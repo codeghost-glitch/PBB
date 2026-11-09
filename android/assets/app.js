@@ -16,6 +16,7 @@ let grid;
 let backBtn;
 let statusText;
 let qualityButtons;
+let hideControlsTimer = null;
 
 function normalizeQuality(raw) {
   const value = String(raw || "").toLowerCase();
@@ -33,6 +34,29 @@ function setStatusText(message) {
 function setStreamStatus(entry, message, bad) {
   entry.statusEl.textContent = message;
   entry.statusEl.classList.toggle("bad", Boolean(bad));
+}
+
+function showControls() {
+  document.body.classList.add("controls-visible");
+  if (hideControlsTimer) {
+    clearTimeout(hideControlsTimer);
+  }
+  hideControlsTimer = setTimeout(() => {
+    document.body.classList.remove("controls-visible");
+    hideControlsTimer = null;
+  }, 3500);
+}
+
+function toggleControls() {
+  if (document.body.classList.contains("controls-visible")) {
+    document.body.classList.remove("controls-visible");
+    if (hideControlsTimer) {
+      clearTimeout(hideControlsTimer);
+      hideControlsTimer = null;
+    }
+    return;
+  }
+  showControls();
 }
 
 function el(tag, className, role, text) {
@@ -182,6 +206,13 @@ function createCard(stream, index) {
   card.appendChild(videoWrap);
   card.appendChild(camMeta);
   card.appendChild(actions);
+
+  card.addEventListener("click", (event) => {
+    if (event.target.closest("button")) {
+      return;
+    }
+    toggleControls();
+  });
 
   focusBtn.addEventListener("click", () => focusStream(index));
   soundBtn.addEventListener("click", () => setSound(index));
@@ -580,7 +611,8 @@ function boot() {
     state.pendingRecord = 0;
     updateControls();
   }
-  setStatusText("loading four live feeds...");
+  setStatusText("tap the screen to show the buttons");
+  showControls();
 }
 
 document.addEventListener("DOMContentLoaded", boot);
