@@ -160,14 +160,6 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 
 .stage { position: relative; margin-top: 32px; }
 
-.stage-head {
-  background: var(--color-lavender);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  margin-bottom: 24px;
-  padding: 24px;
-}
-
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
 @media (min-width: 700px) {
@@ -244,7 +236,7 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 .focus-mode .video-wrap { aspect-ratio: 16 / 9; height: auto; max-height: 70vh; margin: 0 auto; width: 100%; }
 
 .pip-mode .page { padding: 0; max-width: none; }
-.pip-mode .nav, .pip-mode .stage-head, .pip-mode .status, .pip-mode .deco { display: none !important; }
+.pip-mode .nav, .pip-mode .status, .pip-mode .deco { display: none !important; }
 .pip-mode .grid { display: block; }
 .pip-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: var(--border-color); }
 .pip-mode .cam-card:not(.focused) { display: none; }
@@ -259,7 +251,6 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 
 body.fullscreen-mode .page { padding: 0; max-width: none; }
 body.fullscreen-mode .nav,
-body.fullscreen-mode .stage-head,
 body.fullscreen-mode .status,
 body.fullscreen-mode .deco,
 body.fullscreen-mode .cam-meta,
@@ -284,7 +275,6 @@ body.fullscreen-mode .fs-exit { display: inline-flex; }
 
 body.recording-mode .page { padding: 0; max-width: none; }
 body.recording-mode .nav,
-body.recording-mode .stage-head,
 body.recording-mode .status,
 body.recording-mode .deco,
 body.recording-mode .cam-meta,
