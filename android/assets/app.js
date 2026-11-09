@@ -7,6 +7,9 @@ const state = {
   sound: 0,
   fullscreen: false,
   orientation: "auto",
+  locked: false,
+  volume: 0.7,
+  brightness: 0.5,
 };
 
 const players = [];
@@ -17,6 +20,18 @@ let backBtn;
 let statusText;
 let qualityButtons;
 let hideControlsTimer = null;
+let indicator;
+let indicatorTimer = null;
+let suppressTap = false;
+
+const gesture = {
+  tracking: false,
+  active: false,
+  mode: null,
+  startX: 0,
+  startY: 0,
+  startValue: 0,
+};
 
 function normalizeQuality(raw) {
   const value = String(raw || "").toLowerCase();
@@ -60,6 +75,98 @@ function toggleControls() {
     return;
   }
   showControls();
+}
+
+function showIndicator(message) {
+  if (!indicator) {
+    return;
+  }
+  indicator.textContent = message;
+  indicator.classList.remove("hidden");
+  if (indicatorTimer) {
+    clearTimeout(indicatorTimer);
+  }
+  indicatorTimer = setTimeout(() => {
+    indicator.classList.add("hidden");
+    indicatorTimer = null;
+  }, 900);
+}
+
+function toggleLock() {
+  state.locked = !state.locked;
+  document.body.classList.toggle("locked", state.locked);
+  setStatusText(state.locked ? "controls locked — tap the screen to unlock" : "controls unlocked");
+  showControls();
+  updateControls();
+}
+
+function applyGestureValue(value) {
+  const clamped = Math.min(1, Math.max(0, value));
+  if (gesture.mode === "volume") {
+    state.volume = clamped;
+    if (window.Pbb) {
+      Pbb.setVolume(clamped);
+    }
+    showIndicator(`volume ${Math.round(clamped * 100)}%`);
+  } else {
+    state.brightness = clamped;
+    if (window.Pbb) {
+      Pbb.setBrightness(clamped);
+    }
+    showIndicator(`brightness ${Math.round(clamped * 100)}%`);
+  }
+}
+
+function onTouchStart(event) {
+  if (state.locked || event.touches.length !== 1) {
+    gesture.tracking = false;
+    return;
+  }
+  if (!state.fullscreen && state.focused < 0) {
+    gesture.tracking = false;
+    return;
+  }
+  const touch = event.touches[0];
+  gesture.tracking = true;
+  gesture.active = false;
+  gesture.mode = null;
+  gesture.startX = touch.clientX;
+  gesture.startY = touch.clientY;
+}
+
+function onTouchMove(event) {
+  if (!gesture.tracking || event.touches.length !== 1) {
+    return;
+  }
+  const touch = event.touches[0];
+  const dy = gesture.startY - touch.clientY;
+  const dx = touch.clientX - gesture.startX;
+
+  if (!gesture.active) {
+    if (Math.abs(dy) < 16 || Math.abs(dy) <= Math.abs(dx)) {
+      return;
+    }
+    gesture.active = true;
+    const width = window.innerWidth || 1;
+    gesture.mode = gesture.startX < width / 2 ? "brightness" : "volume";
+    gesture.startValue = gesture.mode === "volume" ? state.volume : state.brightness;
+  }
+
+  event.preventDefault();
+  const height = window.innerHeight || 1;
+  applyGestureValue(gesture.startValue + dy / height);
+}
+
+function onTouchEnd() {
+  if (gesture.active) {
+    suppressTap = true;
+    setTimeout(() => {
+      suppressTap = false;
+    }, 0);
+  }
+  gesture.tracking = false;
+  gesture.active = false;
+  gesture.mode = null;
 }
 
 function el(tag, className, role, text) {
@@ -120,6 +227,14 @@ const ICONS = {
     ["rect", { x: 14, y: 3, width: 7, height: 7, rx: 1 }],
     ["rect", { x: 3, y: 14, width: 7, height: 7, rx: 1 }],
     ["rect", { x: 14, y: 14, width: 7, height: 7, rx: 1 }],
+  ],
+  lock: [
+    ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
+    ["path", { d: "M8 11V7a4 4 0 0 1 8 0v4" }],
+  ],
+  unlock: [
+    ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
+    ["path", { d: "M8 11V7a4 4 0 0 1 7.5-2" }],
   ],
 };
 
@@ -211,11 +326,15 @@ function createCard(stream, index) {
   card.appendChild(actions);
 
   card.addEventListener("click", (event) => {
-    if (event.target.closest("button")) {
+    if (event.target.closest("button") || suppressTap) {
       return;
     }
     toggleControls();
   });
+
+  card.addEventListener("touchstart", onTouchStart, { passive: true });
+  card.addEventListener("touchmove", onTouchMove, { passive: false });
+  card.addEventListener("touchend", onTouchEnd, { passive: true });
 
   focusBtn.addEventListener("click", () => focusStream(index));
   soundBtn.addEventListener("click", () => setSound(index));
@@ -353,6 +472,9 @@ function updateControls() {
     setIcon(focusBtn, "focus", state.focused === index ? "focused" : "focus");
     setIcon(soundBtn, state.sound === index ? "soundOn" : "soundOff", state.sound === index ? "mute" : "sound");
   }
+
+  const lockBtn = document.getElementById("fsLock");
+  setIcon(lockBtn, state.locked ? "lock" : "unlock", state.locked ? "unlock controls" : "lock controls");
 }
 
 function ensureSound(index) {
@@ -549,6 +671,10 @@ window.handleBack = () => {
   if (state.pip) {
     return true;
   }
+  if (state.locked) {
+    showControls();
+    return true;
+  }
   if (state.fullscreen) {
     toggleFullscreen();
     return true;
@@ -598,7 +724,12 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
+  indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
+  const fsLock = document.getElementById("fsLock");
+  if (fsLock) {
+    fsLock.addEventListener("click", toggleLock);
+  }
   const fsExit = document.getElementById("fsExit");
   if (fsExit) {
     setIcon(fsExit, "exit", "exit fullscreen");
