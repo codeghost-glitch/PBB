@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private int pendingRecordIndex = -1;
     private String pendingRecordLabel = "stream";
     private boolean orientationLocked = false;
+    private float appBrightness = -1f;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -165,6 +166,24 @@ public class MainActivity extends Activity {
         } else {
             decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
         }
+    }
+
+    // Window-scoped only: never written to Settings.System, and cleared when
+    // the app leaves the foreground so the device keeps its own brightness.
+    private void applyBrightness(float value) {
+        appBrightness = Math.max(0.01f, Math.min(1f, value));
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        params.screenBrightness = appBrightness;
+        getWindow().setAttributes(params);
+    }
+
+    private void clearBrightnessOverride() {
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        if (params.screenBrightness == WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
+            return;
+        }
+        params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        getWindow().setAttributes(params);
     }
 
     private void lockLandscape(boolean lock) {
@@ -336,7 +355,24 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (appBrightness >= 0f && !isInPictureInPictureMode()) {
+            applyBrightness(appBrightness);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        if (!isInPictureInPictureMode()) {
+            clearBrightnessOverride();
+        }
+        super.onStop();
+    }
+
+    @Override
     protected void onDestroy() {
+        clearBrightnessOverride();
         if (isFinishing() && recording) {
             Intent stop = new Intent(this, RecordService.class);
             stop.setAction(RecordService.ACTION_STOP);
@@ -396,9 +432,7 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    WindowManager.LayoutParams params = getWindow().getAttributes();
-                    params.screenBrightness = Math.max(0.01f, Math.min(1f, value));
-                    getWindow().setAttributes(params);
+                    applyBrightness(value);
                 }
             });
         }
