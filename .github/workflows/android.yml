@@ -76,8 +76,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION_CODE: ${{ github.run_number }}
         run: |
-          cp PBB.apk "PBB-$VERSION_NAME-$VERSION_CODE.apk"
-          NOTES="PBB $VERSION_NAME (build $VERSION_CODE)"$'\n\n'"Four PBB live DASH/clear-key streams, neobrutalist multi-view, single-stream picture-in-picture, screen recording to Movies/PBB."$'\n\n'"Install: adb install -r PBB-$VERSION_NAME-$VERSION_CODE.apk"
+          cp PBB.apk "PBB-$VERSION_NAME.apk"
+          NOTES="$(printf 'PBB %s (build %s)\n\nFour PBB live DASH/clear-key streams, neobrutalist multi-view, single-stream picture-in-picture, screen recording to Movies/PBB.\n\nInstall: adb install -r PBB-%s.apk' "$VERSION_NAME" "$VERSION_CODE" "$VERSION_NAME")"
           gh release view "v$VERSION_NAME" >/dev/null 2>&1 || \
             gh release create "v$VERSION_NAME" --title "PBB $VERSION_NAME" --notes "$NOTES"
-          gh release upload "v$VERSION_NAME" "PBB-$VERSION_NAME-$VERSION_CODE.apk" --clobber
+          gh release upload "v$VERSION_NAME" "PBB-$VERSION_NAME.apk" --clobber
