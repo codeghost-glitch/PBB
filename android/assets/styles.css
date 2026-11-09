@@ -89,8 +89,6 @@ p { color: var(--text-secondary); }
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  position: sticky;
-  top: 16px;
   z-index: 20;
 }
 
@@ -170,10 +168,10 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
   padding: 24px;
 }
 
-.grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
-@media (min-width: 700px), (orientation: landscape) and (min-width: 560px) {
-  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 700px) {
+  .grid { gap: 20px; }
 }
 
 .cam-card {
@@ -199,7 +197,7 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
   aspect-ratio: 16 / 9;
 }
 
-.video-wrap video { width: 100%; height: 100%; display: block; object-fit: cover; background: var(--border-color); }
+.video-wrap video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000000; }
 
 .stream-status {
   position: absolute;
@@ -243,7 +241,7 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 .focus-mode .grid { grid-template-columns: 1fr; }
 .focus-mode .cam-card:not(.focused) { display: none; }
 .focus-mode .cam-card.focused { box-shadow: var(--shadow-lg); }
-.focus-mode .video-wrap { aspect-ratio: auto; height: 68vh; max-height: 720px; }
+.focus-mode .video-wrap { aspect-ratio: 16 / 9; height: auto; max-height: 70vh; margin: 0 auto; width: 100%; }
 
 .pip-mode .page { padding: 0; max-width: none; }
 .pip-mode .nav, .pip-mode .stage-head, .pip-mode .status, .pip-mode .deco { display: none !important; }
@@ -252,6 +250,20 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 .pip-mode .cam-card:not(.focused) { display: none; }
 .pip-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; height: 100vh; }
 .pip-mode .cam-meta, .pip-mode .cam-actions, .pip-mode .live-badge { display: none !important; }
+
+body.recording-mode .page { padding: 0; max-width: none; }
+body.recording-mode .nav,
+body.recording-mode .stage-head,
+body.recording-mode .status,
+body.recording-mode .deco,
+body.recording-mode .cam-meta,
+body.recording-mode .cam-actions,
+body.recording-mode .stream-status { display: none !important; }
+body.recording-mode .grid { display: block; }
+body.recording-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: #000000; }
+body.recording-mode .cam-card:not(.focused) { display: none; }
+body.recording-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; height: 100vh; max-height: none; background: #000000; }
+body.recording-mode .video-wrap video { object-fit: contain; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

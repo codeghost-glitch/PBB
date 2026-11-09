@@ -4,7 +4,7 @@ const state = {
   pip: false,
   recording: -1,
   pendingRecord: -1,
-  sound: -1,
+  sound: 0,
 };
 
 const players = [];
@@ -101,7 +101,7 @@ function createCard(stream, index) {
   players.push({ video, player: null, stream, statusEl });
 }
 
-async function initPlayer(entry) {
+async function initPlayer(entry, index) {
   const player = new shaka.Player(entry.video);
   entry.player = player;
 
@@ -147,9 +147,14 @@ async function initPlayer(entry) {
     await entry.video.play();
   } catch {
     entry.video.muted = true;
+    if (state.sound === index) {
+      state.sound = -1;
+      updateControls();
+    }
     entry.video.play().catch(() => {});
   }
 
+  entry.video.muted = state.sound !== index;
   setStreamStatus(entry, "live", false);
   setStatusText("all four feeds ready");
 }
@@ -310,7 +315,7 @@ function toggleRecord(index) {
     focusStream(index);
   }
   state.pendingRecord = index;
-  setStatusText("requesting screen capture...");
+  setStatusText("android will ask for screen access — that is how the video gets recorded, tap start now");
   Pbb.startRecording(index, players[index].stream.name);
 }
 
@@ -320,6 +325,10 @@ window.onRecordingState = (active, message) => {
     state.pendingRecord = -1;
   }
   document.body.classList.toggle("recording", active);
+  document.body.classList.toggle("recording-mode", active);
+  if (active && state.focused >= 0) {
+    playOnly(state.focused);
+  }
   setStatusText(message || (active ? "recording..." : "recording stopped"));
   updateControls();
 };
@@ -382,8 +391,8 @@ function boot() {
   }
   updateQualityButtons();
 
-  for (const entry of players) {
-    initPlayer(entry);
+  for (const [index, entry] of players.entries()) {
+    initPlayer(entry, index);
   }
 
   for (const btn of qualityButtons) {
@@ -394,6 +403,7 @@ function boot() {
   if (Pbb.isInPip()) {
     window.setPipMode(true);
   }
+  updateControls();
   if (Pbb.isRecording()) {
     state.recording = 0;
     state.pendingRecord = 0;
