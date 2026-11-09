@@ -58,9 +58,9 @@ Environment overrides, all optional:
 4. cargo fmt --check, cargo clippy -D warnings, cargo test
 5. ./build.sh
 6. uploads PBB-apk as a workflow artifact
-7. on main only, creates or updates the rolling GitHub release v1.0 with PBB-1.0-<build>.apk
+7. on main only, creates or updates the rolling GitHub release v1.0 with the single asset PBB-1.0.apk
 
-Because the release tag is fixed at v1.0 and the asset is re-uploaded with --clobber, there is one stable download link while the app version stays 1.0.
+The release tag is fixed at v1.0 and the asset name is fixed at PBB-1.0.apk, re-uploaded with --clobber. One stable download link, app version always 1.0, versionCode carries the build number.
 
 ## Signing
 
