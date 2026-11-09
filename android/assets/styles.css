@@ -144,12 +144,21 @@ p { color: var(--text-secondary); }
   transform: translate(0, 0);
   transition: transform 0.1s ease, box-shadow 0.1s ease;
   user-select: none;
+  touch-action: manipulation;
+  -webkit-appearance: none;
 }
 
-.btn:hover { transform: translate(2px, 2px); box-shadow: var(--shadow-md-hover); }
 .btn:active { transform: translate(4px, 4px); box-shadow: none; }
 .btn-ghost { background: transparent; color: var(--text-primary); }
-.btn-ghost:hover { background: var(--bg-page); }
+
+/* Hover only for real pointers: on touch the hover state latches after a tap
+   and leaves the button stuck on its hover colour. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { transform: translate(2px, 2px); box-shadow: var(--shadow-md-hover); }
+  .btn-ghost:hover { background: var(--bg-page); }
+  .cam-card:nth-child(even):hover { box-shadow: var(--shadow-sm); transform: translate(-2px, -2px); }
+  .fs-controls .btn:hover { background: var(--bg-surface); box-shadow: var(--shadow-md-hover); }
+}
 .btn-tiny { padding: 8px 14px; font-size: 0.82rem; border-radius: 8px; }
 .btn-icon {
   width: 40px;
@@ -189,8 +198,6 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 }
 
 .cam-card:nth-child(even) { box-shadow: none; }
-.cam-card:nth-child(even):hover { box-shadow: var(--shadow-sm); transform: translate(-2px, -2px); }
-
 .video-wrap {
   position: relative;
   background: var(--border-color);
@@ -349,11 +356,6 @@ body.recording-mode .video-wrap video {
   color: var(--text-primary);
   border: var(--border);
   box-shadow: var(--shadow-sm);
-}
-
-.fs-controls .btn:hover {
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-md-hover);
 }
 
 body.fullscreen-mode.controls-visible .fs-controls { display: flex; }
