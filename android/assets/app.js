@@ -673,7 +673,7 @@ window.setPipMode = (enabled) => {
     setStatusText(`picture-in-picture: ${players[state.focused].stream.name}`);
   } else {
     playOnly(state.focused);
-    setStatusText("");
+    setStatusText("back from picture-in-picture");
   }
   updateControls();
 };
