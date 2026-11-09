@@ -49,8 +49,96 @@ function el(tag, className, role, text) {
   return node;
 }
 
-function makeButton(className, role, label) {
-  const btn = el("button", className, role, label);
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const ICONS = {
+  focus: [
+    ["path", { d: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" }],
+    ["circle", { cx: 12, cy: 12, r: 3 }],
+  ],
+  soundOn: [
+    ["path", { d: "M11 5 6 9H2v6h4l5 4V5z" }],
+    ["path", { d: "M15.5 8.5a5 5 0 0 1 0 7" }],
+    ["path", { d: "M18.5 5.5a9 9 0 0 1 0 13" }],
+  ],
+  soundOff: [
+    ["path", { d: "M11 5 6 9H2v6h4l5 4V5z" }],
+    ["path", { d: "m22 9-6 6" }],
+    ["path", { d: "m16 9 6 6" }],
+  ],
+  pip: [
+    ["rect", { x: 2, y: 4, width: 20, height: 16, rx: 2 }],
+    ["rect", { x: 12, y: 12, width: 8, height: 6, rx: 1 }],
+  ],
+  fullscreen: [
+    ["path", { d: "M8 3H5a2 2 0 0 0-2 2v3" }],
+    ["path", { d: "M16 3h3a2 2 0 0 1 2 2v3" }],
+    ["path", { d: "M8 21H5a2 2 0 0 1-2-2v-3" }],
+    ["path", { d: "M16 21h3a2 2 0 0 0 2-2v-3" }],
+  ],
+  record: [["circle", { cx: 12, cy: 12, r: 6 }]],
+  stop: [["rect", { x: 6, y: 6, width: 12, height: 12, rx: 2 }]],
+  rotate: [
+    ["path", { d: "M21 12a9 9 0 1 1-2.6-6.4" }],
+    ["path", { d: "M21 3v6h-6" }],
+  ],
+  exit: [
+    ["path", { d: "M8 3v3a2 2 0 0 1-2 2H3" }],
+    ["path", { d: "M21 8h-3a2 2 0 0 1-2-2V3" }],
+    ["path", { d: "M3 16h3a2 2 0 0 1 2 2v3" }],
+    ["path", { d: "M16 21v-3a2 2 0 0 1 2-2h3" }],
+  ],
+  grid: [
+    ["rect", { x: 3, y: 3, width: 7, height: 7, rx: 1 }],
+    ["rect", { x: 14, y: 3, width: 7, height: 7, rx: 1 }],
+    ["rect", { x: 3, y: 14, width: 7, height: 7, rx: 1 }],
+    ["rect", { x: 14, y: 14, width: 7, height: 7, rx: 1 }],
+  ],
+};
+
+const SVG_ATTRS = {
+  viewBox: "0 0 24 24",
+  width: "18",
+  height: "18",
+  fill: "none",
+  stroke: "currentColor",
+  "stroke-width": "2",
+  "stroke-linecap": "round",
+  "stroke-linejoin": "round",
+  "aria-hidden": "true",
+};
+
+function iconNode(name) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  for (const [key, value] of Object.entries(SVG_ATTRS)) {
+    svg.setAttribute(key, value);
+  }
+  for (const [tag, attrs] of ICONS[name] || []) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      node.setAttribute(key, String(value));
+    }
+    svg.appendChild(node);
+  }
+  return svg;
+}
+
+function setIcon(btn, name, label) {
+  if (!btn) {
+    return;
+  }
+  if (btn.dataset.icon !== name) {
+    btn.dataset.icon = name;
+    btn.replaceChildren(iconNode(name));
+  }
+  if (label) {
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  }
+}
+
+function makeIconButton(className, role) {
+  const btn = el("button", className, role, null);
   btn.setAttribute("type", "button");
   return btn;
 }
@@ -80,11 +168,11 @@ function createCard(stream, index) {
   camMeta.appendChild(el("span", "live-badge", "badge", "live"));
 
   const actions = el("div", "cam-actions", null, null);
-  const focusBtn = makeButton("btn btn-ghost btn-tiny", "focus", "focus");
-  const soundBtn = makeButton("btn btn-ghost btn-tiny", "sound", "sound");
-  const pipBtn = makeButton("btn btn-ghost btn-tiny hidden", "pip", "pip");
-  const fsBtn = makeButton("btn btn-ghost btn-tiny hidden", "fs", "fullscreen");
-  const recordBtn = makeButton("btn btn-tiny record-btn", "record", "record");
+  const focusBtn = makeIconButton("btn btn-ghost btn-icon", "focus");
+  const soundBtn = makeIconButton("btn btn-ghost btn-icon", "sound");
+  const pipBtn = makeIconButton("btn btn-ghost btn-icon hidden", "pip");
+  const fsBtn = makeIconButton("btn btn-ghost btn-icon hidden", "fs");
+  const recordBtn = makeIconButton("btn btn-icon record-btn", "record");
   actions.appendChild(focusBtn);
   actions.appendChild(soundBtn);
   actions.appendChild(pipBtn);
@@ -213,19 +301,23 @@ function updateControls() {
     const fsBtn = card.querySelector('[data-role="fs"]');
     fsBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
     fsBtn.disabled = state.recording >= 0 || state.pip;
-    fsBtn.textContent = state.fullscreen ? "exit fullscreen" : "fullscreen";
 
     const recordBtn = card.querySelector('[data-role="record"]');
-    recordBtn.textContent = state.recording === index ? "stop recording" : "record";
     recordBtn.classList.toggle("recording", state.recording === index);
     recordBtn.disabled = state.pip && state.recording !== index;
 
     const focusBtn = card.querySelector('[data-role="focus"]');
     focusBtn.disabled = state.pip || state.recording >= 0;
-    focusBtn.textContent = state.focused === index ? "focused" : "focus";
+    focusBtn.classList.toggle("active", state.focused === index);
 
     const soundBtn = card.querySelector('[data-role="sound"]');
-    soundBtn.textContent = state.sound === index ? "sound on" : "sound";
+    soundBtn.classList.toggle("active", state.sound === index);
+
+    setIcon(pipBtn, "pip", "picture-in-picture");
+    setIcon(fsBtn, "fullscreen", "fullscreen");
+    setIcon(recordBtn, state.recording === index ? "stop" : "record", state.recording === index ? "stop recording" : "record");
+    setIcon(focusBtn, "focus", state.focused === index ? "focused" : "focus");
+    setIcon(soundBtn, state.sound === index ? "soundOn" : "soundOff", state.sound === index ? "mute" : "sound");
   }
 }
 
@@ -341,13 +433,16 @@ function toggleFullscreen() {
   document.body.classList.toggle("fullscreen-mode", state.fullscreen);
   if (window.Pbb) {
     Pbb.setImmersive(state.fullscreen);
-    if (!state.fullscreen) {
+    if (state.fullscreen) {
+      state.orientation = "landscape";
+      Pbb.setOrientation("landscape");
+    } else {
       state.orientation = "auto";
       Pbb.setOrientation("auto");
     }
   }
   playOnly(state.focused);
-  setStatusText(state.fullscreen ? "fullscreen — tap exit fullscreen to return" : "back to focus view");
+  setStatusText(state.fullscreen ? "fullscreen landscape — rotate or exit" : "back to focus view");
   updateControls();
 }
 
@@ -464,12 +559,15 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
+  setIcon(backBtn, "grid", "back to grid");
   const fsExit = document.getElementById("fsExit");
   if (fsExit) {
+    setIcon(fsExit, "exit", "exit fullscreen");
     fsExit.addEventListener("click", toggleFullscreen);
   }
   const fsRotate = document.getElementById("fsRotate");
   if (fsRotate) {
+    setIcon(fsRotate, "rotate", "rotate");
     fsRotate.addEventListener("click", rotateFullscreen);
   }
 

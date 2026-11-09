@@ -151,6 +151,17 @@ p { color: var(--text-secondary); }
 .btn-ghost { background: transparent; color: var(--text-primary); }
 .btn-ghost:hover { background: var(--bg-page); }
 .btn-tiny { padding: 8px 14px; font-size: 0.82rem; border-radius: 8px; }
+.btn-icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+.btn-icon svg { width: 18px; height: 18px; display: block; }
+.btn-icon.active { background: var(--color-secondary); color: var(--text-on-accent); }
+.record-btn svg circle,
+.record-btn svg rect { fill: currentColor; }
 .btn-pill { border-radius: var(--radius-pill); }
 .quality-btn.active { background: var(--color-secondary); }
 .record-btn.recording { background: var(--color-pink); color: var(--text-primary); }
