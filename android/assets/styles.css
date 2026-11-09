@@ -417,6 +417,11 @@ body.recording-mode .video-wrap video {
   box-shadow: var(--shadow-sm);
 }
 
+.fs-controls .btn.active {
+  background: var(--color-secondary);
+  color: var(--text-on-accent);
+}
+
 body.fullscreen-mode.controls-visible .fs-controls { display: flex; }
 
 body.locked .fs-controls .btn:not(.lock-btn) { display: none; }
