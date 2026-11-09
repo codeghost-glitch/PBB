@@ -375,6 +375,22 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void setOrientation(final String mode) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if ("landscape".equals(mode)) {
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                    } else if ("portrait".equals(mode)) {
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                    } else {
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void setImmersive(final boolean enabled) {
             runOnUiThread(new Runnable() {
                 @Override

@@ -235,56 +235,106 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 .focus-mode .cam-card.focused { box-shadow: var(--shadow-lg); }
 .focus-mode .video-wrap { aspect-ratio: 16 / 9; height: auto; max-height: 70vh; margin: 0 auto; width: 100%; }
 
-.pip-mode .page { padding: 0; max-width: none; }
-.pip-mode .nav, .pip-mode .status, .pip-mode .deco { display: none !important; }
-.pip-mode .grid { display: block; }
-.pip-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: var(--border-color); }
-.pip-mode .cam-card:not(.focused) { display: none; }
-.pip-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; height: 100vh; }
+.pip-mode .page,
+body.fullscreen-mode .page,
+body.recording-mode .page {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+}
+
+.pip-mode .nav,
+.pip-mode .status,
+.pip-mode .deco,
 .pip-mode .cam-meta,
 .pip-mode .cam-actions,
 .pip-mode .live-badge,
-.pip-mode .stream-status { display: none !important; }
-.pip-mode .cam-card { overflow: visible; height: 100dvh; }
-.pip-mode .grid { height: 100dvh; }
-.pip-mode .video-wrap { width: 100%; height: 100%; }
-
-body.fullscreen-mode .page { padding: 0; max-width: none; }
+.pip-mode .stream-status,
 body.fullscreen-mode .nav,
 body.fullscreen-mode .status,
 body.fullscreen-mode .deco,
 body.fullscreen-mode .cam-meta,
 body.fullscreen-mode .cam-actions,
-body.fullscreen-mode .stream-status { display: none !important; }
-body.fullscreen-mode .grid { display: block; height: 100dvh; }
-body.fullscreen-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: #000000; height: 100dvh; overflow: visible; }
-body.fullscreen-mode .cam-card:not(.focused) { display: none; }
-body.fullscreen-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; width: 100%; height: 100%; max-height: none; background: #000000; }
-body.fullscreen-mode .video-wrap video { object-fit: contain; }
-
-.fs-exit {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 90;
-  display: none;
-  opacity: 0.9;
-}
-
-body.fullscreen-mode .fs-exit { display: inline-flex; }
-
-body.recording-mode .page { padding: 0; max-width: none; }
+body.fullscreen-mode .stream-status,
 body.recording-mode .nav,
 body.recording-mode .status,
 body.recording-mode .deco,
 body.recording-mode .cam-meta,
 body.recording-mode .cam-actions,
 body.recording-mode .stream-status { display: none !important; }
-body.recording-mode .grid { display: block; }
-body.recording-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: #000000; }
-body.recording-mode .cam-card:not(.focused) { display: none; }
-body.recording-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; height: 100vh; max-height: none; background: #000000; }
-body.recording-mode .video-wrap video { object-fit: contain; }
+
+.pip-mode .grid,
+body.fullscreen-mode .grid,
+body.recording-mode .grid {
+  display: block;
+  height: auto;
+  gap: 0;
+}
+
+.pip-mode .cam-card:not(.focused),
+body.fullscreen-mode .cam-card:not(.focused),
+body.recording-mode .cam-card:not(.focused) { display: none !important; }
+
+.pip-mode .cam-card.focused,
+body.fullscreen-mode .cam-card.focused,
+body.recording-mode .cam-card.focused {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #000000;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.pip-mode .video-wrap,
+body.fullscreen-mode .video-wrap,
+body.recording-mode .video-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: #000000;
+  overflow: hidden;
+}
+
+.pip-mode .video-wrap video,
+body.fullscreen-mode .video-wrap video,
+body.recording-mode .video-wrap video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.fs-controls {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 90;
+  display: none;
+  gap: 8px;
+  opacity: 0.9;
+}
+
+body.fullscreen-mode .fs-controls { display: flex; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

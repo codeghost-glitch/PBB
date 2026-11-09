@@ -6,6 +6,7 @@ const state = {
   pendingRecord: -1,
   sound: 0,
   fullscreen: false,
+  orientation: "auto",
 };
 
 const players = [];
@@ -340,10 +341,26 @@ function toggleFullscreen() {
   document.body.classList.toggle("fullscreen-mode", state.fullscreen);
   if (window.Pbb) {
     Pbb.setImmersive(state.fullscreen);
+    if (!state.fullscreen) {
+      state.orientation = "auto";
+      Pbb.setOrientation("auto");
+    }
   }
   playOnly(state.focused);
   setStatusText(state.fullscreen ? "fullscreen — tap exit fullscreen to return" : "back to focus view");
   updateControls();
+}
+
+function rotateFullscreen() {
+  if (!state.fullscreen) {
+    return;
+  }
+  const portrait = window.matchMedia("(orientation: portrait)").matches;
+  state.orientation = portrait ? "landscape" : "portrait";
+  if (window.Pbb) {
+    Pbb.setOrientation(state.orientation);
+  }
+  setStatusText(`rotated to ${state.orientation}`);
 }
 
 function toggleRecord(index) {
@@ -450,6 +467,10 @@ function boot() {
   const fsExit = document.getElementById("fsExit");
   if (fsExit) {
     fsExit.addEventListener("click", toggleFullscreen);
+  }
+  const fsRotate = document.getElementById("fsRotate");
+  if (fsRotate) {
+    fsRotate.addEventListener("click", rotateFullscreen);
   }
 
   if (Pbb.isInPip()) {

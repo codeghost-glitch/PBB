@@ -151,5 +151,5 @@ cp "$OUT/dex/classes.dex" "$OUT/apk/classes.dex"
 
 echo "== verify =="
 "$BUILD_TOOLS/apksigner" verify --verbose "$ROOT/PBB.apk"
-"$BUILD_TOOLS/aapt2" dump badging "$ROOT/PBB.apk" | head -8
+"$BUILD_TOOLS/aapt2" dump badging "$ROOT/PBB.apk" | head -8 || true
 echo "built: $ROOT/PBB.apk"
