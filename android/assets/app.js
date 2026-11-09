@@ -126,7 +126,7 @@ function onTouchStart(event) {
     gesture.tracking = false;
     return;
   }
-  if (!state.fullscreen && state.focused < 0) {
+  if (!state.fullscreen) {
     gesture.tracking = false;
     return;
   }
