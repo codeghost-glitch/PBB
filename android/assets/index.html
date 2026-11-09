@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>PBB live studio</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="shaka-player.compiled.min.js"></script>
+</head>
+<body>
+  <div class="page">
+    <svg class="deco deco-star star-1 spin" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 2 L17.5 14.5 L30 16 L17.5 17.5 L16 30 L14.5 17.5 L2 16 L14.5 14.5 Z" fill="#FFE566" stroke="#111111" stroke-width="1.5"></path>
+    </svg>
+    <svg class="deco deco-blob blob-1" width="78" height="78" viewBox="0 0 80 80" aria-hidden="true">
+      <path d="M40 5 C55 5,75 20,75 40 C75 60,60 75,40 75 C20 75,5 60,5 40 C5 20,25 5,40 5Z" fill="#F9A8B8" stroke="#111111" stroke-width="2"></path>
+    </svg>
+    <svg class="deco deco-star star-2" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 2 L17.5 14.5 L30 16 L17.5 17.5 L16 30 L14.5 17.5 L2 16 L14.5 14.5 Z" fill="#4ECDC4" stroke="#111111" stroke-width="1.5"></path>
+    </svg>
+
+    <header class="nav card shadow">
+      <div class="brand">
+        <div class="icon-box" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1>pbb live studio</h1>
+          <p>four cameras, one loud little window</p>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <span class="tag tag-filled">4 live</span>
+        <div class="quality" role="group" aria-label="default quality">
+          <span class="quality-label">default quality</span>
+          <button class="btn btn-tiny quality-btn" type="button" data-quality="auto">auto</button>
+          <button class="btn btn-tiny quality-btn" type="button" data-quality="hd">hd</button>
+          <button class="btn btn-tiny quality-btn" type="button" data-quality="sd">sd</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="stage">
+      <svg class="deco deco-star star-3" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M16 2 L17.5 14.5 L30 16 L17.5 17.5 L16 30 L14.5 17.5 L2 16 L14.5 14.5 Z" fill="#C4B5FD" stroke="#111111" stroke-width="1.5"></path>
+      </svg>
+      <svg class="deco deco-blob blob-2" width="54" height="54" viewBox="0 0 80 80" aria-hidden="true">
+        <path d="M40 5 C55 5,75 20,75 40 C75 60,60 75,40 75 C20 75,5 60,5 40 C5 20,25 5,40 5Z" fill="#FFE566" stroke="#111111" stroke-width="2"></path>
+      </svg>
+
+      <section class="stage-head card shadow">
+        <h2>all four feeds</h2>
+        <p>tap focus, then pip or record. picture-in-picture is for one stream only.</p>
+      </section>
+
+      <div id="grid" class="grid" aria-label="live camera feeds"></div>
+    </main>
+
+    <footer class="status card card-flat" id="statusBar" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span id="statusText">loading streams...</span>
+      <button id="backBtn" class="btn btn-ghost btn-tiny hidden" type="button">back to grid</button>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

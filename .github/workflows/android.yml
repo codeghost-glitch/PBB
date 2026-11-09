@@ -1,0 +1,83 @@
+name: android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  VERSION_NAME: "1.0"
+
+jobs:
+  build:
+    name: build and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: android sdk
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          if ! ls -1d "$SDK"/ndk/* >/dev/null 2>&1; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+          fi
+          ls -1d "$SDK"/ndk/*
+
+      - name: rust tests
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+      - name: build apk
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./build.sh
+
+      - name: upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: PBB-apk
+          path: PBB.apk
+          if-no-files-found: error
+
+      - name: publish release v1.0
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          cp PBB.apk "PBB-$VERSION_NAME-$VERSION_CODE.apk"
+          NOTES="PBB $VERSION_NAME (build $VERSION_CODE)"$'\n\n'"Four PBB live DASH/clear-key streams, neobrutalist multi-view, single-stream picture-in-picture, screen recording to Movies/PBB."$'\n\n'"Install: adb install -r PBB-$VERSION_NAME-$VERSION_CODE.apk"
+          gh release view "v$VERSION_NAME" >/dev/null 2>&1 || \
+            gh release create "v$VERSION_NAME" --title "PBB $VERSION_NAME" --notes "$NOTES"
+          gh release upload "v$VERSION_NAME" "PBB-$VERSION_NAME-$VERSION_CODE.apk" --clobber

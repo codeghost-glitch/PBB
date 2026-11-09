@@ -1,0 +1,17 @@
+[package]
+name = "pbb"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pbb"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jni = { version = "0.21.1", default-features = false }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
