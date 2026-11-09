@@ -44,6 +44,10 @@ function uuidKid(kid) {
 
 function setStatusText(message) {
   statusText.textContent = message;
+  const bar = document.getElementById("statusBar");
+  if (bar) {
+    bar.classList.toggle("hidden", message === "");
+  }
 }
 
 function setStreamStatus(entry, message, bad) {
@@ -557,7 +561,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText("showing all four feeds");
+  setStatusText("");
   updateControls();
   return true;
 }
