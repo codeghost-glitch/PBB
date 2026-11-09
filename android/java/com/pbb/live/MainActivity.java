@@ -9,11 +9,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.media.AudioManager;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.util.Rational;
 import android.view.View;
 import android.view.WindowInsets;
@@ -394,35 +392,6 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void setVolume(final float value) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                    if (audio == null) {
-                        return;
-                    }
-                    int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                    int index = Math.round(Math.max(0f, Math.min(1f, value)) * max);
-                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0);
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public float getVolume() {
-            AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            if (audio == null) {
-                return 0.7f;
-            }
-            int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-            if (max <= 0) {
-                return 0.7f;
-            }
-            return (float) audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max;
-        }
-
-        @JavascriptInterface
         public void setBrightness(final float value) {
             runOnUiThread(new Runnable() {
                 @Override
@@ -432,20 +401,6 @@ public class MainActivity extends Activity {
                     getWindow().setAttributes(params);
                 }
             });
-        }
-
-        @JavascriptInterface
-        public float getBrightness() {
-            WindowManager.LayoutParams params = getWindow().getAttributes();
-            if (params.screenBrightness >= 0f) {
-                return params.screenBrightness;
-            }
-            try {
-                int value = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
-                return Math.max(0f, Math.min(1f, value / 255f));
-            } catch (Settings.SettingNotFoundException e) {
-                return 0.5f;
-            }
         }
 
         @JavascriptInterface

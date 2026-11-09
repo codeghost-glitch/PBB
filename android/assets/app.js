@@ -8,7 +8,7 @@ const state = {
   fullscreen: false,
   orientation: "auto",
   locked: false,
-  volume: 0.7,
+  volume: 1,
   brightness: 0.5,
 };
 
@@ -31,6 +31,19 @@ const gesture = {
   startX: 0,
   startY: 0,
   startValue: 0,
+};
+
+const zoom = {
+  mode: false,
+  scale: 1,
+  x: 0,
+  y: 0,
+  startDist: 0,
+  startScale: 1,
+  startPanX: 0,
+  startPanY: 0,
+  touchX: 0,
+  touchY: 0,
 };
 
 function normalizeQuality(raw) {
@@ -109,9 +122,10 @@ function toggleLock() {
 function applyGestureValue(value) {
   const clamped = Math.min(1, Math.max(0, value));
   if (gesture.mode === "volume") {
+    // Player volume only: the system media volume is left alone.
     state.volume = clamped;
-    if (window.Pbb) {
-      Pbb.setVolume(clamped);
+    for (const entry of players) {
+      entry.video.volume = clamped;
     }
     showIndicator(`volume ${Math.round(clamped * 100)}%`);
   } else {
@@ -123,12 +137,72 @@ function applyGestureValue(value) {
   }
 }
 
+function touchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy) || 1;
+}
+
+function applyZoom() {
+  const entry = players[state.focused];
+  if (!entry) {
+    return;
+  }
+  if (zoom.scale <= 1) {
+    entry.video.style.transform = "";
+    zoom.x = 0;
+    zoom.y = 0;
+    return;
+  }
+  const limitX = (window.innerWidth * (zoom.scale - 1)) / 2;
+  const limitY = (window.innerHeight * (zoom.scale - 1)) / 2;
+  zoom.x = Math.max(-limitX, Math.min(limitX, zoom.x));
+  zoom.y = Math.max(-limitY, Math.min(limitY, zoom.y));
+  entry.video.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
+}
+
+function resetZoom() {
+  zoom.scale = 1;
+  zoom.x = 0;
+  zoom.y = 0;
+  const entry = players[state.focused];
+  if (entry) {
+    entry.video.style.transform = "";
+  }
+}
+
+function toggleZoom() {
+  if (!state.fullscreen) {
+    return;
+  }
+  zoom.mode = !zoom.mode;
+  if (!zoom.mode) {
+    resetZoom();
+  }
+  setStatusText(zoom.mode ? "zoom on — pinch to zoom, drag to pan" : "");
+  showControls();
+  updateControls();
+}
+
 function onTouchStart(event) {
-  if (state.locked || event.touches.length !== 1) {
+  if (state.locked || !state.fullscreen) {
     gesture.tracking = false;
     return;
   }
-  if (!state.fullscreen) {
+  if (zoom.mode) {
+    gesture.tracking = false;
+    if (event.touches.length === 2) {
+      zoom.startDist = touchDistance(event.touches);
+      zoom.startScale = zoom.scale;
+    } else if (event.touches.length === 1) {
+      zoom.touchX = event.touches[0].clientX;
+      zoom.touchY = event.touches[0].clientY;
+      zoom.startPanX = zoom.x;
+      zoom.startPanY = zoom.y;
+    }
+    return;
+  }
+  if (event.touches.length !== 1) {
     gesture.tracking = false;
     return;
   }
@@ -141,6 +215,24 @@ function onTouchStart(event) {
 }
 
 function onTouchMove(event) {
+  if (state.locked || !state.fullscreen) {
+    return;
+  }
+  if (zoom.mode) {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      zoom.scale = Math.max(1, Math.min(4, (zoom.startScale * touchDistance(event.touches)) / zoom.startDist));
+      applyZoom();
+      return;
+    }
+    if (event.touches.length === 1 && zoom.scale > 1) {
+      event.preventDefault();
+      zoom.x = zoom.startPanX + (event.touches[0].clientX - zoom.touchX);
+      zoom.y = zoom.startPanY + (event.touches[0].clientY - zoom.touchY);
+      applyZoom();
+    }
+    return;
+  }
   if (!gesture.tracking || event.touches.length !== 1) {
     return;
   }
@@ -233,6 +325,12 @@ const ICONS = {
     ["rect", { x: 14, y: 3, width: 7, height: 7, rx: 1 }],
     ["rect", { x: 3, y: 14, width: 7, height: 7, rx: 1 }],
     ["rect", { x: 14, y: 14, width: 7, height: 7, rx: 1 }],
+  ],
+  zoom: [
+    ["circle", { cx: 11, cy: 11, r: 7 }],
+    ["path", { d: "m21 21-4.3-4.3" }],
+    ["path", { d: "M11 8v6" }],
+    ["path", { d: "M8 11h6" }],
   ],
   lock: [
     ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
@@ -486,6 +584,12 @@ function updateControls() {
 
   const lockBtn = document.getElementById("fsLock");
   setIcon(lockBtn, state.locked ? "lock" : "unlock", state.locked ? "unlock controls" : "lock controls");
+
+  const zoomBtn = document.getElementById("fsZoom");
+  if (zoomBtn) {
+    zoomBtn.classList.toggle("active", zoom.mode);
+    setIcon(zoomBtn, "zoom", zoom.mode ? "zoom off" : "zoom");
+  }
 }
 
 function ensureSound(index) {
@@ -496,6 +600,7 @@ function ensureSound(index) {
   for (const [i, entry] of players.entries()) {
     entry.video.muted = i !== index;
   }
+  players[index].video.volume = state.volume;
   players[index].video.play().catch(() => {});
   updateControls();
 }
@@ -598,6 +703,10 @@ function toggleFullscreen() {
   }
   state.fullscreen = !state.fullscreen;
   document.body.classList.toggle("fullscreen-mode", state.fullscreen);
+  if (!state.fullscreen) {
+    zoom.mode = false;
+    resetZoom();
+  }
   document.body.classList.remove("controls-visible");
   if (hideControlsTimer) {
     clearTimeout(hideControlsTimer);
@@ -740,6 +849,10 @@ function boot() {
   const fsLock = document.getElementById("fsLock");
   if (fsLock) {
     fsLock.addEventListener("click", toggleLock);
+  }
+  const fsZoom = document.getElementById("fsZoom");
+  if (fsZoom) {
+    fsZoom.addEventListener("click", toggleZoom);
   }
   const fsExit = document.getElementById("fsExit");
   if (fsExit) {
