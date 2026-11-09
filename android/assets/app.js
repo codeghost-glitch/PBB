@@ -48,6 +48,9 @@ function showControls() {
 }
 
 function toggleControls() {
+  if (!state.fullscreen) {
+    return;
+  }
   if (document.body.classList.contains("controls-visible")) {
     document.body.classList.remove("controls-visible");
     if (hideControlsTimer) {
@@ -462,6 +465,11 @@ function toggleFullscreen() {
   }
   state.fullscreen = !state.fullscreen;
   document.body.classList.toggle("fullscreen-mode", state.fullscreen);
+  document.body.classList.remove("controls-visible");
+  if (hideControlsTimer) {
+    clearTimeout(hideControlsTimer);
+    hideControlsTimer = null;
+  }
   if (window.Pbb) {
     Pbb.setImmersive(state.fullscreen);
     if (state.fullscreen) {
@@ -611,8 +619,7 @@ function boot() {
     state.pendingRecord = 0;
     updateControls();
   }
-  setStatusText("tap the screen to show the buttons");
-  showControls();
+  setStatusText("loading four live feeds...");
 }
 
 document.addEventListener("DOMContentLoaded", boot);

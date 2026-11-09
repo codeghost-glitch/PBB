@@ -233,20 +233,7 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
   box-shadow: var(--shadow-sm);
 }
 
-.cam-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-
-body.controls-visible .cam-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
+.cam-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
 .status { display: flex; align-items: center; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
 .status-dot { width: 14px; height: 14px; background: var(--color-teal); border: var(--border); border-radius: 50%; box-shadow: var(--shadow-sm); flex-shrink: 0; }
