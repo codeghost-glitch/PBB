@@ -275,6 +275,12 @@ public class MainActivity extends Activity {
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
         isInPip = isInPictureInPictureMode;
+        // In the pip window the device brightness applies, not the app's level.
+        if (isInPictureInPictureMode) {
+            clearBrightnessOverride();
+        } else if (appBrightnessLevel >= 0f) {
+            applyBrightness(appBrightnessLevel, false);
+        }
         notifyPipState(isInPictureInPictureMode);
     }
 
