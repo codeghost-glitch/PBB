@@ -37,10 +37,19 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: cargo-ndk
-        uses: taiki-e/install-action@v2
+      # install-action no longer carries cargo-ndk and its binstall fallback
+      # pulls a release asset from github.com, which has 504'd mid-run.
+      # Compiling from crates.io once and caching the binary avoids both.
+      - name: cache cargo-ndk
+        id: cargo-ndk-cache
+        uses: actions/cache@v6
         with:
-          tool: cargo-ndk
+          path: ~/.cargo/bin/cargo-ndk
+          key: cargo-ndk-${{ runner.os }}-v1
+
+      - name: install cargo-ndk
+        if: steps.cargo-ndk-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-ndk --locked
 
       - name: android sdk
         run: |
