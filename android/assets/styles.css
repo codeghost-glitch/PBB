@@ -342,7 +342,18 @@ body.recording-mode .video-wrap video {
   z-index: 90;
   display: none;
   gap: 8px;
-  opacity: 0.9;
+}
+
+.fs-controls .btn {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  border: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.fs-controls .btn:hover {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md-hover);
 }
 
 body.fullscreen-mode.controls-visible .fs-controls { display: flex; }
