@@ -43,6 +43,10 @@ public class MainActivity extends Activity {
     private static native String streamConfig();
     private static native String defaultQuality(String filesDir);
     private static native void setDefaultQuality(String filesDir, String quality);
+    private static native float appVolume(String filesDir);
+    private static native void setAppVolume(String filesDir, float value);
+    private static native float appBrightness(String filesDir);
+    private static native void setAppBrightness(String filesDir, float value);
 
     private WebView webView;
     private boolean recording = false;
@@ -51,7 +55,9 @@ public class MainActivity extends Activity {
     private int pendingRecordIndex = -1;
     private String pendingRecordLabel = "stream";
     private boolean orientationLocked = false;
-    private float appBrightness = -1f;
+    private float appVolumeLevel = -1f;
+    private float appBrightnessLevel = -1f;
+    private int savedSystemVolume = -1;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -65,6 +71,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        String filesDir = getFilesDir().getAbsolutePath();
+        appVolumeLevel = appVolume(filesDir);
+        appBrightnessLevel = appBrightness(filesDir);
         setupWebView();
         registerStatusReceiver();
     }
@@ -171,11 +180,38 @@ public class MainActivity extends Activity {
 
     // Window-scoped only: never written to Settings.System, and cleared when
     // the app leaves the foreground so the device keeps its own brightness.
-    private void applyBrightness(float value) {
-        appBrightness = Math.max(0.01f, Math.min(1f, value));
+    private void applyBrightness(float value, boolean persist) {
+        appBrightnessLevel = Math.max(0.01f, Math.min(1f, value));
+        if (persist) {
+            setAppBrightness(getFilesDir().getAbsolutePath(), appBrightnessLevel);
+        }
         WindowManager.LayoutParams params = getWindow().getAttributes();
-        params.screenBrightness = appBrightness;
+        params.screenBrightness = appBrightnessLevel;
         getWindow().setAttributes(params);
+    }
+
+    private void applyVolume(float value, boolean persist) {
+        appVolumeLevel = Math.max(0f, Math.min(1f, value));
+        if (persist) {
+            setAppVolume(getFilesDir().getAbsolutePath(), appVolumeLevel);
+        }
+        AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audio == null) {
+            return;
+        }
+        int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(appVolumeLevel * max), 0);
+    }
+
+    private void restoreSystemVolume() {
+        if (savedSystemVolume < 0) {
+            return;
+        }
+        AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audio != null) {
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, savedSystemVolume, 0);
+        }
+        savedSystemVolume = -1;
     }
 
     private void clearBrightnessOverride() {
@@ -358,14 +394,22 @@ public class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
-        if (appBrightness >= 0f && !isInPictureInPictureMode()) {
-            applyBrightness(appBrightness);
+        AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audio != null && savedSystemVolume < 0) {
+            savedSystemVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        }
+        if (appVolumeLevel >= 0f) {
+            applyVolume(appVolumeLevel, false);
+        }
+        if (appBrightnessLevel >= 0f && !isInPictureInPictureMode()) {
+            applyBrightness(appBrightnessLevel, false);
         }
     }
 
     @Override
     protected void onStop() {
         if (!isInPictureInPictureMode()) {
+            restoreSystemVolume();
             clearBrightnessOverride();
         }
         super.onStop();
@@ -373,6 +417,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        restoreSystemVolume();
         clearBrightnessOverride();
         if (isFinishing() && recording) {
             Intent stop = new Intent(this, RecordService.class);
@@ -433,13 +478,7 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                    if (audio == null) {
-                        return;
-                    }
-                    int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                    int index = Math.round(Math.max(0f, Math.min(1f, value)) * max);
-                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0);
+                    applyVolume(value, true);
                 }
             });
         }
@@ -462,7 +501,7 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    applyBrightness(value);
+                    applyBrightness(value, true);
                 }
             });
         }

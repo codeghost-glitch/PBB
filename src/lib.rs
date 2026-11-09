@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use jni::objects::{JClass, JString};
-use jni::sys::jstring;
+use jni::sys::{jfloat, jstring};
 use jni::JNIEnv;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -52,18 +52,56 @@ fn normalize_quality(value: &str) -> String {
     }
 }
 
-fn quality_file(files_dir: &str) -> PathBuf {
-    Path::new(files_dir).join("default_quality.txt")
+const VOLUME_FILE: &str = "app_volume.txt";
+const BRIGHTNESS_FILE: &str = "app_brightness.txt";
+
+fn setting_path(files_dir: &str, name: &str) -> PathBuf {
+    Path::new(files_dir).join(name)
+}
+
+fn read_value(files_dir: &str, name: &str) -> Option<String> {
+    fs::read_to_string(setting_path(files_dir, name)).ok()
+}
+
+fn write_value(files_dir: &str, name: &str, value: &str) -> std::io::Result<()> {
+    fs::write(setting_path(files_dir, name), value)
 }
 
 fn load_default_quality(files_dir: &str) -> String {
-    fs::read_to_string(quality_file(files_dir))
+    read_value(files_dir, "default_quality.txt")
         .map(|value| normalize_quality(&value))
-        .unwrap_or_else(|_| QUALITY_AUTO.to_string())
+        .unwrap_or_else(|| QUALITY_AUTO.to_string())
 }
 
 fn save_default_quality(files_dir: &str, quality: &str) -> std::io::Result<()> {
-    fs::write(quality_file(files_dir), normalize_quality(quality))
+    write_value(
+        files_dir,
+        "default_quality.txt",
+        &normalize_quality(quality),
+    )
+}
+
+/// Parses a stored 0..1 level. Returns None for anything unusable.
+fn parse_unit(raw: &str) -> Option<f32> {
+    raw.trim()
+        .parse::<f32>()
+        .ok()
+        .filter(|value| value.is_finite())
+        .map(|value| value.clamp(0.0, 1.0))
+}
+
+/// A level the user has set, or -1.0 when the app has never stored one.
+fn load_unit(files_dir: &str, name: &str) -> f32 {
+    read_value(files_dir, name)
+        .and_then(|raw| parse_unit(&raw))
+        .unwrap_or(-1.0)
+}
+
+fn save_unit(files_dir: &str, name: &str, value: f32) {
+    if !value.is_finite() {
+        return;
+    }
+    let _ = write_value(files_dir, name, &format!("{}", value.clamp(0.0, 1.0)));
 }
 
 fn java_string<'local>(env: &JNIEnv<'local>, value: &str) -> jstring {
@@ -113,6 +151,65 @@ pub extern "system" fn Java_com_pbb_live_MainActivity_setDefaultQuality<'local>(
     let _ = save_default_quality(&dir, &value);
 }
 
+fn java_unit<'local>(env: &mut JNIEnv<'local>, files_dir: &JString<'local>, name: &str) -> f32 {
+    let dir: String = env
+        .get_string(files_dir)
+        .map(String::from)
+        .unwrap_or_default();
+    load_unit(&dir, name)
+}
+
+fn store_unit<'local>(
+    env: &mut JNIEnv<'local>,
+    files_dir: &JString<'local>,
+    name: &str,
+    value: jfloat,
+) {
+    let dir: String = env
+        .get_string(files_dir)
+        .map(String::from)
+        .unwrap_or_default();
+    save_unit(&dir, name, value);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_pbb_live_MainActivity_appVolume<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    files_dir: JString<'local>,
+) -> jfloat {
+    java_unit(&mut env, &files_dir, VOLUME_FILE)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_pbb_live_MainActivity_setAppVolume<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    files_dir: JString<'local>,
+    value: jfloat,
+) {
+    store_unit(&mut env, &files_dir, VOLUME_FILE, value);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_pbb_live_MainActivity_appBrightness<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    files_dir: JString<'local>,
+) -> jfloat {
+    java_unit(&mut env, &files_dir, BRIGHTNESS_FILE)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_pbb_live_MainActivity_setAppBrightness<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    files_dir: JString<'local>,
+    value: jfloat,
+) {
+    store_unit(&mut env, &files_dir, BRIGHTNESS_FILE, value);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +242,30 @@ mod tests {
         assert_eq!(load_default_quality(&dir_str), QUALITY_HD);
         save_default_quality(&dir_str, "nope").unwrap();
         assert_eq!(load_default_quality(&dir_str), QUALITY_AUTO);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn parses_unit_levels() {
+        assert_eq!(parse_unit("0.5"), Some(0.5));
+        assert_eq!(parse_unit(" 1 "), Some(1.0));
+        assert_eq!(parse_unit("2.0"), Some(1.0));
+        assert_eq!(parse_unit("-3"), Some(0.0));
+        assert_eq!(parse_unit("abc"), None);
+        assert_eq!(parse_unit("NaN"), None);
+    }
+
+    #[test]
+    fn remembers_app_levels() {
+        let dir = test_dir("levels");
+        let dir_str = dir.to_string_lossy().into_owned();
+        assert_eq!(load_unit(&dir_str, VOLUME_FILE), -1.0);
+        save_unit(&dir_str, VOLUME_FILE, 0.42);
+        assert_eq!(load_unit(&dir_str, VOLUME_FILE), 0.42);
+        save_unit(&dir_str, BRIGHTNESS_FILE, 0.9);
+        assert_eq!(load_unit(&dir_str, BRIGHTNESS_FILE), 0.9);
+        save_unit(&dir_str, VOLUME_FILE, 5.0);
+        assert_eq!(load_unit(&dir_str, VOLUME_FILE), 1.0);
         fs::remove_dir_all(&dir).unwrap();
     }
 
