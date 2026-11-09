@@ -53,6 +53,8 @@ function setStatusText(message) {
 function setStreamStatus(entry, message, bad) {
   entry.statusEl.textContent = message;
   entry.statusEl.classList.toggle("bad", Boolean(bad));
+  // The steady "live" pill is noise; keep the pill only while connecting or on error.
+  entry.statusEl.classList.toggle("hidden", !bad && message === "live");
 }
 
 function showControls() {
