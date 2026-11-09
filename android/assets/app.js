@@ -401,8 +401,13 @@ async function initPlayer(entry, index) {
   }
 
   entry.video.muted = state.sound !== index;
+  if (state.focused >= 0 && state.focused !== index) {
+    entry.video.pause();
+  }
   setStreamStatus(entry, "live", false);
-  setStatusText("all four feeds ready");
+  if (state.focused < 0) {
+    setStatusText("all four feeds ready");
+  }
 }
 
 function applyQuality(player, quality) {
@@ -748,9 +753,10 @@ function boot() {
   if (Pbb.isRecording()) {
     state.recording = 0;
     state.pendingRecord = 0;
-    updateControls();
   }
-  setStatusText("loading four live feeds...");
+  if (state.focused < 0) {
+    focusStream(0);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", boot);
