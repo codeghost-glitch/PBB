@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -425,6 +426,35 @@ public class MainActivity extends Activity {
                     }
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void setVolume(final float value) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                    if (audio == null) {
+                        return;
+                    }
+                    int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    int index = Math.round(Math.max(0f, Math.min(1f, value)) * max);
+                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public float getVolume() {
+            AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (audio == null) {
+                return 0.7f;
+            }
+            int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            if (max <= 0) {
+                return 0.7f;
+            }
+            return (float) audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max;
         }
 
         @JavascriptInterface

@@ -122,10 +122,11 @@ function toggleLock() {
 function applyGestureValue(value) {
   const clamped = Math.min(1, Math.max(0, value));
   if (gesture.mode === "volume") {
-    // Player volume only: the system media volume is left alone.
+    // Drive the media stream so the change is actually audible; the players
+    // stay at full volume so nothing attenuates twice.
     state.volume = clamped;
-    for (const entry of players) {
-      entry.video.volume = clamped;
+    if (window.Pbb) {
+      Pbb.setVolume(clamped);
     }
     showIndicator(`volume ${Math.round(clamped * 100)}%`);
   } else {
@@ -600,7 +601,7 @@ function ensureSound(index) {
   for (const [i, entry] of players.entries()) {
     entry.video.muted = i !== index;
   }
-  players[index].video.volume = state.volume;
+  players[index].video.volume = 1;
   players[index].video.play().catch(() => {});
   updateControls();
 }
@@ -831,6 +832,10 @@ function boot() {
   }
 
   state.quality = normalizeQuality(Pbb.getDefaultQuality());
+  const systemVolume = Number(Pbb.getVolume());
+  if (!Number.isNaN(systemVolume)) {
+    state.volume = Math.min(1, Math.max(0, systemVolume));
+  }
   for (const [index, stream] of config.streams.entries()) {
     createCard(stream, index);
   }
