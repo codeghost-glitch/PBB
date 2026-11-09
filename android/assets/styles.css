@@ -249,7 +249,38 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 .pip-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: var(--border-color); }
 .pip-mode .cam-card:not(.focused) { display: none; }
 .pip-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; height: 100vh; }
-.pip-mode .cam-meta, .pip-mode .cam-actions, .pip-mode .live-badge { display: none !important; }
+.pip-mode .cam-meta,
+.pip-mode .cam-actions,
+.pip-mode .live-badge,
+.pip-mode .stream-status { display: none !important; }
+.pip-mode .cam-card { overflow: visible; height: 100dvh; }
+.pip-mode .grid { height: 100dvh; }
+.pip-mode .video-wrap { width: 100%; height: 100%; }
+
+body.fullscreen-mode .page { padding: 0; max-width: none; }
+body.fullscreen-mode .nav,
+body.fullscreen-mode .stage-head,
+body.fullscreen-mode .status,
+body.fullscreen-mode .deco,
+body.fullscreen-mode .cam-meta,
+body.fullscreen-mode .cam-actions,
+body.fullscreen-mode .stream-status { display: none !important; }
+body.fullscreen-mode .grid { display: block; height: 100dvh; }
+body.fullscreen-mode .cam-card { border: 0; box-shadow: none; padding: 0; border-radius: 0; background: #000000; height: 100dvh; overflow: visible; }
+body.fullscreen-mode .cam-card:not(.focused) { display: none; }
+body.fullscreen-mode .video-wrap { border: 0; border-radius: 0; aspect-ratio: auto; width: 100%; height: 100%; max-height: none; background: #000000; }
+body.fullscreen-mode .video-wrap video { object-fit: contain; }
+
+.fs-exit {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 90;
+  display: none;
+  opacity: 0.9;
+}
+
+body.fullscreen-mode .fs-exit { display: inline-flex; }
 
 body.recording-mode .page { padding: 0; max-width: none; }
 body.recording-mode .nav,

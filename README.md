@@ -6,10 +6,14 @@ Rust + JNI Android app for four PBB live DASH/clear-key streams.
 
 - 2x2 multi-view in every orientation.
 - Focus one stream, then picture-in-picture for that one stream only. PiP also auto-enters when leaving the app from focus mode. Focus keeps the 16:9 frame instead of stretching.
+- Focusing a stream turns its sound on automatically.
+- Fullscreen button per focused stream: hides system bars, letterboxes the feed on black, exits with the floating button or the back key.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage.
 - PBB All Access is the default sound stream on launch.
 - Record button uses Android MediaProjection to capture the focused stream into Movies/PBB/. Recording is video-only screen capture because DASH clear-key playback is DRM-protected and captureStream() is not a reliable source.
 - While recording, the UI chrome hides so the captured file is just the video (letterboxed on black). Stop from the notification shade; no on-screen button is drawn into the recording.
+- Starting a recording locks the activity to landscape; stopping restores the sensor orientation.
+- In picture-in-picture the live badge, stream status, and controls are hidden, so only the video is shown.
 - Android shows its "share your screen" consent dialog on every recording start. That dialog is mandatory for MediaProjection and cannot be skipped.
 - Neobrutalism styling from /home/rey/Downloads/Projects/neobrutalism with Coral & Cream defaults: warm cream, 2px black borders, 4px hard shadows, rounded cards, lowercase headings, scattered stars/blobs, mechanical press-down buttons.
 

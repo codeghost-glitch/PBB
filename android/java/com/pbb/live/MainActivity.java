@@ -7,12 +7,15 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
@@ -45,6 +48,7 @@ public class MainActivity extends Activity {
     private int focusedStream = -1;
     private int pendingRecordIndex = -1;
     private String pendingRecordLabel = "stream";
+    private boolean orientationLocked = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -106,6 +110,9 @@ public class MainActivity extends Activity {
 
     private void notifyRecordingState(boolean active, String message) {
         recording = active;
+        if (!active) {
+            lockLandscape(false);
+        }
         final String quoted = JSONObject.quote(message == null ? "" : message);
         runOnUiThread(new Runnable() {
             @Override
@@ -131,6 +138,46 @@ public class MainActivity extends Activity {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
+    private void applyImmersive(boolean enabled) {
+        View decor = getWindow().getDecorView();
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = decor.getWindowInsetsController();
+            if (controller == null) {
+                return;
+            }
+            if (enabled) {
+                controller.hide(WindowInsets.Type.systemBars());
+                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            } else {
+                controller.show(WindowInsets.Type.systemBars());
+            }
+            return;
+        }
+        if (enabled) {
+            decor.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } else {
+            decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        }
+    }
+
+    private void lockLandscape(boolean lock) {
+        if (lock && !orientationLocked) {
+            orientationLocked = true;
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            return;
+        }
+        if (!lock && orientationLocked) {
+            orientationLocked = false;
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }
+
     private void enterPipMode() {
         if (recording) {
             toast("stop recording before pip");
@@ -143,6 +190,7 @@ public class MainActivity extends Activity {
         if (isInPictureInPictureMode()) {
             return;
         }
+        applyImmersive(false);
         PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
         builder.setAspectRatio(new Rational(16, 9));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -253,6 +301,7 @@ public class MainActivity extends Activity {
     }
 
     private void startRecordService(Intent data) {
+        lockLandscape(true);
         String displayName = makeDisplayName(pendingRecordLabel);
         Intent service = new Intent(this, RecordService.class);
         service.setAction(RecordService.ACTION_START);
@@ -323,6 +372,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void clearFocusedStream() {
             focusedStream = -1;
+        }
+
+        @JavascriptInterface
+        public void setImmersive(final boolean enabled) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    applyImmersive(enabled);
+                }
+            });
         }
 
         @JavascriptInterface

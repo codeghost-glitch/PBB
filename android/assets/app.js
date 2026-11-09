@@ -5,6 +5,7 @@ const state = {
   recording: -1,
   pendingRecord: -1,
   sound: 0,
+  fullscreen: false,
 };
 
 const players = [];
@@ -81,10 +82,12 @@ function createCard(stream, index) {
   const focusBtn = makeButton("btn btn-ghost btn-tiny", "focus", "focus");
   const soundBtn = makeButton("btn btn-ghost btn-tiny", "sound", "sound");
   const pipBtn = makeButton("btn btn-ghost btn-tiny hidden", "pip", "pip");
+  const fsBtn = makeButton("btn btn-ghost btn-tiny hidden", "fs", "fullscreen");
   const recordBtn = makeButton("btn btn-tiny record-btn", "record", "record");
   actions.appendChild(focusBtn);
   actions.appendChild(soundBtn);
   actions.appendChild(pipBtn);
+  actions.appendChild(fsBtn);
   actions.appendChild(recordBtn);
 
   card.appendChild(videoWrap);
@@ -94,6 +97,7 @@ function createCard(stream, index) {
   focusBtn.addEventListener("click", () => focusStream(index));
   soundBtn.addEventListener("click", () => setSound(index));
   pipBtn.addEventListener("click", () => enterPip(index));
+  fsBtn.addEventListener("click", () => toggleFullscreen());
   recordBtn.addEventListener("click", () => toggleRecord(index));
 
   grid.appendChild(card);
@@ -202,8 +206,13 @@ function updateControls() {
 
   for (const [index, card] of cards.entries()) {
     const pipBtn = card.querySelector('[data-role="pip"]');
-    pipBtn.classList.toggle("hidden", state.focused !== index || state.pip);
+    pipBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
     pipBtn.disabled = state.recording >= 0 || state.pip;
+
+    const fsBtn = card.querySelector('[data-role="fs"]');
+    fsBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
+    fsBtn.disabled = state.recording >= 0 || state.pip;
+    fsBtn.textContent = state.fullscreen ? "exit fullscreen" : "fullscreen";
 
     const recordBtn = card.querySelector('[data-role="record"]');
     recordBtn.textContent = state.recording === index ? "stop recording" : "record";
@@ -219,19 +228,28 @@ function updateControls() {
   }
 }
 
+function ensureSound(index) {
+  if (index < 0 || !players[index]) {
+    return;
+  }
+  state.sound = index;
+  for (const [i, entry] of players.entries()) {
+    entry.video.muted = i !== index;
+  }
+  players[index].video.play().catch(() => {});
+  updateControls();
+}
+
 function setSound(index) {
   if (state.sound === index) {
     state.sound = -1;
     for (const entry of players) {
       entry.video.muted = true;
     }
-  } else {
-    state.sound = index;
-    for (const [i, entry] of players.entries()) {
-      entry.video.muted = i !== index;
-    }
+    updateControls();
+    return;
   }
-  updateControls();
+  ensureSound(index);
 }
 
 function playOnly(index) {
@@ -258,6 +276,7 @@ function focusStream(index) {
     card.classList.toggle("focused", i === index);
   }
   playOnly(index);
+  ensureSound(index);
   if (window.Pbb) {
     Pbb.setFocusedStream(index);
   }
@@ -294,12 +313,37 @@ function enterPip(index) {
     setStatusText("stop recording before pip");
     return;
   }
+  if (state.fullscreen) {
+    toggleFullscreen();
+  }
   if (state.focused !== index) {
     focusStream(index);
   }
-  setSound(index);
+  ensureSound(index);
   setStatusText("requesting picture-in-picture");
   Pbb.enterPip();
+}
+
+function toggleFullscreen() {
+  if (state.pip) {
+    return;
+  }
+  if (state.recording >= 0) {
+    setStatusText("stop recording first");
+    return;
+  }
+  if (state.focused < 0) {
+    setStatusText("focus one stream first");
+    return;
+  }
+  state.fullscreen = !state.fullscreen;
+  document.body.classList.toggle("fullscreen-mode", state.fullscreen);
+  if (window.Pbb) {
+    Pbb.setImmersive(state.fullscreen);
+  }
+  playOnly(state.focused);
+  setStatusText(state.fullscreen ? "fullscreen — tap exit fullscreen to return" : "back to focus view");
+  updateControls();
 }
 
 function toggleRecord(index) {
@@ -340,7 +384,7 @@ window.setPipMode = (enabled) => {
     if (state.focused < 0) {
       focusStream(0);
     }
-    setSound(state.focused);
+    ensureSound(state.focused);
     playOnly(state.focused);
     setStatusText(`picture-in-picture: ${players[state.focused].stream.name}`);
   } else {
@@ -352,6 +396,10 @@ window.setPipMode = (enabled) => {
 
 window.handleBack = () => {
   if (state.pip) {
+    return true;
+  }
+  if (state.fullscreen) {
+    toggleFullscreen();
     return true;
   }
   if (state.focused >= 0) {
@@ -399,6 +447,10 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
+  const fsExit = document.getElementById("fsExit");
+  if (fsExit) {
+    fsExit.addEventListener("click", toggleFullscreen);
+  }
 
   if (Pbb.isInPip()) {
     window.setPipMode(true);
