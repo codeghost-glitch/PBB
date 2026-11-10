@@ -127,7 +127,7 @@ It writes keys/keys.json and rewrites `STREAM_CONFIG_JSON` in src/lib.rs with th
 
 ## Downloadable recorder plugin
 
-Android 10+ forbids execve() on files in an app home directory, so a downloaded ffmpeg executable cannot run. A downloaded shared library can, as long as it is read-only (Android 14+ rejects writable dynamic code). The plugin therefore is libpbbffmpeg.so, fetched as base64 from a private gist, decoded, chmod 0444, then loaded with System.load(). Only libc/libm/libdl are needed, and it is 16 KB page-aligned for Android 15+.
+Android 10+ forbids execve() on files in an app home directory, so a downloaded ffmpeg executable cannot run. A downloaded shared library can, as long as it is read-only (Android 14+ rejects writable dynamic code). The plugin therefore is libpbbffmpeg.so, shipped in the APK as base64 in assets/libpbbffmpeg.so.b64, decoded, chmod 0444, then loaded with System.load(). A pinned gist is the fallback for builds made without the asset. Only libc/libm/libdl are needed, and it is 16 KB page-aligned for Android 15+.
 
 Hosted at the URL pinned in RecordService.java, together with its SHA-256. Both must be updated together when the plugin changes.
 
@@ -135,7 +135,7 @@ Rebuild with ./ffmpeg/build-android.sh (FFmpeg n7.1, arm64-v8a, minimal: mov dem
 
 The plugin is arm64-only. Non-arm64 devices get a clear error instead of a crash. On Android 15+ the dataSync foreground service has a six-hour budget, and `onTimeout` then ends the pull through the normal save path, so the file is published instead of lost.
 
-The pinned gist is a single point of failure: if it disappears, recording stops working until a new URL ships in an APK. Shipping the .so in the APK removes that dependency.
+The bundled copy means recording works offline and does not depend on the gist surviving; the gist is only used by builds that ship without the asset.
 
 A long stall in the archive (the live edge moving past what the server still serves) no longer splices across the hole: the current part is saved and a second file `..._2.mp4` continues. A failed remux keeps the pulled segments in the app cache and says so in the status text instead of deleting the only copy.
 

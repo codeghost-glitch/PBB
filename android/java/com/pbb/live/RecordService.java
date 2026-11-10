@@ -65,6 +65,7 @@ public class RecordService extends Service {
     private static final int STOP_REQUEST_CODE = 4102;
     private static final String TAG = "PbbRecordService";
     private static final String PLUGIN_FILE = "libpbbffmpeg.so";
+    private static final String PLUGIN_ASSET = "libpbbffmpeg.so.b64";
 
     private static final String PLUGIN_URL =
         "https://gist.githubusercontent.com/codeghost-glitch/e2db5f9ab594739147c94ad82f5bd3d1/raw/7a5bd9a1ea01410443b94f310be6a1684c967823/libpbbffmpeg.so.b64";
@@ -199,7 +200,7 @@ public class RecordService extends Service {
             if (!isArm64()) {
                 throw new IOException("recorder plugin is arm64 only on this build");
             }
-            status(true, "downloading recorder plugin");
+            status(true, "preparing the recorder");
             loadPlugin(this);
 
             // One part per uninterrupted run. A gap in the archive ends a part and
@@ -315,7 +316,11 @@ public class RecordService extends Service {
         return false;
     }
 
-    /** The plugin is fetched once, verified against a pinned digest, and loaded read-only. */
+    /**
+     * The plugin ships as base64 in the assets, with the pinned gist as a fallback
+     * for builds made without it. Either copy is verified against the pinned
+     * digest before it is written read-only and loaded.
+     */
     private static synchronized void loadPlugin(Context context) throws Exception {
         if (pluginLoaded) {
             return;
@@ -323,12 +328,10 @@ public class RecordService extends Service {
         File file = new File(context.getFilesDir(), PLUGIN_FILE);
         byte[] existing = file.exists() ? Http.readAll(new FileInputStream(file)) : null;
         if (existing == null || !PLUGIN_SHA256.equals(hex(sha256(existing)))) {
-            byte[] encoded = fetch(PLUGIN_URL);
-            if (encoded == null) {
-                throw new IOException("cannot download the recorder plugin, check the network and record again");
+            byte[] so = bundledPlugin(context);
+            if (so == null) {
+                so = downloadedPlugin();
             }
-            byte[] so = Base64.decode(
-                new String(encoded, StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
             if (!PLUGIN_SHA256.equals(hex(sha256(so)))) {
                 throw new IOException("recorder plugin checksum mismatch");
             }
@@ -344,6 +347,31 @@ public class RecordService extends Service {
         Os.chmod(file.getAbsolutePath(), 0444);
         System.load(file.getAbsolutePath());
         pluginLoaded = true;
+    }
+
+    private static byte[] bundledPlugin(Context context) {
+        try {
+            InputStream in = context.getAssets().open(PLUGIN_ASSET);
+            try {
+                byte[] encoded = Http.readAll(in);
+                return Base64.decode(
+                    new String(encoded, StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
+            } finally {
+                in.close();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "no bundled recorder plugin", e);
+            return null;
+        }
+    }
+
+    private static byte[] downloadedPlugin() throws IOException {
+        byte[] encoded = fetch(PLUGIN_URL);
+        if (encoded == null) {
+            throw new IOException("cannot download the recorder plugin, check the network and record again");
+        }
+        return Base64.decode(
+            new String(encoded, StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
     }
 
     private Plan loadPlan(String mpdUrl) throws Exception {
