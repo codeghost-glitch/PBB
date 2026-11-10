@@ -514,7 +514,7 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     left: 6px;
     top: 6px;
     z-index: 3;
-    max-width: 46%;
+    max-width: calc(100% - 12px);
     margin: 0;
     padding: 2px 6px;
     background: var(--bg-surface);
@@ -538,6 +538,8 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     left: 50%;
     bottom: 6px;
     z-index: 3;
+    /* max-content, or the 50% left offset halves the space and wraps the row. */
+    width: max-content;
     max-width: calc(100% - 12px);
     margin: 0;
     padding: 3px;

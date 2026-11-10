@@ -358,6 +358,12 @@ const ICONS = {
     ["path", { d: "M11 8v6" }],
     ["path", { d: "M8 11h6" }],
   ],
+  next: [
+    ["path", { d: "M8 3 4 7l4 4" }],
+    ["path", { d: "M4 7h16" }],
+    ["path", { d: "m16 21 4-4-4-4" }],
+    ["path", { d: "M20 17H4" }],
+  ],
   lock: [
     ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
     ["path", { d: "M8 11V7a4 4 0 0 1 8 0v4" }],
@@ -554,7 +560,7 @@ async function initPlayer(entry, index) {
     if (Number(detail.code) === 4012) {
       state.keysStale = true;
       setStreamStatus(entry, "keys rotated - tap refresh", true);
-      setStatusText("keys rotated - tap the refresh icon in the top bar");
+      setStatusText("keys rotated - tap this bar to refresh");
       return;
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
@@ -737,7 +743,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText(state.keysStale ? "keys rotated - tap the refresh icon in the top bar" : "");
+  setStatusText(state.keysStale ? "keys rotated - tap this bar to refresh" : "");
   updateControls();
   return true;
 }
@@ -800,6 +806,15 @@ function toggleFullscreen() {
   // Entering fullscreen is visible on its own; only report the way back.
   setStatusText(state.fullscreen ? "" : "back to focus view");
   updateControls();
+}
+
+// Stay in fullscreen and move to the next live feed.
+function switchFullscreen() {
+  if (!state.fullscreen || state.pip || players.length < 2) {
+    return;
+  }
+  focusStream((state.focused + 1) % players.length);
+  showControls();
 }
 
 function rotateFullscreen() {
@@ -969,11 +984,6 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
-  const refreshKeysBtn = document.getElementById("refreshKeysBtn");
-  if (refreshKeysBtn) {
-    setIcon(refreshKeysBtn, "refresh", "refresh stream keys");
-    refreshKeysBtn.addEventListener("click", refreshKeysFromUi);
-  }
   const statusBar = document.getElementById("statusBar");
   if (statusBar) {
     statusBar.addEventListener("click", refreshKeysFromUi);
@@ -992,6 +1002,11 @@ function boot() {
   if (fsExit) {
     setIcon(fsExit, "exit", "exit fullscreen");
     fsExit.addEventListener("click", toggleFullscreen);
+  }
+  const fsSwitch = document.getElementById("fsSwitch");
+  if (fsSwitch) {
+    setIcon(fsSwitch, "next", "next live feed");
+    fsSwitch.addEventListener("click", switchFullscreen);
   }
   const fsRotate = document.getElementById("fsRotate");
   if (fsRotate) {

@@ -10,7 +10,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Focus rings only appear for keyboard/D-pad navigation. Tapping a button does not leave the WebView focus outline stuck on it.
 - Shaka network failures (1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT) trigger a bounded backoff reload instead of leaving the tile on a dead error message.
 - Opening fullscreen or PiP turns that feed's sound on automatically.
-- Fullscreen button on every card: hides system bars, letterboxes the feed on black, exits with the floating button or the back key.
+- Fullscreen button on every card: hides system bars, letterboxes the feed on black, exits with the floating button or the back key. The control column has lock, exit, rotate, zoom, and a next-feed button that switches which live feed is fullscreen without leaving it.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage.
 - PBB All Access is the default sound stream on launch.
 - Record button pulses while a recording runs. It pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: a foreground service keeps recording with the app backgrounded or the screen off.
@@ -106,7 +106,7 @@ The app uses the three feeds from https://pbb-live.vercel.app. MainActivity fetc
 - Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback with the last known three feeds.
 - Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
 - The status bar is the thin footer card at the bottom of the page, below the three-feed grid: a teal dot plus the status text, with the back button when focused. It is hidden in PiP and fullscreen, and setStatusText("") hides it when returning to the grid.
-- Because of that, the always-visible control is the circular-arrow refresh icon in the top nav (and the same icon in the fullscreen control column). Tapping it calls Pbb.refreshKeys(); the status bar is also tappable. On 4012 the tiles say "keys rotated - tap refresh" and the status bar says "keys rotated - tap the refresh icon in the top bar".
+- The status bar is the refresh control: tapping it calls Pbb.refreshKeys(). There is no separate refresh icon in the top bar or in fullscreen. On 4012 the tiles say "keys rotated - tap refresh" and the status bar says "keys rotated - tap this bar to refresh".
 - A manual refresh always resolves its status text: changed keys re-init the players, unchanged keys report that the source has not published new ones, and a failed fetch reports the connection error. Silent startup fetches never overwrite the status.
 - Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall.
 
