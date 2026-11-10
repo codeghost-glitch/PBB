@@ -787,7 +787,8 @@ function toggleFullscreen() {
     }
   }
   playOnly(state.focused);
-  setStatusText(state.fullscreen ? "fullscreen landscape — rotate or exit" : "back to focus view");
+  // Entering fullscreen is visible on its own; only report the way back.
+  setStatusText(state.fullscreen ? "" : "back to focus view");
   updateControls();
 }
 

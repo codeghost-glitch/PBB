@@ -499,22 +499,35 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     border-radius: 0;
     aspect-ratio: auto;
   }
+  /* Title top-left, status top-right, buttons centred at the bottom: the
+     three never collide, however narrow the card is. */
   .cam-meta {
     position: absolute;
     left: 6px;
     top: 6px;
     z-index: 3;
+    max-width: 46%;
     margin: 0;
     padding: 2px 6px;
     background: var(--bg-surface);
     border: var(--border);
     border-radius: var(--radius-sm);
   }
+  .stream-status {
+    left: auto;
+    right: 6px;
+    top: 6px;
+    bottom: auto;
+    max-width: 46%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
   /* A white pill behind the buttons: ghost buttons over black video would be
      black icons on black. */
   .cam-actions {
     position: absolute;
-    right: 6px;
+    left: 50%;
     bottom: 6px;
     z-index: 3;
     max-width: calc(100% - 12px);
@@ -522,7 +535,8 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     padding: 3px;
     gap: 4px;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: center;
+    transform: translateX(-50%);
     background: var(--bg-surface);
     border: var(--border);
     border-radius: var(--radius-sm);
@@ -538,7 +552,12 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
   /* The status pill can slide under the buttons on narrow cards; keep the
      buttons tappable. */
   .stream-status { pointer-events: none; }
-  .cam-title { font-size: 0.72rem; }
+  .cam-title {
+    font-size: 0.72rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
   .cam-sub { display: none; }
   /* The status pill already reports the feed state. */
   .live-badge { display: none; }
