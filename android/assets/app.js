@@ -80,6 +80,11 @@ function setStatusText(message) {
   if (bar) {
     bar.classList.toggle("hidden", message === "");
   }
+  // Fullscreen hides the footer, so mirror the message on the indicator or a
+  // control like the refresh icon looks like it did nothing.
+  if (message && state.fullscreen) {
+    showIndicator(message, 2500);
+  }
 }
 
 function setStreamStatus(entry, message, bad) {
@@ -115,7 +120,7 @@ function toggleControls() {
   showControls();
 }
 
-function showIndicator(message) {
+function showIndicator(message, duration = 900) {
   if (!indicator) {
     return;
   }
@@ -127,7 +132,7 @@ function showIndicator(message) {
   indicatorTimer = setTimeout(() => {
     indicator.classList.add("hidden");
     indicatorTimer = null;
-  }, 900);
+  }, duration);
 }
 
 function toggleLock() {

@@ -510,17 +510,34 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     border: var(--border);
     border-radius: var(--radius-sm);
   }
+  /* A white pill behind the buttons: ghost buttons over black video would be
+     black icons on black. */
   .cam-actions {
     position: absolute;
     right: 6px;
     bottom: 6px;
     z-index: 3;
-    flex-wrap: nowrap;
+    max-width: calc(100% - 12px);
     margin: 0;
+    padding: 3px;
     gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    background: var(--bg-surface);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 2px 2px 0 0 var(--border-color);
   }
-  .cam-actions .btn-icon { width: 24px; height: 24px; border-radius: 7px; }
-  .cam-actions .btn-icon svg { width: 14px; height: 14px; }
+  .cam-actions .btn-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    box-shadow: none;
+  }
+  .cam-actions .btn-icon svg { width: 16px; height: 16px; }
+  /* The status pill can slide under the buttons on narrow cards; keep the
+     buttons tappable. */
+  .stream-status { pointer-events: none; }
   .cam-title { font-size: 0.72rem; }
   .cam-sub { display: none; }
   /* The status pill already reports the feed state. */
