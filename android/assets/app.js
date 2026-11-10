@@ -354,10 +354,6 @@ const ICONS = {
   ],
   record: [["circle", { cx: 12, cy: 12, r: 6 }]],
   stop: [["rect", { x: 6, y: 6, width: 12, height: 12, rx: 2 }]],
-  rotate: [
-    ["path", { d: "M21 12a9 9 0 1 1-2.6-6.4" }],
-    ["path", { d: "M21 3v6h-6" }],
-  ],
   exit: [
     ["path", { d: "M8 3v3a2 2 0 0 1-2 2H3" }],
     ["path", { d: "M21 8h-3a2 2 0 0 1-2-2V3" }],
@@ -837,18 +833,6 @@ function switchFullscreen() {
   showControls();
 }
 
-function rotateFullscreen() {
-  if (!state.fullscreen) {
-    return;
-  }
-  const portrait = window.matchMedia("(orientation: portrait)").matches;
-  state.orientation = portrait ? "landscape" : "portrait";
-  if (window.Pbb) {
-    Pbb.setOrientation(state.orientation);
-  }
-  setStatusText(`rotated to ${state.orientation}`);
-}
-
 function toggleRecord(index) {
   if (state.recording >= 0) {
     Pbb.stopRecording();
@@ -1027,11 +1011,6 @@ function boot() {
   if (fsSwitch) {
     setIcon(fsSwitch, "next", "next live feed");
     fsSwitch.addEventListener("click", switchFullscreen);
-  }
-  const fsRotate = document.getElementById("fsRotate");
-  if (fsRotate) {
-    setIcon(fsRotate, "rotate", "rotate");
-    fsRotate.addEventListener("click", rotateFullscreen);
   }
   if (Pbb.isInPip()) {
     window.setPipMode(true);
