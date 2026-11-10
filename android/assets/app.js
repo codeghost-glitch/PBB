@@ -207,12 +207,13 @@ function applyZoom() {
   entry.video.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
 }
 
+// Clears every tile, not just the focused one: a zoomed video that becomes the
+// mini tile keeps its scale and translate and renders black inside the tile.
 function resetZoom() {
   zoom.scale = 1;
   zoom.x = 0;
   zoom.y = 0;
-  const entry = players[state.focused];
-  if (entry) {
+  for (const entry of players) {
     entry.video.style.transform = "";
   }
 }
@@ -762,6 +763,7 @@ function focusStream(index, skipQuality) {
     return;
   }
   state.focused = index;
+  resetZoom();
   document.body.classList.add("focus-mode");
   for (const [i, entry] of players.entries()) {
     entry.card.classList.toggle("focused", i === index);
