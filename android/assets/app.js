@@ -763,6 +763,14 @@ function focusStream(index, skipQuality) {
     return;
   }
   state.focused = index;
+  // A card can not be the big feed and the tile at once; drop the tile rather
+  // than letting one element carry both layouts.
+  if (state.mini === index) {
+    for (const entry of players) {
+      entry.card.classList.remove("mini");
+    }
+    state.mini = -1;
+  }
   // The arriving feed starts unzoomed, so zoom mode and its highlight go with it.
   zoom.mode = false;
   resetZoom();
@@ -918,7 +926,15 @@ function switchFullscreen() {
   if (!state.fullscreen || state.pip || players.length < 2) {
     return;
   }
-  focusStream((state.focused + 1) % players.length);
+  const next = (state.focused + 1) % players.length;
+  if (next === state.mini) {
+    // The tile is already the next feed: promote it and hand it the old big
+    // feed, instead of making one card both the big feed and the tile.
+    swapMini();
+    showControls();
+    return;
+  }
+  focusStream(next);
   showControls();
 }
 
