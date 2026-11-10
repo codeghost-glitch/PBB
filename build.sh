@@ -98,9 +98,11 @@ export PATH="${JAVA_HOME:+$JAVA_HOME/bin:}$BUILD_TOOLS:$ANDROID_SDK_ROOT/platfor
 
 OUT="$ROOT/build"
 APK_LIB="$OUT/apk/lib"
+# The signing key is not in the repo: point PBB_KEYSTORE at the keystore file
+# and pass PBB_KEYSTORE_PASS. CI decodes both from repository secrets.
 KEYSTORE="${PBB_KEYSTORE:-$ROOT/android/release.keystore}"
 KEY_ALIAS="${PBB_KEY_ALIAS:-pbb}"
-STORE_PASS="${PBB_KEYSTORE_PASS:-pbb-release}"
+STORE_PASS="${PBB_KEYSTORE_PASS:-}"
 KEY_PASS="${PBB_KEY_PASS:-$STORE_PASS}"
 
 echo "sdk:          $ANDROID_SDK_ROOT"
@@ -113,7 +115,11 @@ rm -rf "$OUT"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/apk" "$APK_LIB"
 
 if [ ! -f "$KEYSTORE" ]; then
-  echo "missing keystore: $KEYSTORE" >&2
+  echo "missing keystore: $KEYSTORE (set PBB_KEYSTORE)" >&2
+  exit 1
+fi
+if [ -z "$STORE_PASS" ]; then
+  echo "missing keystore password: set PBB_KEYSTORE_PASS" >&2
   exit 1
 fi
 

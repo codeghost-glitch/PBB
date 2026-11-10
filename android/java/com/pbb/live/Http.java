@@ -1,0 +1,62 @@
+package com.pbb.live;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+/**
+ * The two HTTP GETs the app makes and the one stream reader, in a single place
+ * so a timeout change lands in both the key fetch and the recorder.
+ */
+final class Http {
+    private static final String AGENT = "PBB/1.0";
+
+    private Http() {
+    }
+
+    static HttpURLConnection open(String url, int connectMs, int readMs) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(connectMs);
+        c.setReadTimeout(readMs);
+        c.setInstanceFollowRedirects(true);
+        c.setUseCaches(false);
+        c.setRequestProperty("User-Agent", AGENT);
+        c.setRequestProperty("Cache-Control", "no-cache");
+        return c;
+    }
+
+    static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[16384];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+            out.write(buf, 0, n);
+        }
+        return out.toByteArray();
+    }
+
+    /** Returns null when the server answered anything but 200. */
+    static byte[] getBytes(String url, int connectMs, int readMs) throws IOException {
+        HttpURLConnection conn = open(url, connectMs, readMs);
+        try {
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            InputStream in = conn.getInputStream();
+            try {
+                return readAll(in);
+            } finally {
+                in.close();
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    static String getText(String url, int connectMs, int readMs) throws IOException {
+        byte[] body = getBytes(url, connectMs, readMs);
+        return body == null ? null : new String(body, "UTF-8");
+    }
+}

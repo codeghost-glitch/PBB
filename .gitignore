@@ -3,6 +3,7 @@
 /*.apk
 /*.apk.idsig
 /android/debug.keystore
+/android/release.keystore
 .pi-lens/
 /ffmpeg/out/
 /ffmpeg/include/

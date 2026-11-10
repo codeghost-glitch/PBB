@@ -28,13 +28,9 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -179,7 +175,7 @@ public class MainActivity extends Activity {
             FileInputStream in = new FileInputStream(cache);
             String json;
             try {
-                json = readText(in);
+                json = new String(Http.readAll(in), "UTF-8");
             } finally {
                 in.close();
             }
@@ -235,7 +231,12 @@ public class MainActivity extends Activity {
     private static String fetchKeys() {
         JSONArray streams = new JSONArray();
         for (String[] channel : CHANNELS) {
-            String raw = fetchJson(STREAM_API + channel[1]);
+            String raw;
+            try {
+                raw = Http.getText(STREAM_API + channel[1], 5000, 8000);
+            } catch (Exception e) {
+                return null;
+            }
             if (raw == null) {
                 return null;
             }
@@ -261,43 +262,6 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private static String fetchJson(String url) {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(8000);
-            conn.setInstanceFollowRedirects(true);
-            conn.setUseCaches(false);
-            conn.setRequestProperty("Cache-Control", "no-cache");
-            if (conn.getResponseCode() != 200) {
-                return null;
-            }
-            InputStream in = conn.getInputStream();
-            try {
-                return readText(in);
-            } finally {
-                in.close();
-            }
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    private static String readText(InputStream in) throws Exception {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-            out.write(buf, 0, n);
-        }
-        return new String(out.toByteArray(), "UTF-8");
     }
 
     private static JSONArray validKeys(String json) {
@@ -724,6 +688,11 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    // A running recording owns the orientation; the page asking
+                    // for landscape on fullscreen exit must not undo that lock.
+                    if (orientationLocked) {
+                        return;
+                    }
                     if ("landscape".equals(mode)) {
                         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
                     } else if ("portrait".equals(mode)) {
@@ -743,6 +712,11 @@ public class MainActivity extends Activity {
                     applyVolume(value, true);
                 }
             });
+        }
+
+        @JavascriptInterface
+        public float getBrightness() {
+            return appBrightnessLevel;
         }
 
         @JavascriptInterface

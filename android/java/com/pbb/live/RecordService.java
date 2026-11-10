@@ -22,7 +22,6 @@ import android.util.Xml;
 
 import org.xmlpull.v1.XmlPullParser;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -181,15 +180,21 @@ public class RecordService extends Service {
         return START_NOT_STICKY;
     }
 
+    /**
+     * Android 15 caps dataSync foreground services at six hours. Stop the pull so
+     * the normal path still remuxes and publishes what was recorded.
+     */
+    public void onTimeout(int startId, int foregroundServiceType) {
+        stopping = true;
+        running = false;
+    }
+
     private void record(String mpdUrl, String key, String displayName) {
         File videoTmp = new File(getCacheDir(), "pull_video.mp4");
         File audioTmp = new File(getCacheDir(), "pull_audio.mp4");
         File outTmp = new File(getCacheDir(), "pull_out.mp4");
-        delete(videoTmp);
-        delete(audioTmp);
-        delete(outTmp);
-        int segments = 0;
         String result = null;
+        boolean saved = false;
         try {
             if (!isArm64()) {
                 throw new IOException("recorder plugin is arm64 only on this build");
@@ -197,54 +202,80 @@ public class RecordService extends Service {
             status(true, "downloading recorder plugin");
             loadPlugin(this);
 
-            Plan plan = loadPlan(mpdUrl);
-            write(videoTmp, fetch(plan.baseUrl + plan.video.init));
-            write(audioTmp, fetch(plan.baseUrl + plan.audio.init));
-
-            status(true, "finding the live edge");
-            long offset = findLiveOffset(plan);
-            int misses = 0;
-            status(true, "recording to Movies/PBB/" + displayName);
-            while (running && !stopping) {
-                String vUrl = plan.baseUrl + segmentUrl(plan.video.media, plan.video.startNumber + offset);
-                String aUrl = plan.baseUrl + segmentUrl(plan.audio.media, plan.audio.startNumber + offset);
-                byte[] v = null;
-                byte[] a = null;
-                try {
-                    v = fetch(vUrl);
-                    a = fetch(aUrl);
-                } catch (IOException e) {
-                    Log.w(TAG, "segment fetch failed", e);
+            // One part per uninterrupted run. A gap in the archive ends a part and
+            // a second file continues, so no file ever splices across a hole.
+            String name = displayName;
+            for (int part = 1; running && !stopping; part++) {
+                if (part > 1) {
+                    name = partName(displayName, part);
                 }
-                if (v == null || a == null) {
-                    misses++;
-                    if (misses > 30) {
-                        // Long stall: the live edge moved or a new period started.
-                        plan = loadPlan(mpdUrl);
-                        offset = findLiveOffset(plan);
-                        misses = 0;
-                    }
+                delete(videoTmp);
+                delete(audioTmp);
+                delete(outTmp);
+
+                Plan plan = loadPlan(mpdUrl);
+                byte[] videoInit = fetch(plan.baseUrl + plan.video.init);
+                byte[] audioInit = fetch(plan.baseUrl + plan.audio.init);
+                if (videoInit == null || audioInit == null) {
+                    throw new IOException("init segment missing");
+                }
+                write(videoTmp, videoInit);
+                write(audioTmp, audioInit);
+
+                status(true, "finding the live edge");
+                long offset = findLiveOffset(plan);
+                int misses = 0;
+                int segments = 0;
+                boolean gap = false;
+                status(true, "recording to Movies/PBB/" + name);
+                while (running && !stopping) {
+                    String vUrl = plan.baseUrl + segmentUrl(plan.video.media, plan.video.startNumber + offset);
+                    String aUrl = plan.baseUrl + segmentUrl(plan.audio.media, plan.audio.startNumber + offset);
+                    byte[] v = null;
+                    byte[] a = null;
                     try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        break;
+                        v = fetch(vUrl);
+                        a = fetch(aUrl);
+                    } catch (IOException e) {
+                        Log.w(TAG, "segment fetch failed", e);
                     }
-                    continue;
+                    if (v == null || a == null) {
+                        misses++;
+                        if (misses > 30) {
+                            // Long stall: the live edge moved past what the archive
+                            // still serves. Save this part and start the next one.
+                            gap = true;
+                            break;
+                        }
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                        continue;
+                    }
+                    append(videoTmp, v);
+                    append(audioTmp, a);
+                    segments++;
+                    misses = 0;
+                    offset++;
                 }
-                append(videoTmp, v);
-                append(audioTmp, a);
-                segments++;
-                misses = 0;
-                offset++;
-            }
 
-            if (segments == 0) {
-                result = "nothing recorded";
-            } else {
+                if (segments == 0) {
+                    result = gap ? "nothing recorded before the stream gap" : "nothing recorded";
+                    break;
+                }
                 status(true, "saving " + segments + " segments");
                 nativeRemux(videoTmp.getAbsolutePath(), audioTmp.getAbsolutePath(),
                     outTmp.getAbsolutePath(), key);
-                result = "saved to " + publish(outTmp, displayName);
+                result = "saved to " + publish(outTmp, name);
+                saved = true;
+                if (!gap) {
+                    break;
+                }
+            }
+            if (result == null) {
+                result = "recording stopped";
             }
         } catch (Throwable t) {
             Log.e(TAG, "recording failed", t);
@@ -253,13 +284,26 @@ public class RecordService extends Service {
             running = false;
             active = false;
             activeIndex = -1;
-            status(false, result == null ? "recording stopped" : result);
-            delete(videoTmp);
-            delete(audioTmp);
-            delete(outTmp);
+            // A failed remux must not throw away the only copy of a long
+            // recording: keep the pulled segments and say where they are.
+            if (saved) {
+                delete(videoTmp);
+                delete(audioTmp);
+                delete(outTmp);
+            } else if (videoTmp.exists()) {
+                result = result + " - segments kept in " + getCacheDir().getAbsolutePath();
+            }
+            status(false, result);
             stopForeground(true);
             stopSelf();
         }
+    }
+
+    private static String partName(String displayName, int part) {
+        int dot = displayName.lastIndexOf('.');
+        String base = dot > 0 ? displayName.substring(0, dot) : displayName;
+        String ext = dot > 0 ? displayName.substring(dot) : ".mp4";
+        return base + "_" + part + ext;
     }
 
     private static boolean isArm64() {
@@ -277,11 +321,11 @@ public class RecordService extends Service {
             return;
         }
         File file = new File(context.getFilesDir(), PLUGIN_FILE);
-        byte[] existing = file.exists() ? readAll(new FileInputStream(file)) : null;
+        byte[] existing = file.exists() ? Http.readAll(new FileInputStream(file)) : null;
         if (existing == null || !PLUGIN_SHA256.equals(hex(sha256(existing)))) {
             byte[] encoded = fetch(PLUGIN_URL);
             if (encoded == null) {
-                throw new IOException("plugin download returned 404");
+                throw new IOException("cannot download the recorder plugin, check the network and record again");
             }
             byte[] so = Base64.decode(
                 new String(encoded, StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
@@ -303,20 +347,10 @@ public class RecordService extends Service {
     }
 
     private Plan loadPlan(String mpdUrl) throws Exception {
-        HttpURLConnection conn = open(mpdUrl);
-        int code = conn.getResponseCode();
-        if (code != 200) {
-            conn.disconnect();
-            throw new IOException("manifest HTTP " + code);
+        byte[] body = Http.getBytes(mpdUrl, 15000, 20000);
+        if (body == null) {
+            throw new IOException("manifest request failed");
         }
-        byte[] body;
-        InputStream in = conn.getInputStream();
-        try {
-            body = readAll(in);
-        } finally {
-            in.close();
-        }
-        conn.disconnect();
 
         List<Track> videos = new ArrayList<Track>();
         List<Track> audios = new ArrayList<Track>();
@@ -384,7 +418,9 @@ public class RecordService extends Service {
      */
     private static long findLiveOffset(Plan plan) throws IOException {
         long best = -1;
-        for (long off = 0; off <= 65536L; off += 256L) {
+        // 1 KiB steps keep the coarse scan under ~65 requests; the binary search
+        // below then nails the edge to within one step.
+        for (long off = 0; off <= 65536L; off += 1024L) {
             if (exists(plan, off)) {
                 best = off;
             } else if (best >= 0 && off - best > 2048L) {
@@ -412,7 +448,7 @@ public class RecordService extends Service {
             + segmentUrl(plan.video.media, plan.video.startNumber + offset);
         HttpURLConnection conn = null;
         try {
-            conn = open(url);
+            conn = Http.open(url, 15000, 20000);
             conn.setRequestProperty("Range", "bytes=0-0");
             int code = conn.getResponseCode();
             return code == 200 || code == 206;
@@ -499,7 +535,7 @@ public class RecordService extends Service {
 
     /** Returns null on 404 (the live edge has not published that segment yet). */
     private static byte[] fetch(String url) throws IOException {
-        HttpURLConnection conn = open(url);
+        HttpURLConnection conn = Http.open(url, 15000, 20000);
         int code = conn.getResponseCode();
         if (code == 404) {
             conn.disconnect();
@@ -511,30 +547,11 @@ public class RecordService extends Service {
         }
         InputStream in = conn.getInputStream();
         try {
-            return readAll(in);
+            return Http.readAll(in);
         } finally {
             in.close();
             conn.disconnect();
         }
-    }
-
-    private static HttpURLConnection open(String url) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-        c.setConnectTimeout(15000);
-        c.setReadTimeout(20000);
-        c.setInstanceFollowRedirects(true);
-        c.setRequestProperty("User-Agent", "PBB/1.0");
-        return c;
-    }
-
-    private static byte[] readAll(InputStream in) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buf = new byte[16384];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-            out.write(buf, 0, n);
-        }
-        return out.toByteArray();
     }
 
     private static void write(File f, byte[] data) throws IOException {

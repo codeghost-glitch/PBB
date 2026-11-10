@@ -67,9 +67,25 @@ jobs:
           cargo clippy --all-targets -- -D warnings
           cargo test
 
+      # The signing key is not in the repo. Decode it from the repository secret
+      # for this run only, then point build.sh at it.
+      - name: signing key
+        env:
+          PBB_KEYSTORE_B64: ${{ secrets.PBB_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$PBB_KEYSTORE_B64" ]; then
+            echo "missing PBB_KEYSTORE_B64 repository secret" >&2
+            exit 1
+          fi
+          KEY="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$PBB_KEYSTORE_B64" | base64 -d > "$KEY"
+          test -s "$KEY"
+          echo "PBB_KEYSTORE=$KEY" >> "$GITHUB_ENV"
+
       - name: build apk
         env:
           VERSION_CODE: ${{ github.run_number }}
+          PBB_KEYSTORE_PASS: ${{ secrets.PBB_KEYSTORE_PASS }}
         run: ./build.sh
 
       - name: upload apk
