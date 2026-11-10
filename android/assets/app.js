@@ -76,10 +76,12 @@ function uuidKid(kid) {
 }
 
 function setStatusText(message) {
-  statusText.textContent = message;
+  // The footer is the refresh control, so it never hides itself: an idle label
+  // takes the place of the message instead.
+  statusText.textContent = message || "tap to refresh";
   const bar = document.getElementById("statusBar");
   if (bar) {
-    bar.classList.toggle("hidden", message === "");
+    bar.classList.remove("hidden");
   }
   // Fullscreen hides the footer, so mirror the message on the indicator or a
   // control like the refresh icon looks like it did nothing.

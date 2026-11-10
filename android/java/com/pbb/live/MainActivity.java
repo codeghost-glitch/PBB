@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private FrameLayout rootView;
+    private boolean immersive = false;
     private boolean recording = false;
     private boolean isInPip = false;
     private int focusedStream = -1;
@@ -106,6 +107,7 @@ public class MainActivity extends Activity {
         // padding on a WebView itself does not shrink what it renders.
         rootView = new FrameLayout(this);
         rootView.setBackgroundColor(0xFFFAFADF);
+        applyBarIconAppearance();
         rootView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override
             public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
@@ -347,7 +349,16 @@ public class MainActivity extends Activity {
     // Only Android 15 and later force edge to edge here; below that the window
     // already fits the system bars and padding would be applied twice.
     private void applyInsetsAsPadding(WindowInsets insets) {
-        if (rootView == null || Build.VERSION.SDK_INT < 35) {
+        if (rootView == null) {
+            return;
+        }
+        // Fullscreen ignores the bars and the camera cutout: any padding here
+        // shows up as a cream strip in front of the notch.
+        if (immersive) {
+            rootView.setPadding(0, 0, 0, 0);
+            return;
+        }
+        if (Build.VERSION.SDK_INT < 35 || insets == null) {
             return;
         }
         android.graphics.Insets bars =
@@ -373,6 +384,15 @@ public class MainActivity extends Activity {
     }
 
     private void applyImmersive(boolean enabled) {
+        immersive = enabled;
+        setBarsHidden(enabled);
+        if (rootView != null) {
+            applyInsetsAsPadding(rootView.getRootWindowInsets());
+            rootView.requestApplyInsets();
+        }
+    }
+
+    private void setBarsHidden(boolean enabled) {
         View decor = getWindow().getDecorView();
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = decor.getWindowInsetsController();
@@ -389,15 +409,38 @@ public class MainActivity extends Activity {
         }
         if (enabled) {
             decor.setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                    | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         } else {
-            decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            decor.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_VISIBLE
+                    | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                    | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
+    }
+
+    // The bars sit over the cream page, where white clock and icon glyphs are
+    // unreadable, so ask for the dark variants.
+    private void applyBarIconAppearance() {
+        View decor = getWindow().getDecorView();
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = decor.getWindowInsetsController();
+            if (controller != null) {
+                int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(light, light);
+            }
+            return;
+        }
+        decor.setSystemUiVisibility(decor.getSystemUiVisibility()
+            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
     }
 
     // Window-scoped only: never written to Settings.System, and cleared when
