@@ -6,7 +6,6 @@ const state = {
   pendingRecord: -1,
   sound: 0,
   fullscreen: false,
-  orientation: "auto",
   locked: false,
   volume: 1,
   brightness: 0.5,
@@ -33,7 +32,6 @@ window.onKeysMessage = (message) => {
 };
 
 const players = [];
-const cards = [];
 
 let grid;
 let backBtn;
@@ -386,12 +384,6 @@ const ICONS = {
     ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
     ["path", { d: "M8 11V7a4 4 0 0 1 7.5-2" }],
   ],
-  refresh: [
-    ["path", { d: "M3 12a9 9 0 0 1 15.5-6.2" }],
-    ["path", { d: "M21 3v6h-6" }],
-    ["path", { d: "M21 12a9 9 0 0 1-15.5 6.2" }],
-    ["path", { d: "M3 21v-6h6" }],
-  ],
 };
 
 const SVG_ATTRS = {
@@ -500,7 +492,6 @@ function createCard(stream, index) {
   card.classList.add("status-on");
 
   grid.appendChild(card);
-  cards.push(card);
   players.push({ video, player: null, stream, statusEl, card });
 }
 
@@ -585,7 +576,7 @@ async function initPlayer(entry, index) {
   });
 
   player.addEventListener("loaded", () => {
-    applyQuality(player, state.quality);
+    applyQuality(player, qualityFor(index));
   });
 
   try {
@@ -613,6 +604,21 @@ async function initPlayer(entry, index) {
   setStreamStatus(entry, "live", false);
   if (state.focused < 0) {
     setStatusText("all three feeds ready");
+  }
+}
+
+// hd is 1080p: only the feed being watched needs that many pixels at once, so
+// the other tiles drop to sd while one feed is focused.
+function qualityFor(index) {
+  if (state.quality === "hd" && state.focused >= 0 && index !== state.focused) {
+    return "sd";
+  }
+  return state.quality;
+}
+
+function applyAllQualities() {
+  for (const [index, entry] of players.entries()) {
+    applyQuality(entry.player, qualityFor(index));
   }
 }
 
@@ -644,9 +650,7 @@ function updateQualityButtons() {
 function setQuality(quality, persist) {
   state.quality = normalizeQuality(quality);
   updateQualityButtons();
-  for (const entry of players) {
-    applyQuality(entry.player, state.quality);
-  }
+  applyAllQualities();
   if (persist && window.Pbb) {
     Pbb.setDefaultQuality(state.quality);
   }
@@ -657,7 +661,8 @@ function updateControls() {
   backBtn.disabled = state.pip;
   backBtn.classList.toggle("hidden", state.focused < 0 && !state.pip);
 
-  for (const [index, card] of cards.entries()) {
+  for (const [index, entry] of players.entries()) {
+    const card = entry.card;
     const pipBtn = card.querySelector('[data-role="pip"]');
     pipBtn.classList.toggle("hidden", state.pip || state.fullscreen);
     pipBtn.disabled = state.pip;
@@ -730,11 +735,12 @@ function focusStream(index) {
   }
   state.focused = index;
   document.body.classList.add("focus-mode");
-  for (const [i, card] of cards.entries()) {
-    card.classList.toggle("focused", i === index);
+  for (const [i, entry] of players.entries()) {
+    entry.card.classList.toggle("focused", i === index);
   }
   playOnly(index);
   ensureSound(index);
+  applyAllQualities();
   if (window.Pbb) {
     Pbb.setFocusedStream(index);
   }
@@ -747,9 +753,10 @@ function backToGrid() {
   }
   state.focused = -1;
   document.body.classList.remove("focus-mode");
-  for (const card of cards) {
-    card.classList.remove("focused");
+  for (const entry of players) {
+    entry.card.classList.remove("focused");
   }
+  applyAllQualities();
   for (const entry of players) {
     entry.video.play().catch(() => {});
   }
@@ -807,13 +814,7 @@ function toggleFullscreen() {
   }
   if (window.Pbb) {
     Pbb.setImmersive(state.fullscreen);
-    if (state.fullscreen) {
-      state.orientation = "landscape";
-      Pbb.setOrientation("landscape");
-    } else {
-      state.orientation = "auto";
-      Pbb.setOrientation("auto");
-    }
+    Pbb.setOrientation(state.fullscreen ? "landscape" : "auto");
   }
   playOnly(state.focused);
   updateControls();
@@ -974,6 +975,11 @@ function boot() {
   const systemVolume = Number(Pbb.getVolume());
   if (!Number.isNaN(systemVolume)) {
     state.volume = Math.min(1, Math.max(0, systemVolume));
+  }
+  // -1 means the app has never stored a brightness, so the 0.5 default stands.
+  const storedBrightness = Number(Pbb.getBrightness());
+  if (!Number.isNaN(storedBrightness) && storedBrightness >= 0) {
+    state.brightness = Math.min(1, Math.max(0, storedBrightness));
   }
   for (const [index, stream] of config.streams.entries()) {
     createCard(stream, index);
