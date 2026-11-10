@@ -742,7 +742,6 @@ function focusStream(index) {
   if (window.Pbb) {
     Pbb.setFocusedStream(index);
   }
-  setStatusText(`focused: ${players[index].stream.name}`);
   updateControls();
 }
 
