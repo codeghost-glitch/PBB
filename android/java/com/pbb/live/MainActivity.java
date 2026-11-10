@@ -10,7 +10,6 @@ import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
@@ -25,6 +24,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
@@ -34,7 +34,6 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    private static final int REQUEST_SCREEN_CAPTURE = 2002;
 
     static {
         System.loadLibrary("pbb");
@@ -299,18 +298,6 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_SCREEN_CAPTURE) {
-            if (resultCode == RESULT_OK && data != null) {
-                startRecordService(data);
-            } else {
-                notifyRecordingState(false, "screen capture cancelled");
-            }
-        }
-    }
-
-    @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         if (requestCode != REQUEST_PERMISSIONS) {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -326,7 +313,7 @@ public class MainActivity extends Activity {
                 return;
             }
         }
-        launchScreenCapture();
+        startRecordService();
     }
 
     private void requestRecording(int index, String label) {
@@ -351,29 +338,30 @@ public class MainActivity extends Activity {
             requestPermissions(needed.toArray(new String[0]), REQUEST_PERMISSIONS);
             return;
         }
-        launchScreenCapture();
+        startRecordService();
     }
 
-    private void launchScreenCapture() {
-        MediaProjectionManager manager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        if (manager == null) {
-            notifyRecordingState(false, "screen capture unavailable");
-            return;
+    private void startRecordService() {
+        try {
+            JSONArray streams = new JSONObject(streamConfig()).getJSONArray("streams");
+            if (pendingRecordIndex < 0 || pendingRecordIndex >= streams.length()) {
+                notifyRecordingState(false, "unknown stream");
+                return;
+            }
+            JSONObject stream = streams.getJSONObject(pendingRecordIndex);
+            String displayName = makeDisplayName(pendingRecordLabel);
+            Intent service = new Intent(this, RecordService.class);
+            service.setAction(RecordService.ACTION_START);
+            service.putExtra(RecordService.EXTRA_MPD_URL, stream.getString("url"));
+            service.putExtra(RecordService.EXTRA_KEY, stream.getString("key"));
+            service.putExtra(RecordService.EXTRA_DISPLAY_NAME, displayName);
+            service.putExtra(RecordService.EXTRA_QUALITY, defaultQuality(getFilesDir().getAbsolutePath()));
+            startForegroundService(service);
+            recording = true;
+            notifyRecordingState(true, "recording to Movies/PBB/" + displayName);
+        } catch (Exception e) {
+            notifyRecordingState(false, "cannot start recording: " + e.getMessage());
         }
-        startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_SCREEN_CAPTURE);
-    }
-
-    private void startRecordService(Intent data) {
-        lockLandscape(true);
-        String displayName = makeDisplayName(pendingRecordLabel);
-        Intent service = new Intent(this, RecordService.class);
-        service.setAction(RecordService.ACTION_START);
-        service.putExtra(RecordService.EXTRA_RESULT_DATA, data);
-        service.putExtra(RecordService.EXTRA_DISPLAY_NAME, displayName);
-        service.putExtra(RecordService.EXTRA_STREAM_INDEX, pendingRecordIndex);
-        startForegroundService(service);
-        recording = true;
-        notifyRecordingState(true, "recording to Movies/PBB/" + displayName);
     }
 
     private void stopRecording() {
@@ -425,11 +413,6 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         restoreSystemVolume();
         clearBrightnessOverride();
-        if (isFinishing() && recording) {
-            Intent stop = new Intent(this, RecordService.class);
-            stop.setAction(RecordService.ACTION_STOP);
-            startService(stop);
-        }
         try {
             unregisterReceiver(statusReceiver);
         } catch (IllegalArgumentException ignored) {

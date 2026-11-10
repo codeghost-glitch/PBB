@@ -753,7 +753,7 @@ function toggleRecord(index) {
     focusStream(index);
   }
   state.pendingRecord = index;
-  setStatusText("android will ask for screen access — that is how the video gets recorded, tap start now");
+  setStatusText("pulling the stream directly — keeps recording in the background");
   Pbb.startRecording(index, players[index].stream.name);
 }
 
@@ -763,10 +763,6 @@ window.onRecordingState = (active, message) => {
     state.pendingRecord = -1;
   }
   document.body.classList.toggle("recording", active);
-  document.body.classList.toggle("recording-mode", active);
-  if (active && state.focused >= 0) {
-    playOnly(state.focused);
-  }
   setStatusText(message || (active ? "recording..." : "recording stopped"));
   updateControls();
 };

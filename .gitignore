@@ -4,3 +4,6 @@
 /*.apk.idsig
 /android/debug.keystore
 .pi-lens/
+/ffmpeg/out/
+/ffmpeg/include/
+/ffmpeg/compile_commands.json

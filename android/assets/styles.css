@@ -310,8 +310,7 @@ button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset
 .focus-mode .cam-meta { justify-content: center; text-align: center; }
 
 .pip-mode .page,
-body.fullscreen-mode .page,
-body.recording-mode .page {
+body.fullscreen-mode .page {
   padding: 0;
   max-width: none;
   margin: 0;
@@ -329,29 +328,20 @@ body.fullscreen-mode .status,
 body.fullscreen-mode .deco,
 body.fullscreen-mode .cam-meta,
 body.fullscreen-mode .cam-actions,
-body.fullscreen-mode .stream-status,
-body.recording-mode .nav,
-body.recording-mode .status,
-body.recording-mode .deco,
-body.recording-mode .cam-meta,
-body.recording-mode .cam-actions,
-body.recording-mode .stream-status { display: none !important; }
+body.fullscreen-mode .stream-status { display: none !important; }
 
 .pip-mode .grid,
-body.fullscreen-mode .grid,
-body.recording-mode .grid {
+body.fullscreen-mode .grid {
   display: block;
   height: auto;
   gap: 0;
 }
 
 .pip-mode .cam-card:not(.focused),
-body.fullscreen-mode .cam-card:not(.focused),
-body.recording-mode .cam-card:not(.focused) { display: none !important; }
+body.fullscreen-mode .cam-card:not(.focused) { display: none !important; }
 
 .pip-mode .cam-card.focused,
-body.fullscreen-mode .cam-card.focused,
-body.recording-mode .cam-card.focused {
+body.fullscreen-mode .cam-card.focused {
   position: fixed;
   top: 0;
   left: 0;
@@ -370,8 +360,7 @@ body.recording-mode .cam-card.focused {
 }
 
 .pip-mode .video-wrap,
-body.fullscreen-mode .video-wrap,
-body.recording-mode .video-wrap {
+body.fullscreen-mode .video-wrap {
   position: absolute;
   top: 0;
   left: 0;
@@ -388,8 +377,7 @@ body.recording-mode .video-wrap {
 }
 
 .pip-mode .video-wrap video,
-body.fullscreen-mode .video-wrap video,
-body.recording-mode .video-wrap video {
+body.fullscreen-mode .video-wrap video {
   position: absolute;
   top: 0;
   left: 0;
