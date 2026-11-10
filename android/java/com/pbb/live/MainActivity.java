@@ -235,10 +235,6 @@ public class MainActivity extends Activity {
     }
 
     private void enterPipMode() {
-        if (recording) {
-            toast("stop recording before pip");
-            return;
-        }
         if (focusedStream < 0) {
             toast("focus one stream first");
             return;
@@ -264,7 +260,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onUserLeaveHint() {
-        if (focusedStream >= 0 && !recording && !isInPip) {
+        if (focusedStream >= 0 && !isInPip) {
             enterPipMode();
         }
         super.onUserLeaveHint();
@@ -317,12 +313,8 @@ public class MainActivity extends Activity {
     }
 
     private void requestRecording(int index, String label) {
-        if (recording) {
+        if (recording || RecordService.isActive()) {
             stopRecording();
-            return;
-        }
-        if (isInPip) {
-            notifyRecordingState(false, "exit picture-in-picture before recording");
             return;
         }
         pendingRecordIndex = index;
@@ -356,6 +348,7 @@ public class MainActivity extends Activity {
             service.putExtra(RecordService.EXTRA_KEY, stream.getString("key"));
             service.putExtra(RecordService.EXTRA_DISPLAY_NAME, displayName);
             service.putExtra(RecordService.EXTRA_QUALITY, defaultQuality(getFilesDir().getAbsolutePath()));
+            service.putExtra(RecordService.EXTRA_STREAM_INDEX, pendingRecordIndex);
             startForegroundService(service);
             recording = true;
             notifyRecordingState(true, "recording to Movies/PBB/" + displayName);
@@ -365,7 +358,7 @@ public class MainActivity extends Activity {
     }
 
     private void stopRecording() {
-        if (!recording) {
+        if (!recording && !RecordService.isActive()) {
             notifyRecordingState(false, "not recording");
             return;
         }
@@ -539,7 +532,13 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean isRecording() {
-            return recording;
+            return recording || RecordService.isActive();
+        }
+
+        @JavascriptInterface
+        public int recordingStream() {
+            int index = RecordService.activeStream();
+            return index >= 0 ? index : pendingRecordIndex;
         }
 
         @JavascriptInterface

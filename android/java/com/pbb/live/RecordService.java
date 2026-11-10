@@ -57,6 +57,7 @@ public class RecordService extends Service {
     public static final String EXTRA_KEY = "key";
     public static final String EXTRA_DISPLAY_NAME = "display_name";
     public static final String EXTRA_QUALITY = "quality";
+    public static final String EXTRA_STREAM_INDEX = "stream_index";
     public static final String EXTRA_RECORDING = "recording";
     public static final String EXTRA_MESSAGE = "message";
 
@@ -74,6 +75,16 @@ public class RecordService extends Service {
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
 
     private static boolean pluginLoaded = false;
+    private static volatile boolean active = false;
+    private static volatile int activeIndex = -1;
+
+    public static boolean isActive() {
+        return active;
+    }
+
+    public static int activeStream() {
+        return activeIndex;
+    }
 
     private volatile boolean running = false;
     private volatile boolean stopping = false;
@@ -158,6 +169,8 @@ public class RecordService extends Service {
         startForegroundWithNotification();
         running = true;
         stopping = false;
+        active = true;
+        activeIndex = intent.getIntExtra(EXTRA_STREAM_INDEX, 0);
         worker = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -238,6 +251,8 @@ public class RecordService extends Service {
             result = "recording failed: " + t.getMessage();
         } finally {
             running = false;
+            active = false;
+            activeIndex = -1;
             status(false, result == null ? "recording stopped" : result);
             delete(videoTmp);
             delete(audioTmp);

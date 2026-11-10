@@ -553,24 +553,24 @@ function setQuality(quality, persist) {
 }
 
 function updateControls() {
-  backBtn.disabled = state.recording >= 0 || state.pip;
+  backBtn.disabled = state.pip;
   backBtn.classList.toggle("hidden", state.focused < 0 && !state.pip);
 
   for (const [index, card] of cards.entries()) {
     const pipBtn = card.querySelector('[data-role="pip"]');
     pipBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
-    pipBtn.disabled = state.recording >= 0 || state.pip;
+    pipBtn.disabled = state.pip;
 
     const fsBtn = card.querySelector('[data-role="fs"]');
     fsBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
-    fsBtn.disabled = state.recording >= 0 || state.pip;
+    fsBtn.disabled = state.pip;
 
     const recordBtn = card.querySelector('[data-role="record"]');
     recordBtn.classList.toggle("recording", state.recording === index);
-    recordBtn.disabled = state.pip && state.recording !== index;
+    recordBtn.disabled = false;
 
     const focusBtn = card.querySelector('[data-role="focus"]');
-    focusBtn.disabled = state.pip || state.recording >= 0;
+    focusBtn.disabled = state.pip;
     focusBtn.classList.toggle("active", state.focused === index);
 
     const soundBtn = card.querySelector('[data-role="sound"]');
@@ -632,10 +632,6 @@ function focusStream(index) {
   if (state.pip) {
     return;
   }
-  if (state.recording >= 0 && state.recording !== index) {
-    setStatusText("stop recording first");
-    return;
-  }
   state.focused = index;
   document.body.classList.add("focus-mode");
   for (const [i, card] of cards.entries()) {
@@ -652,10 +648,6 @@ function focusStream(index) {
 
 function backToGrid() {
   if (state.pip) {
-    return true;
-  }
-  if (state.recording >= 0) {
-    setStatusText("stop recording first");
     return true;
   }
   state.focused = -1;
@@ -675,10 +667,6 @@ function backToGrid() {
 }
 
 function enterPip(index) {
-  if (state.recording >= 0) {
-    setStatusText("stop recording before pip");
-    return;
-  }
   if (state.fullscreen) {
     toggleFullscreen();
   }
@@ -692,10 +680,6 @@ function enterPip(index) {
 
 function toggleFullscreen() {
   if (state.pip) {
-    return;
-  }
-  if (state.recording >= 0) {
-    setStatusText("stop recording first");
     return;
   }
   if (state.focused < 0) {
@@ -741,16 +725,9 @@ function rotateFullscreen() {
 }
 
 function toggleRecord(index) {
-  if (state.pip) {
-    setStatusText("exit pip before recording");
-    return;
-  }
   if (state.recording >= 0) {
     Pbb.stopRecording();
     return;
-  }
-  if (state.focused !== index) {
-    focusStream(index);
   }
   state.pendingRecord = index;
   setStatusText("pulling the stream directly — keeps recording in the background");
@@ -758,6 +735,9 @@ function toggleRecord(index) {
 }
 
 window.onRecordingState = (active, message) => {
+  if (active && state.pendingRecord < 0 && window.Pbb) {
+    state.pendingRecord = Math.max(0, Number(Pbb.recordingStream()) || 0);
+  }
   state.recording = active ? state.pendingRecord : -1;
   if (!active) {
     state.pendingRecord = -1;
@@ -871,8 +851,9 @@ function boot() {
   }
   updateControls();
   if (Pbb.isRecording()) {
-    state.recording = 0;
-    state.pendingRecord = 0;
+    const idx = Math.max(0, Number(Pbb.recordingStream()) || 0);
+    state.recording = idx;
+    state.pendingRecord = idx;
   }
   if (state.focused < 0) {
     focusStream(0);
