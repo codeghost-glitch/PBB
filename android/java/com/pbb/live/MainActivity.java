@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
         appBrightnessLevel = appBrightness(filesDir);
         setupWebView();
         registerStatusReceiver();
+        updatePipParams();
     }
 
     private void setupWebView() {
@@ -234,6 +235,26 @@ public class MainActivity extends Activity {
         }
     }
 
+    private PictureInPictureParams pipParams(boolean autoEnter) {
+        PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
+        builder.setAspectRatio(new Rational(16, 9));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setTitle("PBB");
+            builder.setSubtitle("live stream");
+            builder.setAutoEnterEnabled(autoEnter);
+        }
+        return builder.build();
+    }
+
+    // Let the system decide when to auto-enter PiP. It fires on the go-home
+    // gesture, not on the recents/overview gesture. onUserLeaveHint fires for
+    // both, which is why it used to jump into PiP on a swipe up to recents.
+    private void updatePipParams() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            setPictureInPictureParams(pipParams(focusedStream >= 0 && !isInPip));
+        }
+    }
+
     private void enterPipMode() {
         if (focusedStream < 0) {
             toast("focus one stream first");
@@ -243,13 +264,7 @@ public class MainActivity extends Activity {
             return;
         }
         applyImmersive(false);
-        PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
-        builder.setAspectRatio(new Rational(16, 9));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            builder.setTitle("PBB");
-            builder.setSubtitle("live stream");
-        }
-        boolean entered = enterPictureInPictureMode(builder.build());
+        boolean entered = enterPictureInPictureMode(pipParams(false));
         if (entered) {
             isInPip = true;
             notifyPipState(true);
@@ -259,17 +274,10 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onUserLeaveHint() {
-        if (focusedStream >= 0 && !isInPip) {
-            enterPipMode();
-        }
-        super.onUserLeaveHint();
-    }
-
-    @Override
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
         isInPip = isInPictureInPictureMode;
+        updatePipParams();
         // In the pip window the device brightness applies, not the app's level.
         if (isInPictureInPictureMode) {
             clearBrightnessOverride();
@@ -432,11 +440,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setFocusedStream(int index) {
             focusedStream = index;
+            updatePipParams();
         }
 
         @JavascriptInterface
         public void clearFocusedStream() {
             focusedStream = -1;
+            updatePipParams();
         }
 
         @JavascriptInterface

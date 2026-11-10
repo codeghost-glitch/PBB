@@ -201,7 +201,13 @@ p { color: var(--text-secondary); }
 .quality-btn.active { background: var(--color-secondary); }
 .record-btn.recording { background: var(--color-pink); color: var(--text-primary); }
 
-button:focus-visible { outline: 3px solid var(--color-secondary); outline-offset: 2px; }
+button:focus { outline: none; }
+/* WebView can mark tapped buttons as :focus-visible, leaving a blue ring stuck
+   until another button takes focus. Keep the ring for keyboard/D-pad only. */
+body.keyboard-focus button:focus-visible {
+  outline: 3px solid var(--color-secondary);
+  outline-offset: 2px;
+}
 [disabled] { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .stage { position: relative; margin-top: 32px; }

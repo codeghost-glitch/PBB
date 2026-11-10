@@ -452,6 +452,37 @@ function createCard(stream, index) {
   players.push({ video, player: null, stream, statusEl });
 }
 
+// 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT are transient on live
+// DASH. Shaka retries internally, then gives up and fires a fatal error; reload
+// with a bounded backoff instead of leaving the tile dead.
+const RECOVERABLE_SHAKA = new Set([1001, 1002, 1003]);
+
+function scheduleRecover(entry, index) {
+  if (entry.retryTimer) {
+    return;
+  }
+  entry.retries = (entry.retries || 0) + 1;
+  const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(entry.retries - 1, 5)));
+  setStreamStatus(entry, `reconnecting ${Math.round(delay / 1000)}s`, true);
+  entry.retryTimer = setTimeout(async () => {
+    entry.retryTimer = null;
+    try {
+      await entry.player.load(entry.stream.url);
+    } catch {
+      scheduleRecover(entry, index);
+      return;
+    }
+    entry.retries = 0;
+    entry.video.muted = state.sound !== index;
+    if (state.focused >= 0 && state.focused !== index) {
+      entry.video.pause();
+    } else {
+      entry.video.play().catch(() => {});
+    }
+    setStreamStatus(entry, "live", false);
+  }, delay);
+}
+
 async function initPlayer(entry, index) {
   const player = new shaka.Player(entry.video);
   entry.player = player;
@@ -459,6 +490,14 @@ async function initPlayer(entry, index) {
   const clearKeys = {};
   clearKeys[entry.stream.kid] = entry.stream.key;
   clearKeys[uuidKid(entry.stream.kid)] = entry.stream.key;
+
+  const retry = () => ({
+    maxAttempts: 8,
+    baseDelay: 400,
+    backoffFactor: 2,
+    fuzzFactor: 0.5,
+    timeout: 20000,
+  });
 
   player.configure({
     drm: {
@@ -469,18 +508,22 @@ async function initPlayer(entry, index) {
       bufferingGoal: 15,
       rebufferingGoal: 2,
       bufferBehind: 25,
-      retryParameters: { maxAttempts: 8, baseDelay: 400, timeout: 20000 },
+      retryParameters: retry(),
     },
     manifest: {
-      retryParameters: { maxAttempts: 5, baseDelay: 400 },
+      retryParameters: retry(),
     },
     abr: { enabled: state.quality === "auto" },
   });
 
   player.addEventListener("error", (event) => {
-    const detail = event.detail;
-    const message = detail && (detail.message || detail.code || detail);
-    setStreamStatus(entry, `error ${message}`, true);
+    const detail = event.detail || {};
+    const message = detail.message || detail.code || detail;
+    if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
+      scheduleRecover(entry, index);
+    } else {
+      setStreamStatus(entry, `error ${message}`, true);
+    }
   });
 
   player.addEventListener("loaded", () => {
@@ -490,7 +533,7 @@ async function initPlayer(entry, index) {
   try {
     await player.load(entry.stream.url);
   } catch {
-    setStreamStatus(entry, "load failed", true);
+    scheduleRecover(entry, index);
     return;
   }
 
@@ -787,6 +830,9 @@ function boot() {
   backBtn = document.getElementById("backBtn");
   statusText = document.getElementById("statusText");
   qualityButtons = Array.from(document.querySelectorAll("[data-quality]"));
+
+  document.addEventListener("keydown", () => document.body.classList.add("keyboard-focus"), true);
+  document.addEventListener("pointerdown", () => document.body.classList.remove("keyboard-focus"), true);
 
   if (!window.Pbb) {
     setStatusText("android bridge missing");

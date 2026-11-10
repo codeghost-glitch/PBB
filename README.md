@@ -5,7 +5,10 @@ Rust + JNI Android app for four PBB live DASH/clear-key streams.
 ## What it does
 
 - 2x2 multi-view in every orientation.
-- Focus one stream, then picture-in-picture for that one stream only. PiP also auto-enters when leaving the app from focus mode. Focus keeps the 16:9 frame instead of stretching.
+- Focus one stream, then picture-in-picture for that one stream only. Focus keeps the 16:9 frame instead of stretching.
+- On Android 12+ the system auto-enters PiP on the go-home gesture via setAutoEnterEnabled(true) while a stream is focused. It does not fire on the recents/overview gesture. The old onUserLeaveHint trigger fired for both, so swiping up to recents used to jump into PiP. On Android 8-11 and 3-button navigation, use the PiP button.
+- Focus rings only appear for keyboard/D-pad navigation. Tapping a button does not leave the WebView focus outline stuck on it.
+- Shaka network failures (1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT) trigger a bounded backoff reload instead of leaving the tile on a dead error message.
 - Focusing a stream turns its sound on automatically.
 - Fullscreen button per focused stream: hides system bars, letterboxes the feed on black, exits with the floating button or the back key.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage.
