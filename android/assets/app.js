@@ -763,6 +763,8 @@ function focusStream(index, skipQuality) {
     return;
   }
   state.focused = index;
+  // The arriving feed starts unzoomed, so zoom mode and its highlight go with it.
+  zoom.mode = false;
   resetZoom();
   document.body.classList.add("focus-mode");
   for (const [i, entry] of players.entries()) {
