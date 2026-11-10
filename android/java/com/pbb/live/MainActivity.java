@@ -165,6 +165,7 @@ public class MainActivity extends Activity {
             public void run() {
                 final String json = fetchKeys();
                 if (json == null || validKeys(json) == null) {
+                    reportKeys("could not reach key server - tap refresh to retry");
                     return;
                 }
                 streamConfigJson = json;
@@ -187,6 +188,16 @@ public class MainActivity extends Activity {
                 });
             }
         }, "pbb-keys").start();
+    }
+
+    private void reportKeys(final String message) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                webView.evaluateJavascript(
+                    "window.onKeysMessage && window.onKeysMessage(" + JSONObject.quote(message) + ")", null);
+            }
+        });
     }
 
     private static String fetchKeys() {

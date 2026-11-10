@@ -105,7 +105,9 @@ Keys live in a plain keys.json on a secret gist, fetched at startup from the unv
 - Fetched off the UI thread with short timeouts, validated (4 streams, https URLs, 32-hex KID and key), cached in filesDir/streams.json, and used as the last-good config when offline.
 - Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback.
 - Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
-- Tap the status bar to call Pbb.refreshKeys() at any time. On 4012 the tiles and status bar say "keys rotated - tap status bar to refresh".
+- The status bar is the thin footer card at the bottom of the page, below the 2x2 grid: a teal dot plus the status text, with the back button when focused. It is hidden in PiP and fullscreen, and setStatusText("") hides it when returning to the grid.
+- Because of that, the always-visible control is the circular-arrow refresh icon in the top nav (and the same icon in the fullscreen control column). Tapping it calls Pbb.refreshKeys(); the status bar is also tappable. On 4012 the tiles say "keys rotated - tap refresh" and the status bar says "keys rotated - tap the refresh icon in the top bar".
+- A manual refresh always resolves its status text: changed keys re-init the players, unchanged keys report that the studio has not published new ones, and a failed fetch reports the connection error. Silent startup fetches never overwrite the status.
 - Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config.
 
 When the studio publishes new keys, run:

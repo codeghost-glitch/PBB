@@ -10,6 +10,25 @@ const state = {
   locked: false,
   volume: 1,
   brightness: 0.5,
+  keysStale: false,
+};
+
+let manualKeyRefresh = false;
+
+function refreshKeysFromUi() {
+  if (!window.Pbb) {
+    return;
+  }
+  manualKeyRefresh = true;
+  setStatusText("refreshing keys...");
+  Pbb.refreshKeys();
+}
+
+window.onKeysMessage = (message) => {
+  if (manualKeyRefresh) {
+    manualKeyRefresh = false;
+    setStatusText(message);
+  }
 };
 
 const players = [];
@@ -341,6 +360,12 @@ const ICONS = {
     ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
     ["path", { d: "M8 11V7a4 4 0 0 1 7.5-2" }],
   ],
+  refresh: [
+    ["path", { d: "M3 12a9 9 0 0 1 15.5-6.2" }],
+    ["path", { d: "M21 3v6h-6" }],
+    ["path", { d: "M21 12a9 9 0 0 1-15.5 6.2" }],
+    ["path", { d: "M3 21v-6h6" }],
+  ],
 };
 
 const SVG_ATTRS = {
@@ -520,8 +545,9 @@ async function initPlayer(entry, index) {
     const detail = event.detail || {};
     const message = detail.message || detail.code || detail;
     if (Number(detail.code) === 4012) {
-      setStreamStatus(entry, "keys rotated - tap status bar", true);
-      setStatusText("keys rotated - tap status bar to refresh");
+      state.keysStale = true;
+      setStreamStatus(entry, "keys rotated - tap refresh", true);
+      setStatusText("keys rotated - tap the refresh icon in the top bar");
       return;
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
@@ -709,7 +735,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText("");
+  setStatusText(state.keysStale ? "keys rotated - tap the refresh icon in the top bar" : "");
   updateControls();
   return true;
 }
@@ -856,8 +882,14 @@ window.onStreamConfig = async (raw) => {
     }
   }
   if (!changed) {
+    if (manualKeyRefresh) {
+      manualKeyRefresh = false;
+      setStatusText("keys unchanged - studio has not published new ones yet");
+    }
     return;
   }
+  manualKeyRefresh = false;
+  state.keysStale = false;
   const olds = players.map((p) => p.player);
   for (const [i, s] of streams.entries()) {
     players[i].stream = s;
@@ -921,14 +953,14 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
+  const refreshKeysBtn = document.getElementById("refreshKeysBtn");
+  if (refreshKeysBtn) {
+    setIcon(refreshKeysBtn, "refresh", "refresh stream keys");
+    refreshKeysBtn.addEventListener("click", refreshKeysFromUi);
+  }
   const statusBar = document.getElementById("statusBar");
   if (statusBar) {
-    statusBar.addEventListener("click", () => {
-      if (window.Pbb) {
-        setStatusText("refreshing keys...");
-        Pbb.refreshKeys();
-      }
-    });
+    statusBar.addEventListener("click", refreshKeysFromUi);
   }
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
@@ -949,6 +981,11 @@ function boot() {
   if (fsRotate) {
     setIcon(fsRotate, "rotate", "rotate");
     fsRotate.addEventListener("click", rotateFullscreen);
+  }
+  const fsRefresh = document.getElementById("fsRefresh");
+  if (fsRefresh) {
+    setIcon(fsRefresh, "refresh", "refresh stream keys");
+    fsRefresh.addEventListener("click", refreshKeysFromUi);
   }
 
   if (Pbb.isInPip()) {
