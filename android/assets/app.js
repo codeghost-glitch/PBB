@@ -748,9 +748,11 @@ function setSound(index) {
   ensureSound(index);
 }
 
+// The big feed plays, and so does the mini tile: pausing it here is what froze
+// the tile whenever the focused feed changed.
 function playOnly(index) {
   for (const [i, entry] of players.entries()) {
-    if (i === index) {
+    if (i === index || i === state.mini) {
       entry.video.play().catch(() => {});
     } else {
       entry.video.pause();
