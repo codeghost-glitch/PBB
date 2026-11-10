@@ -92,7 +92,7 @@ public class RecordService extends Service {
 
     private static native void nativeRemux(String video, String audio, String output, String keyHex);
 
-    private static class Track {
+    static class Track {
         String media;
         String init;
         long startNumber;
@@ -299,7 +299,7 @@ public class RecordService extends Service {
         }
     }
 
-    private static String partName(String displayName, int part) {
+    static String partName(String displayName, int part) {
         int dot = displayName.lastIndexOf('.');
         String base = dot > 0 ? displayName.substring(0, dot) : displayName;
         String ext = dot > 0 ? displayName.substring(dot) : ".mp4";
@@ -372,7 +372,7 @@ public class RecordService extends Service {
         return plan;
     }
 
-    private static Track pickVideo(List<Track> tracks, String quality, long liveStart) {
+    static Track pickVideo(List<Track> tracks, String quality, long liveStart) {
         int ceiling = "sd".equals(quality) ? 640 : 1280;
         Track best = null;
         Track fallback = null;
@@ -394,7 +394,7 @@ public class RecordService extends Service {
         return best == null ? fallback : best;
     }
 
-    private static Track pickAudio(List<Track> tracks, long liveStart) {
+    static Track pickAudio(List<Track> tracks, long liveStart) {
         Track fallback = null;
         for (Track t : tracks) {
             if (t.media == null || t.init == null) {
@@ -520,7 +520,7 @@ public class RecordService extends Service {
         track.seconds = t.timescale > 0 ? (double) t.duration / t.timescale : 0;
     }
 
-    private static String segmentUrl(String template, long number) {
+    static String segmentUrl(String template, long number) {
         Matcher m = NUMBER.matcher(template);
         StringBuffer sb = new StringBuffer();
         while (m.find()) {

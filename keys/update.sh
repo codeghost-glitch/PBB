@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Refresh the checked-in fallback snapshot from pbb-live.vercel.app.
-# The runtime app fetches the same API directly; this file is only a local snapshot.
+# The runtime app fetches the same API directly; this rewrites both places the
+# last known keys live, so the Rust fallback can not drift from the snapshot.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-python3 - "$HERE/keys.json" <<'PY'
+python3 - "$HERE/keys.json" "$HERE/../src/lib.rs" <<'PY'
 import json
 import re
 import sys
@@ -39,4 +40,21 @@ for name, channel in channels:
 out = Path(sys.argv[1])
 out.write_text(json.dumps({"streams": streams}, indent=2) + "\n", encoding="utf-8")
 print(f"wrote {out} ({len(streams)} streams)")
+
+rust = Path(sys.argv[2])
+block = 'const STREAM_CONFIG_JSON: &str = r#"' + json.dumps(
+    {"app": "PBB", "streams": streams}, indent=2) + '"#;'
+source = rust.read_text(encoding="utf-8")
+patched = re.sub(
+    r'const STREAM_CONFIG_JSON: &str = r#".*?"#;',
+    lambda match: block,
+    source,
+    count=1,
+    flags=re.S,
+)
+if patched == source and block not in source:
+    raise RuntimeError("STREAM_CONFIG_JSON block not found in " + str(rust))
+rust.write_text(patched, encoding="utf-8")
+print(f"wrote {rust}")
+PY
 PY

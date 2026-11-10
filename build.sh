@@ -142,6 +142,15 @@ find "$OUT/gen" -name 'R.java' >> "$OUT/sources.txt"
 "$JAVA_HOME/bin/javac" -source 8 -target 8 -encoding UTF-8 -Xlint:-options \
   -classpath "$PLATFORM" -d "$OUT/classes" @"$OUT/sources.txt"
 
+echo "== java tests =="
+TEST_OUT="$OUT/test-classes"
+mkdir -p "$TEST_OUT"
+find "$ROOT/android/test" -name '*.java' > "$OUT/test-sources.txt"
+"$JAVA_HOME/bin/javac" -encoding UTF-8 -classpath "$PLATFORM:$OUT/classes" \
+  -d "$TEST_OUT" @"$OUT/test-sources.txt"
+"$JAVA_HOME/bin/java" -classpath "$PLATFORM:$OUT/classes:$TEST_OUT" \
+  com.pbb.live.RecorderLogicTest
+
 echo "== dex =="
 find "$OUT/classes" -name '*.class' -print0 |
   xargs -0 -r "$BUILD_TOOLS/d8" --lib "$PLATFORM" --min-api 26 --output "$OUT/dex"
