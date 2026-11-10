@@ -779,11 +779,19 @@ function focusStream(index, skipQuality) {
   updateControls();
 }
 
+// The All Access camera is the one carrying the housemates' microphones, so it
+// owns the sound whenever no single feed is focused.
+function mainStreamIndex() {
+  const index = players.findIndex((entry) => /all access/i.test(entry.stream.name));
+  return index >= 0 ? index : 0;
+}
+
 function backToGrid() {
   if (state.pip) {
     return true;
   }
   state.focused = -1;
+  ensureSound(mainStreamIndex());
   document.body.classList.remove("focus-mode");
   for (const entry of players) {
     entry.card.classList.remove("focused");
