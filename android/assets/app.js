@@ -974,8 +974,10 @@ window.setPipMode = (enabled) => {
     playOnly(state.focused);
     setStatusText(`picture-in-picture: ${players[state.focused].stream.name}`);
   } else {
-    playOnly(state.focused);
-    setStatusText("back from picture-in-picture");
+    // The small window is gone, so land on the three-feed grid with the sound
+    // back on All Access. There is no "back from PiP" focus view any more.
+    backToGrid();
+    return;
   }
   updateControls();
 };
