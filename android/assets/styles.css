@@ -462,6 +462,29 @@ body.fullscreen-mode.controls-visible .fs-controls { display: flex; }
 body.locked .fs-controls .btn:not(.lock-btn) { display: none; }
 body.locked .fs-controls .lock-btn { background: var(--color-primary); color: var(--text-on-accent); }
 
+/* In-app mini tile: another feed in the bottom-right corner of fullscreen. It
+   is the same card element moved by CSS, so no video is re-attached. */
+body.fullscreen-mode .cam-card.mini {
+  display: block !important;
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 40;
+  width: 34vw;
+  max-width: 220px;
+  /* The card's own ratio sizes the tile; the fullscreen .video-wrap fills it. */
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  background: #000000;
+  overflow: hidden;
+}
+
 .indicator {
   position: fixed;
   top: 50%;

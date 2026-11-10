@@ -10,6 +10,7 @@ const state = {
   volume: 1,
   brightness: 0.5,
   keysStale: false,
+  mini: -1,
 };
 
 let manualKeyRefresh = false;
@@ -368,6 +369,10 @@ const ICONS = {
     ["path", { d: "M11 8v6" }],
     ["path", { d: "M8 11h6" }],
   ],
+  mini: [
+    ["rect", { x: 3, y: 5, width: 18, height: 14, rx: 2 }],
+    ["rect", { x: 12, y: 12, width: 7, height: 5, rx: 1 }],
+  ],
   next: [
     ["path", { d: "M8 3 4 7l4 4" }],
     ["path", { d: "M4 7h16" }],
@@ -471,6 +476,10 @@ function createCard(stream, index) {
 
   card.addEventListener("click", (event) => {
     if (event.target.closest("button") || suppressTap) {
+      return;
+    }
+    if (state.fullscreen && card.classList.contains("mini")) {
+      swapMini();
       return;
     }
     toggleControls();
@@ -685,6 +694,12 @@ function updateControls() {
   const lockBtn = document.getElementById("fsLock");
   setIcon(lockBtn, state.locked ? "lock" : "unlock", state.locked ? "unlock controls" : "lock controls");
 
+  const miniBtn = document.getElementById("fsMini");
+  if (miniBtn) {
+    miniBtn.classList.toggle("active", state.mini >= 0);
+    setIcon(miniBtn, "mini", state.mini >= 0 ? "hide mini feed" : "mini feed");
+  }
+
   const zoomBtn = document.getElementById("fsZoom");
   if (zoomBtn) {
     zoomBtn.classList.toggle("active", zoom.mode);
@@ -805,6 +820,10 @@ function toggleFullscreen(keepFocus) {
   if (!state.fullscreen) {
     zoom.mode = false;
     resetZoom();
+    state.mini = -1;
+    for (const entry of players) {
+      entry.card.classList.remove("mini");
+    }
   }
   document.body.classList.remove("controls-visible");
   if (hideControlsTimer) {
@@ -822,6 +841,41 @@ function toggleFullscreen(keepFocus) {
   if (!state.fullscreen && keepFocus !== true) {
     backToGrid();
   }
+}
+
+// A second feed in the corner of fullscreen: the card is the same element,
+// only moved and resized by CSS, so its video keeps playing.
+function setMini(index) {
+  state.mini = index;
+  for (const [i, entry] of players.entries()) {
+    entry.card.classList.toggle("mini", i === index);
+  }
+  if (index >= 0) {
+    players[index].video.play().catch(() => {});
+  } else {
+    playOnly(state.focused);
+  }
+  updateControls();
+}
+
+function toggleMini() {
+  if (!state.fullscreen) {
+    return;
+  }
+  if (state.mini >= 0) {
+    setMini(-1);
+    return;
+  }
+  setMini((state.focused + 1) % players.length);
+}
+
+function swapMini() {
+  if (!state.fullscreen || state.mini < 0) {
+    return;
+  }
+  const previous = state.focused;
+  focusStream(state.mini);
+  setMini(previous);
 }
 
 // Stay in fullscreen and move to the next live feed.
@@ -1017,10 +1071,10 @@ function boot() {
     setIcon(fsSwitch, "next", "next live feed");
     fsSwitch.addEventListener("click", switchFullscreen);
   }
-  const fsPip = document.getElementById("fsPip");
-  if (fsPip) {
-    setIcon(fsPip, "pip", "picture-in-picture");
-    fsPip.addEventListener("click", () => enterPip(state.focused));
+  const fsMini = document.getElementById("fsMini");
+  if (fsMini) {
+    setIcon(fsMini, "mini", "mini feed");
+    fsMini.addEventListener("click", toggleMini);
   }
   if (Pbb.isInPip()) {
     window.setPipMode(true);
