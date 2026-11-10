@@ -159,7 +159,6 @@ function showIndicator(message, duration = 900) {
 function toggleLock() {
   state.locked = !state.locked;
   document.body.classList.toggle("locked", state.locked);
-  setStatusText(state.locked ? "controls locked — tap the screen to unlock" : "controls unlocked");
   showControls();
   updateControls();
 }
@@ -225,7 +224,6 @@ function toggleZoom() {
   if (!zoom.mode) {
     resetZoom();
   }
-  setStatusText(zoom.mode ? "zoom on — pinch to zoom, drag to pan" : "");
   showControls();
   updateControls();
 }
