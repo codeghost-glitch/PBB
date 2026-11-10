@@ -99,6 +99,31 @@ public class MainActivity extends Activity {
     private void setupWebView() {
         webView = new WebView(this);
         setContentView(webView);
+        // targetSdk 35 draws edge to edge, so reserve the status and navigation
+        // bar space. Immersive fullscreen hides the bars and the padding drops.
+        if (Build.VERSION.SDK_INT >= 30) {
+            webView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                    android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                    view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    return insets;
+                }
+            });
+        } else {
+            webView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @SuppressWarnings("deprecation")
+                @Override
+                public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                    view.setPadding(
+                        insets.getSystemWindowInsetLeft(),
+                        insets.getSystemWindowInsetTop(),
+                        insets.getSystemWindowInsetRight(),
+                        insets.getSystemWindowInsetBottom());
+                    return insets;
+                }
+            });
+        }
         webView.setBackgroundColor(0xFFFAFADF);
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);

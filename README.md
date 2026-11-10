@@ -13,13 +13,14 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Fullscreen button on every card: hides system bars, letterboxes the feed on black, exits with the floating button or the back key. The control column has lock, exit, rotate, zoom, and a next-feed button that switches which live feed is fullscreen without leaving it.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage.
 - PBB All Access is the default sound stream on launch.
-- Record button pulses while a recording runs. It pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: a foreground service keeps recording with the app backgrounded or the screen off.
+- Record button turns pink with a stop icon while a recording runs. It pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: a foreground service keeps recording with the app backgrounded or the screen off.
 - The service writes the encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with the ClearKey on stop. Stream copy, no re-encode.
 - The remuxer is a downloadable FFmpeg plugin, not part of the APK. It is fetched once on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). APK stays about 1 MB; the plugin is 1.3 MB downloaded on demand.
 - Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on any card stops a running recording.
 - Stop from the notification shade. Swiping the app away from recents does not stop the recording.
 - Recording state lives in the service, so after the activity is recreated the UI still shows which stream is recording and the stop button still works.
 - In picture-in-picture the live badge, stream status, and controls are hidden, so only the video is shown.
+- The WebView is padded by the system bar insets, so the top bar never sits under the phone's status bar and the footer clears the navigation bar; immersive fullscreen drops the padding again.
 - Neobrutalism styling from /home/rey/Downloads/Projects/neobrutalism with Coral & Cream defaults: warm cream, 2px black borders, 4px hard shadows, rounded cards, lowercase headings, scattered stars/blobs, mechanical press-down buttons.
 
 ## Shape

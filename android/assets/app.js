@@ -14,6 +14,7 @@ const state = {
 };
 
 let manualKeyRefresh = false;
+let transientStatusTimer = null;
 
 function refreshKeysFromUi() {
   if (!window.Pbb) {
@@ -97,6 +98,21 @@ function setStreamStatus(entry, message, bad) {
   if (entry.card) {
     entry.card.classList.toggle("status-on", !hidden);
   }
+}
+
+// A message that clears itself, so an informational refresh result does not
+// sit in the footer until the next action.
+function setTransientStatus(message, duration = 4000) {
+  setStatusText(message);
+  if (transientStatusTimer) {
+    clearTimeout(transientStatusTimer);
+  }
+  transientStatusTimer = setTimeout(() => {
+    transientStatusTimer = null;
+    if (statusText.textContent === message) {
+      setStatusText("");
+    }
+  }, duration);
 }
 
 function showControls() {
@@ -803,9 +819,12 @@ function toggleFullscreen() {
     }
   }
   playOnly(state.focused);
-  // Entering fullscreen is visible on its own; only report the way back.
-  setStatusText(state.fullscreen ? "" : "back to focus view");
   updateControls();
+  // Leaving fullscreen drops the focus with it, so land back on the grid
+  // instead of a single focused feed.
+  if (!state.fullscreen) {
+    backToGrid();
+  }
 }
 
 // Stay in fullscreen and move to the next live feed.
@@ -915,7 +934,7 @@ window.onStreamConfig = async (raw) => {
   if (!changed) {
     if (manualKeyRefresh) {
       manualKeyRefresh = false;
-      setStatusText("keys unchanged - stream source has not published new ones yet");
+      setTransientStatus("streams already up to date");
     }
     return;
   }
