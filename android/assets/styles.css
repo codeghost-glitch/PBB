@@ -202,7 +202,13 @@ p { color: var(--text-secondary); }
 .record-btn svg rect { fill: currentColor; }
 .btn-pill { border-radius: var(--radius-pill); }
 .quality-btn.active { background: var(--color-secondary); }
-.record-btn.recording { background: var(--color-pink); color: var(--text-primary); }
+/* A running recording pulses so it is obvious at a glance. */
+@keyframes record-pulse {
+  0%, 100% { background: var(--color-primary); color: var(--text-on-accent); }
+  50% { background: var(--color-pink); color: var(--text-primary); }
+}
+
+.record-btn.recording { animation: record-pulse 1.4s ease-in-out infinite; }
 
 button:focus { outline: none; }
 /* WebView can mark tapped buttons as :focus-visible, leaving a blue ring stuck
@@ -585,4 +591,5 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   .deco.spin { animation: none; }
+  .record-btn.recording { animation: none; background: var(--color-pink); color: var(--text-primary); }
 }

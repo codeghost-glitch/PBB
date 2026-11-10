@@ -314,10 +314,6 @@ function el(tag, className, role, text) {
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const ICONS = {
-  focus: [
-    ["path", { d: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" }],
-    ["circle", { cx: 12, cy: 12, r: 3 }],
-  ],
   soundOn: [
     ["path", { d: "M11 5 6 9H2v6h4l5 4V5z" }],
     ["path", { d: "M15.5 8.5a5 5 0 0 1 0 7" }],
@@ -450,15 +446,13 @@ function createCard(stream, index) {
   camMeta.appendChild(el("span", "live-badge", "badge", "live"));
 
   const actions = el("div", "cam-actions", null, null);
-  const focusBtn = makeIconButton("btn btn-ghost btn-icon", "focus");
+  const fsBtn = makeIconButton("btn btn-ghost btn-icon", "fs");
   const soundBtn = makeIconButton("btn btn-ghost btn-icon", "sound");
-  const pipBtn = makeIconButton("btn btn-ghost btn-icon hidden", "pip");
-  const fsBtn = makeIconButton("btn btn-ghost btn-icon hidden", "fs");
+  const pipBtn = makeIconButton("btn btn-ghost btn-icon", "pip");
   const recordBtn = makeIconButton("btn btn-icon record-btn", "record");
-  actions.appendChild(focusBtn);
+  actions.appendChild(fsBtn);
   actions.appendChild(soundBtn);
   actions.appendChild(pipBtn);
-  actions.appendChild(fsBtn);
   actions.appendChild(recordBtn);
 
   card.appendChild(videoWrap);
@@ -476,10 +470,9 @@ function createCard(stream, index) {
   card.addEventListener("touchmove", onTouchMove, { passive: false });
   card.addEventListener("touchend", onTouchEnd, { passive: true });
 
-  focusBtn.addEventListener("click", () => focusStream(index));
+  fsBtn.addEventListener("click", () => fullscreenStream(index));
   soundBtn.addEventListener("click", () => setSound(index));
   pipBtn.addEventListener("click", () => enterPip(index));
-  fsBtn.addEventListener("click", () => toggleFullscreen());
   recordBtn.addEventListener("click", () => toggleRecord(index));
 
   // Every card starts on "connecting...", so the short-landscape rule that
@@ -646,20 +639,16 @@ function updateControls() {
 
   for (const [index, card] of cards.entries()) {
     const pipBtn = card.querySelector('[data-role="pip"]');
-    pipBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
+    pipBtn.classList.toggle("hidden", state.pip || state.fullscreen);
     pipBtn.disabled = state.pip;
 
     const fsBtn = card.querySelector('[data-role="fs"]');
-    fsBtn.classList.toggle("hidden", state.focused !== index || state.pip || state.fullscreen);
+    fsBtn.classList.toggle("hidden", state.pip || state.fullscreen);
     fsBtn.disabled = state.pip;
 
     const recordBtn = card.querySelector('[data-role="record"]');
     recordBtn.classList.toggle("recording", state.recording === index);
     recordBtn.disabled = false;
-
-    const focusBtn = card.querySelector('[data-role="focus"]');
-    focusBtn.disabled = state.pip;
-    focusBtn.classList.toggle("active", state.focused === index);
 
     const soundBtn = card.querySelector('[data-role="sound"]');
     soundBtn.classList.toggle("active", state.sound === index);
@@ -667,7 +656,6 @@ function updateControls() {
     setIcon(pipBtn, "pip", "picture-in-picture");
     setIcon(fsBtn, "fullscreen", "fullscreen");
     setIcon(recordBtn, state.recording === index ? "stop" : "record", state.recording === index ? "stop recording" : "record");
-    setIcon(focusBtn, "focus", state.focused === index ? "focused" : "focus");
     setIcon(soundBtn, state.sound === index ? "soundOn" : "soundOff", state.sound === index ? "mute" : "sound");
   }
 
@@ -752,6 +740,19 @@ function backToGrid() {
   setStatusText(state.keysStale ? "keys rotated - tap the refresh icon in the top bar" : "");
   updateControls();
   return true;
+}
+
+// One click from the grid: focus the feed and open it fullscreen.
+function fullscreenStream(index) {
+  if (state.pip) {
+    return;
+  }
+  if (state.focused !== index) {
+    focusStream(index);
+  }
+  if (!state.fullscreen) {
+    toggleFullscreen();
+  }
 }
 
 function enterPip(index) {
@@ -997,12 +998,6 @@ function boot() {
     setIcon(fsRotate, "rotate", "rotate");
     fsRotate.addEventListener("click", rotateFullscreen);
   }
-  const fsRefresh = document.getElementById("fsRefresh");
-  if (fsRefresh) {
-    setIcon(fsRefresh, "refresh", "refresh stream keys");
-    fsRefresh.addEventListener("click", refreshKeysFromUi);
-  }
-
   if (Pbb.isInPip()) {
     window.setPipMode(true);
   }

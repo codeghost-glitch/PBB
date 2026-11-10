@@ -5,15 +5,15 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 ## What it does
 
 - Three-feed multi-view in one screen: one large top feed and two bottom feeds in every orientation.
-- Focus one stream, then picture-in-picture for that one stream only. Focus keeps the 16:9 frame instead of stretching.
-- On Android 12+ the system auto-enters PiP on the go-home gesture via setAutoEnterEnabled(true) while a stream is focused. It does not fire on the recents/overview gesture. The old onUserLeaveHint trigger fired for both, so swiping up to recents used to jump into PiP. On Android 8-11 and 3-button navigation, use the PiP button.
+- Every card has one-click fullscreen and picture-in-picture: the button focuses that feed, plays it alone with sound, then enters the mode. Focus keeps the 16:9 frame instead of stretching.
+- On Android 12+ the system auto-enters PiP on the go-home gesture via setAutoEnterEnabled(true) once a stream is focused (any fullscreen or PiP tap focuses one). It does not fire on the recents/overview gesture. The old onUserLeaveHint trigger fired for both, so swiping up to recents used to jump into PiP. On Android 8-11 and 3-button navigation, use the PiP button.
 - Focus rings only appear for keyboard/D-pad navigation. Tapping a button does not leave the WebView focus outline stuck on it.
 - Shaka network failures (1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT) trigger a bounded backoff reload instead of leaving the tile on a dead error message.
-- Focusing a stream turns its sound on automatically.
-- Fullscreen button per focused stream: hides system bars, letterboxes the feed on black, exits with the floating button or the back key.
+- Opening fullscreen or PiP turns that feed's sound on automatically.
+- Fullscreen button on every card: hides system bars, letterboxes the feed on black, exits with the floating button or the back key.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage.
 - PBB All Access is the default sound stream on launch.
-- Record button pulls the focused stream DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: a foreground service keeps recording with the app backgrounded or the screen off.
+- Record button pulses while a recording runs. It pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: a foreground service keeps recording with the app backgrounded or the screen off.
 - The service writes the encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with the ClearKey on stop. Stream copy, no re-encode.
 - The remuxer is a downloadable FFmpeg plugin, not part of the APK. It is fetched once on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). APK stays about 1 MB; the plugin is 1.3 MB downloaded on demand.
 - Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on any card stops a running recording.
