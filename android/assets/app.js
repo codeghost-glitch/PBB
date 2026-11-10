@@ -781,7 +781,8 @@ function fullscreenStream(index) {
 
 function enterPip(index) {
   if (state.fullscreen) {
-    toggleFullscreen();
+    // Keep the focus: the small window shows the same feed as fullscreen.
+    toggleFullscreen(true);
   }
   if (state.focused !== index) {
     focusStream(index);
@@ -791,7 +792,7 @@ function enterPip(index) {
   Pbb.enterPip();
 }
 
-function toggleFullscreen() {
+function toggleFullscreen(keepFocus) {
   if (state.pip) {
     return;
   }
@@ -817,8 +818,8 @@ function toggleFullscreen() {
   playOnly(state.focused);
   updateControls();
   // Leaving fullscreen drops the focus with it, so land back on the grid
-  // instead of a single focused feed.
-  if (!state.fullscreen) {
+  // instead of a single focused feed. PiP asks to keep it.
+  if (!state.fullscreen && keepFocus !== true) {
     backToGrid();
   }
 }
@@ -1009,12 +1010,17 @@ function boot() {
   const fsExit = document.getElementById("fsExit");
   if (fsExit) {
     setIcon(fsExit, "exit", "exit fullscreen");
-    fsExit.addEventListener("click", toggleFullscreen);
+    fsExit.addEventListener("click", () => toggleFullscreen());
   }
   const fsSwitch = document.getElementById("fsSwitch");
   if (fsSwitch) {
     setIcon(fsSwitch, "next", "next live feed");
     fsSwitch.addEventListener("click", switchFullscreen);
+  }
+  const fsPip = document.getElementById("fsPip");
+  if (fsPip) {
+    setIcon(fsPip, "pip", "picture-in-picture");
+    fsPip.addEventListener("click", () => enterPip(state.focused));
   }
   if (Pbb.isInPip()) {
     window.setPipMode(true);
