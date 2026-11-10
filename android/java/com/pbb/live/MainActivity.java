@@ -41,8 +41,13 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    private static final String KEYS_URL =
-        "https://gist.githubusercontent.com/codeghost-glitch/c21aa2d5114aa18b2114e75479a0e778/raw/keys.json";
+    private static final String STREAM_API =
+        "https://pbb-live.vercel.app/api/stream?channel=";
+    private static final String[][] CHANNELS = {
+        {"PBB All Access", "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22"},
+        {"PBB Dining Area", "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44"},
+        {"PBB External Den", "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"}
+    };
     private static final String KEYS_CACHE = "streams.json";
 
     static {
@@ -158,14 +163,14 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Fetches the current clear keys off the UI thread and pushes them to the page. */
+    /** Fetches the current stream config off the UI thread and pushes it to the page. */
     private void refreshKeys() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 final String json = fetchKeys();
                 if (json == null || validKeys(json) == null) {
-                    reportKeys("could not reach key server - tap refresh to retry");
+                    reportKeys("could not reach pbb-live.vercel.app - tap refresh to retry");
                     return;
                 }
                 streamConfigJson = json;
@@ -201,12 +206,44 @@ public class MainActivity extends Activity {
     }
 
     private static String fetchKeys() {
+        JSONArray streams = new JSONArray();
+        for (String[] channel : CHANNELS) {
+            String raw = fetchJson(STREAM_API + channel[1]);
+            if (raw == null) {
+                return null;
+            }
+            try {
+                JSONObject response = new JSONObject(raw);
+                if (!response.getBoolean("requiresDrm")
+                        || !"clearkey".equals(response.getString("drmMode"))) {
+                    return null;
+                }
+                JSONObject clearKey = response.getJSONObject("ClearKey");
+                JSONObject stream = new JSONObject();
+                stream.put("name", channel[0]);
+                stream.put("url", response.getString("directManifestUri"));
+                stream.put("kid", clearKey.getString("k1"));
+                stream.put("key", clearKey.getString("k2"));
+                streams.put(stream);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        try {
+            return new JSONObject().put("streams", streams).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String fetchJson(String url) {
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(KEYS_URL).openConnection();
+            conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(8000);
             conn.setInstanceFollowRedirects(true);
+            conn.setUseCaches(false);
             conn.setRequestProperty("Cache-Control", "no-cache");
             if (conn.getResponseCode() != 200) {
                 return null;
@@ -239,7 +276,7 @@ public class MainActivity extends Activity {
     private static JSONArray validKeys(String json) {
         try {
             JSONArray streams = new JSONObject(json).getJSONArray("streams");
-            if (streams.length() != 4) {
+            if (streams.length() != CHANNELS.length) {
                 return null;
             }
             for (int i = 0; i < streams.length(); i++) {

@@ -64,9 +64,11 @@ p { color: var(--text-secondary); }
 
 .page {
   position: relative;
+  display: flex;
+  flex-direction: column;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px 16px 24px 16px;
+  padding: 16px;
   height: 100%;
   overflow: hidden;
 }
@@ -98,6 +100,7 @@ p { color: var(--text-secondary); }
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  flex: 0 0 auto;
   z-index: 20;
   padding: 10px 12px;
 }
@@ -210,9 +213,22 @@ body.keyboard-focus button:focus-visible {
 }
 [disabled] { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
 
-.stage { position: relative; margin-top: 32px; }
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 16px;
+}
 
-.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 10px;
+  height: 100%;
+}
+
+.grid .cam-card:first-child { grid-column: 1 / -1; }
 
 @media (min-width: 700px) {
   .grid { gap: 20px; }
@@ -221,6 +237,10 @@ body.keyboard-focus button:focus-visible {
 .cam-card {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   background: var(--bg-surface);
   border: var(--border);
   border-radius: var(--radius-md);
@@ -232,11 +252,12 @@ body.keyboard-focus button:focus-visible {
 .cam-card:nth-child(even) { box-shadow: none; }
 .video-wrap {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   background: var(--border-color);
   border: var(--border);
   border-radius: 8px;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
 }
 
 .video-wrap video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000000; }
@@ -256,7 +277,7 @@ body.keyboard-focus button:focus-visible {
 
 .stream-status.bad { background: var(--color-primary); color: var(--text-on-accent); }
 
-.cam-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.cam-meta { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .cam-title { font-weight: 800; font-size: 0.88rem; line-height: 1.25; text-transform: lowercase; }
 .cam-sub { font-size: 0.68rem; line-height: 1.2; color: var(--text-secondary); }
 
@@ -278,6 +299,7 @@ body.keyboard-focus button:focus-visible {
 
 .cam-actions {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
@@ -286,6 +308,7 @@ body.keyboard-focus button:focus-visible {
 
 .status {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
   margin-top: 12px;
@@ -310,10 +333,23 @@ body.keyboard-focus button:focus-visible {
 
 .hidden { display: none !important; }
 
-.focus-mode .grid { grid-template-columns: 1fr; }
+.focus-mode .grid {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: start;
+}
+.focus-mode .cam-card:first-child { grid-column: auto; }
 .focus-mode .cam-card:not(.focused) { display: none; }
 .focus-mode .cam-card.focused { box-shadow: var(--shadow-lg); }
-.focus-mode .video-wrap { aspect-ratio: 16 / 9; height: auto; max-height: 70vh; margin: 0 auto; width: 100%; }
+.focus-mode .video-wrap {
+  flex: 0 0 auto;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 0;
+  max-height: 70vh;
+  margin: 0 auto;
+  width: 100%;
+}
 .focus-mode .cam-meta { justify-content: center; text-align: center; }
 
 .pip-mode .page,
@@ -438,6 +474,68 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
   font-size: 0.9rem;
   text-transform: lowercase;
   pointer-events: none;
+}
+
+/* Phone-sized cards and landscape have too little room for chrome stacked
+   below the video, so the title and buttons float over the video instead.
+   Kept last so it also wins over the focus-mode rules above. */
+@media (max-width: 520px), (max-height: 520px) {
+  .page { padding: 8px; }
+  .nav { padding: 6px 8px; }
+  .nav p { display: none; }
+  .stage { margin-top: 8px; }
+  .cam-card { padding: 0; }
+  .video-wrap {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: none;
+    width: auto;
+    height: auto;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    aspect-ratio: auto;
+  }
+  .cam-meta {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    z-index: 3;
+    margin: 0;
+    padding: 2px 6px;
+    background: var(--bg-surface);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .cam-actions {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    z-index: 3;
+    flex-wrap: nowrap;
+    margin: 0;
+    gap: 4px;
+  }
+  .cam-actions .btn-icon { width: 24px; height: 24px; border-radius: 7px; }
+  .cam-actions .btn-icon svg { width: 14px; height: 14px; }
+  .cam-title { font-size: 0.72rem; }
+  .cam-sub { display: none; }
+  /* The status pill already reports the feed state. */
+  .live-badge { display: none; }
+  /* The absolute video no longer gives the focused card a height, so let it
+     fill the stage instead of collapsing, and drop the 16:9 frame. */
+  .focus-mode .grid { align-items: stretch; }
+  .focus-mode .cam-card { height: 100%; }
+  .focus-mode .video-wrap {
+    aspect-ratio: auto;
+    max-height: none;
+    width: auto;
+    height: auto;
+    margin: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

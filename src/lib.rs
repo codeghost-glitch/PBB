@@ -12,26 +12,20 @@ const STREAM_CONFIG_JSON: &str = r#"{
     {
       "name": "PBB All Access",
       "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream/manifest.mpd",
-      "kid": "5208606a1a5e4750bc7aaafa3bbad84c",
-      "key": "246d9c7efc6d96d8d596aa294313e17b"
+      "kid": "8150b74d16324bb4b2ff62e3e202fc7a",
+      "key": "0c5ed4f9db9d4ee61bbc91b3a51ef8b5"
     },
     {
       "name": "PBB Dining Area",
       "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream-diningarea/manifest.mpd",
-      "kid": "ac87b335cfd44a8589f96a4f8534c674",
-      "key": "4b9066c7778e74b899c2f57d977149b1"
+      "kid": "ea6588d030c94ca89925ac0c49974430",
+      "key": "3e6de4afee1eff8e14f9506b76ac9ee6"
     },
     {
       "name": "PBB External Den",
       "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream-externalden/manifest.mpd",
-      "kid": "01f5f16338aa4302b5fc5e3e2c50cd3d",
-      "key": "0dbd0f05009fa64614de990f56b3f322"
-    },
-    {
-      "name": "PBB Main Live",
-      "url": "https://abslive.akamaized.net/dash/live/2099522/pinoybigbrothercollabedition30live/manifest.mpd",
-      "kid": "02b0d6aa78d547af890c9e27113e81af",
-      "key": "890160f8ece56b8cd232889acb74e276"
+      "kid": "b750a40736a24e60b5a4f256208b92c5",
+      "key": "af07292597f692726dcac2bd297ddf8e"
     }
   ]
 }"#;
@@ -270,12 +264,14 @@ mod tests {
     }
 
     #[test]
-    fn config_has_four_streams_and_keys() {
+    fn config_has_three_streams_and_keys() {
         let json = stream_config_json();
-        assert_eq!(json.matches(r#""url":"#).count(), 4);
-        assert_eq!(json.matches(r#""kid":"#).count(), 4);
-        assert_eq!(json.matches(r#""key":"#).count(), 4);
+        assert_eq!(json.matches(r#""url":"#).count(), 3);
+        assert_eq!(json.matches(r#""kid":"#).count(), 3);
+        assert_eq!(json.matches(r#""key":"#).count(), 3);
         assert!(json.contains("pbbcollab30allaccesslivestream/manifest.mpd"));
-        assert!(json.contains("pinoybigbrothercollabedition30live/manifest.mpd"));
+        assert!(json.contains("pbbcollab30allaccesslivestream-diningarea/manifest.mpd"));
+        assert!(json.contains("pbbcollab30allaccesslivestream-externalden/manifest.mpd"));
+        assert!(!json.contains("pinoybigbrothercollabedition30live/manifest.mpd"));
     }
 }

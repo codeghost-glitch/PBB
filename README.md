@@ -1,10 +1,10 @@
 # PBB
 
-Rust + JNI Android app for four PBB live DASH/clear-key streams.
+Rust + JNI Android app for three PBB live DASH/clear-key streams.
 
 ## What it does
 
-- 2x2 multi-view in every orientation.
+- Three-feed multi-view in one screen: one large top feed and two bottom feeds in every orientation.
 - Focus one stream, then picture-in-picture for that one stream only. Focus keeps the 16:9 frame instead of stretching.
 - On Android 12+ the system auto-enters PiP on the go-home gesture via setAutoEnterEnabled(true) while a stream is focused. It does not fire on the recents/overview gesture. The old onUserLeaveHint trigger fired for both, so swiping up to recents used to jump into PiP. On Android 8-11 and 3-button navigation, use the PiP button.
 - Focus rings only appear for keyboard/D-pad navigation. Tapping a button does not leave the WebView focus outline stuck on it.
@@ -96,29 +96,27 @@ It is a self-signed personal-release key stored in plain form in this repository
 - WRITE_EXTERNAL_STORAGE is requested only on Android 9 and below. Android 10+ writes through MediaStore to Movies/PBB/.
 - Foreground service type dataSync is declared for Android 14+.
 
-## Runtime clear keys
+## Stream source and runtime clear keys
 
-The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; the recorder would also produce garbage files because it uses the same key.
+The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; an in-flight recording would also produce garbage files because it uses the same key.
 
-Keys live in a plain keys.json on a secret gist, fetched at startup from the unversioned raw URL pinned as KEYS_URL in MainActivity.java:
+The app uses the three feeds from https://pbb-live.vercel.app. MainActivity fetches each channel's `/api/stream?channel=<id>` endpoint at startup and on manual refresh, reads `directManifestUri` and `ClearKey.k1`/`k2`, and converts them to the app's `{name,url,kid,key}` config. Direct Akamai MPDs are used so playback and recording do not depend on the site's manifest proxy.
 
-- Fetched off the UI thread with short timeouts, validated (4 streams, https URLs, 32-hex KID and key), cached in filesDir/streams.json, and used as the last-good config when offline.
-- Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback.
+- Fetched off the UI thread with short timeouts; all three channel responses must be clearkey feeds with https MPDs and 32-hex KID/key pairs. The combined config is cached in filesDir/streams.json and used as the last-good config when offline.
+- Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback with the last known three feeds.
 - Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
-- The status bar is the thin footer card at the bottom of the page, below the 2x2 grid: a teal dot plus the status text, with the back button when focused. It is hidden in PiP and fullscreen, and setStatusText("") hides it when returning to the grid.
+- The status bar is the thin footer card at the bottom of the page, below the three-feed grid: a teal dot plus the status text, with the back button when focused. It is hidden in PiP and fullscreen, and setStatusText("") hides it when returning to the grid.
 - Because of that, the always-visible control is the circular-arrow refresh icon in the top nav (and the same icon in the fullscreen control column). Tapping it calls Pbb.refreshKeys(); the status bar is also tappable. On 4012 the tiles say "keys rotated - tap refresh" and the status bar says "keys rotated - tap the refresh icon in the top bar".
-- A manual refresh always resolves its status text: changed keys re-init the players, unchanged keys report that the studio has not published new ones, and a failed fetch reports the connection error. Silent startup fetches never overwrite the status.
-- Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config.
+- A manual refresh always resolves its status text: changed keys re-init the players, unchanged keys report that the source has not published new ones, and a failed fetch reports the connection error. Silent startup fetches never overwrite the status.
+- Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall.
 
-When the studio publishes new keys, run:
+To refresh the checked-in fallback snapshot from the same live API:
 
 ~~~bash
 ./keys/update.sh
 ~~~
 
-It fetches https://pbb-live-studio.vercel.app/data.js, decodes the obfuscated CH array with keys/decode-data.js, validates the pairs, and PATCHes the gist. No APK rebuild and no reinstall. Verify a new key before publishing by decrypting one live segment on the host with ffmpeg -decryption_key and decoding a few frames.
-
-Current state: the studio site is a maintenance page ("refreshing the server keys") and its data.js still serves the old pairs, so keys.json carries those stale keys. Playback stays on 4012 until the studio publishes the new pairs and ./keys/update.sh is run.
+It writes keys/keys.json. The runtime app does not read that file; it fetches the API directly. Copy the new values into STREAM_CONFIG_JSON if the built-in fallback should track the current rotation.
 
 ## Downloadable recorder plugin
 
@@ -132,7 +130,7 @@ The plugin is arm64-only. Non-arm64 devices get a clear error instead of a crash
 
 ffmpeg/host_test.c plus a host build of the same minimal FFmpeg validates pbb_remux against captured real segments without a device: build host ffmpeg with the same configure flags, compile host_test.c against it, and ffprobe the output. Verified: 360 H.264 frames + 563 AAC frames, clean decode.
 
-Known limit: a rotated ClearKey produces a garbage file rather than an error, because remuxing copies packets without decoding them. Update STREAM_CONFIG_JSON in src/lib.rs when the broadcaster rotates keys.
+Known limit: an in-flight recording keeps the key it started with, so a rotation can produce a garbage file because remuxing copies packets without decoding them. Refresh the feeds and start a new recording after rotation.
 
 DASH tfdt timestamps are absolute (time since the stream began). The remuxer sets AVFMT_AVOID_NEG_TS_MAKE_ZERO so the MP4 starts at 0; otherwise mvhd/tkhd carry a duration of hours or days and only an edit list hides it, which many players ignore. Files recorded before this fix can be repaired without re-encoding:
 
@@ -145,6 +143,9 @@ ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 - cargo fmt --check
 - cargo clippy --all-targets -- -D warnings
 - cargo test
+- node --check android/assets/app.js
+- python3 -m json.tool keys/keys.json
+- three-feed layout measured in headless Chromium at phone portrait, phone landscape, tablet and desktop viewports: every card keeps a visible video area, no clipped controls, no overlapping chrome
 - cargo ndk build for arm64-v8a, armeabi-v7a, x86_64
 - javac against android.jar
 - d8 dexing

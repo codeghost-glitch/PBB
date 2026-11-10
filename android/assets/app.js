@@ -20,7 +20,7 @@ function refreshKeysFromUi() {
     return;
   }
   manualKeyRefresh = true;
-  setStatusText("refreshing keys...");
+  setStatusText("refreshing streams...");
   Pbb.refreshKeys();
 }
 
@@ -585,7 +585,7 @@ async function initPlayer(entry, index) {
   }
   setStreamStatus(entry, "live", false);
   if (state.focused < 0) {
-    setStatusText("all four feeds ready");
+    setStatusText("all three feeds ready");
   }
 }
 
@@ -856,8 +856,8 @@ window.handleBack = () => {
   return false;
 };
 
-// Pushed by Java after keys.json is fetched. Rebuild the Shaka players so
-// both playback and the recorder use the current clear keys.
+// Pushed by Java after the live stream config is fetched. Rebuild the Shaka
+// players so both playback and the recorder use the current clear keys.
 window.onStreamConfig = async (raw) => {
   let cfg;
   try {
@@ -884,7 +884,7 @@ window.onStreamConfig = async (raw) => {
   if (!changed) {
     if (manualKeyRefresh) {
       manualKeyRefresh = false;
-      setStatusText("keys unchanged - studio has not published new ones yet");
+      setStatusText("keys unchanged - stream source has not published new ones yet");
     }
     return;
   }
@@ -996,9 +996,6 @@ function boot() {
     const idx = Math.max(0, Number(Pbb.recordingStream()) || 0);
     state.recording = idx;
     state.pendingRecord = idx;
-  }
-  if (state.focused < 0) {
-    focusStream(0);
   }
 }
 
