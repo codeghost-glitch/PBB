@@ -262,10 +262,12 @@ body.keyboard-focus button:focus-visible {
 
 .video-wrap video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000000; }
 
+/* Centred over the feed, like a monitor's "connecting" overlay. */
 .stream-status {
   position: absolute;
-  left: 6px;
-  bottom: 6px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   padding: 2px 8px;
   background: var(--bg-surface);
   border: var(--border);
@@ -514,11 +516,11 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     border-radius: var(--radius-sm);
   }
   .stream-status {
-    left: auto;
-    right: 6px;
-    top: 6px;
+    left: 50%;
+    right: auto;
+    top: 50%;
     bottom: auto;
-    max-width: 46%;
+    max-width: 70%;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -572,6 +574,12 @@ body.locked .fs-controls .lock-btn { background: var(--color-primary); color: va
     height: auto;
     margin: 0;
   }
+}
+
+/* In a short landscape card a centred status pill and the button pill cannot
+   both fit, so the status wins while it is showing. */
+@media (max-height: 520px) {
+  .cam-card.status-on .cam-actions { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -91,7 +91,12 @@ function setStreamStatus(entry, message, bad) {
   entry.statusEl.textContent = message;
   entry.statusEl.classList.toggle("bad", Boolean(bad));
   // The steady "live" pill is noise; keep the pill only while connecting or on error.
-  entry.statusEl.classList.toggle("hidden", !bad && message === "live");
+  const hidden = !bad && message === "live";
+  entry.statusEl.classList.toggle("hidden", hidden);
+  // Lets the short-landscape layout hide the buttons the status would cover.
+  if (entry.card) {
+    entry.card.classList.toggle("status-on", !hidden);
+  }
 }
 
 function showControls() {
@@ -477,9 +482,13 @@ function createCard(stream, index) {
   fsBtn.addEventListener("click", () => toggleFullscreen());
   recordBtn.addEventListener("click", () => toggleRecord(index));
 
+  // Every card starts on "connecting...", so the short-landscape rule that
+  // hides the buttons behind the status pill applies from the first frame.
+  card.classList.add("status-on");
+
   grid.appendChild(card);
   cards.push(card);
-  players.push({ video, player: null, stream, statusEl });
+  players.push({ video, player: null, stream, statusEl, card });
 }
 
 // 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT are transient on live
