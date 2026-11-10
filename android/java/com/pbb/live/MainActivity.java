@@ -22,6 +22,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -63,6 +64,7 @@ public class MainActivity extends Activity {
     private static native void setAppBrightness(String filesDir, float value);
 
     private WebView webView;
+    private FrameLayout rootView;
     private boolean recording = false;
     private boolean isInPip = false;
     private int focusedStream = -1;
@@ -98,31 +100,29 @@ public class MainActivity extends Activity {
 
     private void setupWebView() {
         webView = new WebView(this);
-        setContentView(webView);
-        // targetSdk 35 draws edge to edge, so reserve the status and navigation
-        // bar space. Immersive fullscreen hides the bars and the padding drops.
-        if (Build.VERSION.SDK_INT >= 30) {
-            webView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-                @Override
-                public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
-                    android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                    view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-                    return insets;
-                }
-            });
-        } else {
-            webView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-                @SuppressWarnings("deprecation")
-                @Override
-                public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
-                    view.setPadding(
-                        insets.getSystemWindowInsetLeft(),
-                        insets.getSystemWindowInsetTop(),
-                        insets.getSystemWindowInsetRight(),
-                        insets.getSystemWindowInsetBottom());
-                    return insets;
-                }
-            });
+        // Android 15 with targetSdk 35 forces edge to edge, so nothing reserves
+        // the status and navigation bar space any more. Pad the container instead
+        // of the WebView: a child is laid out inside its parent's padding, and
+        // padding on a WebView itself does not shrink what it renders.
+        rootView = new FrameLayout(this);
+        rootView.setBackgroundColor(0xFFFAFADF);
+        rootView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                applyInsetsAsPadding(insets);
+                return insets;
+            }
+        });
+        rootView.addView(
+            webView,
+            new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(rootView);
+        if (Build.VERSION.SDK_INT >= 35) {
+            // Correct the first frame, before any inset dispatch arrives.
+            rootView.setPadding(
+                0, dimension("status_bar_height"), 0, dimension("navigation_bar_height"));
+            rootView.requestApplyInsets();
         }
         webView.setBackgroundColor(0xFFFAFADF);
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
@@ -342,6 +342,30 @@ public class MainActivity extends Activity {
                 webView.evaluateJavascript("window.setPipMode && window.setPipMode(" + (active ? "true" : "false") + ")", null);
             }
         });
+    }
+
+    // Only Android 15 and later force edge to edge here; below that the window
+    // already fits the system bars and padding would be applied twice.
+    private void applyInsetsAsPadding(WindowInsets insets) {
+        if (rootView == null || Build.VERSION.SDK_INT < 35) {
+            return;
+        }
+        android.graphics.Insets bars =
+            insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+        rootView.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+    }
+
+    private int dimension(String name) {
+        int id = getResources().getIdentifier(name, "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && rootView != null) {
+            applyInsetsAsPadding(rootView.getRootWindowInsets());
+        }
     }
 
     private void toast(String message) {

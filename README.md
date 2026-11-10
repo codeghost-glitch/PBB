@@ -20,7 +20,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Stop from the notification shade. Swiping the app away from recents does not stop the recording.
 - Recording state lives in the service, so after the activity is recreated the UI still shows which stream is recording and the stop button still works.
 - In picture-in-picture the live badge, stream status, and controls are hidden, so only the video is shown.
-- The WebView is padded by the system bar insets, so the top bar never sits under the phone's status bar and the footer clears the navigation bar; immersive fullscreen drops the padding again.
+- Android 15 forces edge to edge, so the WebView sits in a container padded by the system bar and cutout insets. The top bar clears the phone's status bar and the footer clears the navigation bar; immersive fullscreen zeroes the insets and the padding drops again.
 - Neobrutalism styling from /home/rey/Downloads/Projects/neobrutalism with Coral & Cream defaults: warm cream, 2px black borders, 4px hard shadows, rounded cards, lowercase headings, scattered stars/blobs, mechanical press-down buttons.
 
 ## Shape
