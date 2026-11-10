@@ -523,7 +523,7 @@ function scheduleRecover(entry, index) {
       return;
     }
     entry.retries = 0;
-    entry.video.muted = state.sound !== index;
+    applyAudio();
     if (state.focused >= 0 && state.focused !== index) {
       entry.video.pause();
     } else {
@@ -604,7 +604,7 @@ async function initPlayer(entry, index) {
     entry.video.play().catch(() => {});
   }
 
-  entry.video.muted = state.sound !== index;
+  applyAudio();
   if (state.focused >= 0 && state.focused !== index) {
     entry.video.pause();
   }
@@ -617,10 +617,15 @@ async function initPlayer(entry, index) {
 // hd is 1080p: only the feed being watched needs that many pixels at once, so
 // the other tiles drop to sd while one feed is focused.
 function qualityFor(index) {
-  if (state.quality === "hd" && state.focused >= 0 && index !== state.focused) {
-    return "sd";
+  if (state.quality !== "hd" || state.focused < 0) {
+    return state.quality;
   }
-  return state.quality;
+  // The big feed and the mini tile are both watched, so they keep hd; only the
+  // feeds hidden behind fullscreen drop to sd until they are shown again.
+  if (index === state.focused || index === state.mini) {
+    return "hd";
+  }
+  return "sd";
 }
 
 function applyAllQualities() {
@@ -707,14 +712,20 @@ function updateControls() {
   }
 }
 
+// The focused feed carries the sound, and the mini tile is audible over it, so
+// you can hear both cameras at once. Nothing is audible when sound is muted.
+function applyAudio() {
+  for (const [i, entry] of players.entries()) {
+    entry.video.muted = !(i === state.sound || (i === state.mini && state.sound >= 0));
+  }
+}
+
 function ensureSound(index) {
   if (index < 0 || !players[index]) {
     return;
   }
   state.sound = index;
-  for (const [i, entry] of players.entries()) {
-    entry.video.muted = i !== index;
-  }
+  applyAudio();
   players[index].video.volume = 1;
   players[index].video.play().catch(() => {});
   updateControls();
@@ -723,9 +734,7 @@ function ensureSound(index) {
 function setSound(index) {
   if (state.sound === index) {
     state.sound = -1;
-    for (const entry of players) {
-      entry.video.muted = true;
-    }
+    applyAudio();
     updateControls();
     return;
   }
@@ -824,6 +833,7 @@ function toggleFullscreen(keepFocus) {
     for (const entry of players) {
       entry.card.classList.remove("mini");
     }
+    applyAudio();
   }
   document.body.classList.remove("controls-visible");
   if (hideControlsTimer) {
@@ -855,6 +865,8 @@ function setMini(index) {
   } else {
     playOnly(state.focused);
   }
+  applyAudio();
+  applyAllQualities();
   updateControls();
 }
 
