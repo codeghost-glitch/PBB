@@ -648,6 +648,12 @@ function applyQuality(player, quality) {
   }
   tracks.sort((a, b) => a.height - b.height);
   const chosen = quality === "hd" ? tracks[tracks.length - 1] : tracks[0];
+  // selectVariantTrack(clearBuffer = true) throws the buffer away, which stalls
+  // the picture. Swapping feeds re-applies quality to every tile, so skip the
+  // ones that already play the variant we would pick.
+  if (chosen.active) {
+    return;
+  }
   player.selectVariantTrack(chosen, true);
 }
 
@@ -751,7 +757,7 @@ function playOnly(index) {
   }
 }
 
-function focusStream(index) {
+function focusStream(index, skipQuality) {
   if (state.pip) {
     return;
   }
@@ -762,7 +768,9 @@ function focusStream(index) {
   }
   playOnly(index);
   ensureSound(index);
-  applyAllQualities();
+  if (!skipQuality) {
+    applyAllQualities();
+  }
   if (window.Pbb) {
     Pbb.setFocusedStream(index);
   }
@@ -886,7 +894,10 @@ function swapMini() {
     return;
   }
   const previous = state.focused;
-  focusStream(state.mini);
+  // Both states must be in place before quality is re-applied, or the tile that
+  // is about to become the mini drops to sd and immediately back to hd, which
+  // clears its buffer twice.
+  focusStream(state.mini, true);
   setMini(previous);
 }
 
