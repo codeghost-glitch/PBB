@@ -96,6 +96,28 @@ It is a self-signed personal-release key stored in plain form in this repository
 - WRITE_EXTERNAL_STORAGE is requested only on Android 9 and below. Android 10+ writes through MediaStore to Movies/PBB/.
 - Foreground service type dataSync is declared for Android 14+.
 
+## Runtime clear keys
+
+The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; the recorder would also produce garbage files because it uses the same key.
+
+Keys live in a plain keys.json on a secret gist, fetched at startup from the unversioned raw URL pinned as KEYS_URL in MainActivity.java:
+
+- Fetched off the UI thread with short timeouts, validated (4 streams, https URLs, 32-hex KID and key), cached in filesDir/streams.json, and used as the last-good config when offline.
+- Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback.
+- Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
+- Tap the status bar to call Pbb.refreshKeys() at any time. On 4012 the tiles and status bar say "keys rotated - tap status bar to refresh".
+- Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config.
+
+When the studio publishes new keys, run:
+
+~~~bash
+./keys/update.sh
+~~~
+
+It fetches https://pbb-live-studio.vercel.app/data.js, decodes the obfuscated CH array with keys/decode-data.js, validates the pairs, and PATCHes the gist. No APK rebuild and no reinstall. Verify a new key before publishing by decrypting one live segment on the host with ffmpeg -decryption_key and decoding a few frames.
+
+Current state: the studio site is a maintenance page ("refreshing the server keys") and its data.js still serves the old pairs, so keys.json carries those stale keys. Playback stays on 4012 until the studio publishes the new pairs and ./keys/update.sh is run.
+
 ## Downloadable recorder plugin
 
 Android 10+ forbids execve() on files in an app home directory, so a downloaded ffmpeg executable cannot run. A downloaded shared library can, as long as it is read-only (Android 14+ rejects writable dynamic code). The plugin therefore is libpbbffmpeg.so, fetched as base64 from a private gist, decoded, chmod 0444, then loaded with System.load(). Only libc/libm/libdl are needed, and it is 16 KB page-aligned for Android 15+.

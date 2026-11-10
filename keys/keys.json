@@ -1,0 +1,28 @@
+{
+  "streams": [
+    {
+      "name": "PBB All Access",
+      "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream/manifest.mpd",
+      "kid": "5208606a1a5e4750bc7aaafa3bbad84c",
+      "key": "246d9c7efc6d96d8d596aa294313e17b"
+    },
+    {
+      "name": "PBB Dining Area",
+      "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream-diningarea/manifest.mpd",
+      "kid": "ac87b335cfd44a8589f96a4f8534c674",
+      "key": "4b9066c7778e74b899c2f57d977149b1"
+    },
+    {
+      "name": "PBB External Den",
+      "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream-externalden/manifest.mpd",
+      "kid": "01f5f16338aa4302b5fc5e3e2c50cd3d",
+      "key": "0dbd0f05009fa64614de990f56b3f322"
+    },
+    {
+      "name": "PBB Main Live",
+      "url": "https://abslive.akamaized.net/dash/live/2099522/pinoybigbrothercollabedition30live/manifest.mpd",
+      "kid": "02b0d6aa78d547af890c9e27113e81af",
+      "key": "890160f8ece56b8cd232889acb74e276"
+    }
+  ]
+}

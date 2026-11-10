@@ -519,6 +519,11 @@ async function initPlayer(entry, index) {
   player.addEventListener("error", (event) => {
     const detail = event.detail || {};
     const message = detail.message || detail.code || detail;
+    if (Number(detail.code) === 4012) {
+      setStreamStatus(entry, "keys rotated - tap status bar", true);
+      setStatusText("keys rotated - tap status bar to refresh");
+      return;
+    }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
       scheduleRecover(entry, index);
     } else {
@@ -825,6 +830,51 @@ window.handleBack = () => {
   return false;
 };
 
+// Pushed by Java after keys.json is fetched. Rebuild the Shaka players so
+// both playback and the recorder use the current clear keys.
+window.onStreamConfig = async (raw) => {
+  let cfg;
+  try {
+    cfg = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  const streams = cfg && cfg.streams;
+  if (!Array.isArray(streams) || !players.length || streams.length !== players.length) {
+    return;
+  }
+  for (const s of streams) {
+    if (!s || !s.url || !/^[0-9a-f]{32}$/i.test(s.kid || "") || !/^[0-9a-f]{32}$/i.test(s.key || "")) {
+      return;
+    }
+  }
+  let changed = false;
+  for (const [i, s] of streams.entries()) {
+    const cur = players[i].stream;
+    if (cur.url !== s.url || cur.kid !== s.kid || cur.key !== s.key) {
+      changed = true;
+    }
+  }
+  if (!changed) {
+    return;
+  }
+  const olds = players.map((p) => p.player);
+  for (const [i, s] of streams.entries()) {
+    players[i].stream = s;
+    players[i].player = null;
+    if (players[i].retryTimer) {
+      clearTimeout(players[i].retryTimer);
+      players[i].retryTimer = null;
+    }
+    players[i].retries = 0;
+  }
+  await Promise.all(olds.map((p) => (p ? p.destroy().catch(() => {}) : Promise.resolve())));
+  for (const [i] of players.entries()) {
+    initPlayer(players[i], i);
+  }
+  setStatusText("keys refreshed - reconnecting streams");
+};
+
 function boot() {
   grid = document.getElementById("grid");
   backBtn = document.getElementById("backBtn");
@@ -871,6 +921,15 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
+  const statusBar = document.getElementById("statusBar");
+  if (statusBar) {
+    statusBar.addEventListener("click", () => {
+      if (window.Pbb) {
+        setStatusText("refreshing keys...");
+        Pbb.refreshKeys();
+      }
+    });
+  }
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
   const fsLock = document.getElementById("fsLock");

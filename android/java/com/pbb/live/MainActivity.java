@@ -27,6 +27,13 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -34,6 +41,9 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
+    private static final String KEYS_URL =
+        "https://gist.githubusercontent.com/codeghost-glitch/c21aa2d5114aa18b2114e75479a0e778/raw/keys.json";
+    private static final String KEYS_CACHE = "streams.json";
 
     static {
         System.loadLibrary("pbb");
@@ -57,6 +67,7 @@ public class MainActivity extends Activity {
     private float appVolumeLevel = -1f;
     private float appBrightnessLevel = -1f;
     private int savedSystemVolume = -1;
+    private volatile String streamConfigJson;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -73,6 +84,8 @@ public class MainActivity extends Activity {
         String filesDir = getFilesDir().getAbsolutePath();
         appVolumeLevel = appVolume(filesDir);
         appBrightnessLevel = appBrightness(filesDir);
+        streamConfigJson = streamConfig();
+        loadCachedKeys();
         setupWebView();
         registerStatusReceiver();
         updatePipParams();
@@ -106,7 +119,12 @@ public class MainActivity extends Activity {
         settings.setUseWideViewPort(false);
         settings.setLoadWithOverviewMode(false);
         settings.setDefaultTextEncodingName("utf-8");
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                refreshKeys();
+            }
+        });
         webView.addJavascriptInterface(new PbbBridge(), "Pbb");
         webView.loadUrl("file:///android_asset/index.html");
     }
@@ -117,6 +135,113 @@ public class MainActivity extends Activity {
             registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(statusReceiver, filter);
+        }
+    }
+
+    private void loadCachedKeys() {
+        File cache = new File(getFilesDir(), KEYS_CACHE);
+        if (!cache.exists()) {
+            return;
+        }
+        try {
+            FileInputStream in = new FileInputStream(cache);
+            String json;
+            try {
+                json = readText(in);
+            } finally {
+                in.close();
+            }
+            if (validKeys(json) != null) {
+                streamConfigJson = json;
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Fetches the current clear keys off the UI thread and pushes them to the page. */
+    private void refreshKeys() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final String json = fetchKeys();
+                if (json == null || validKeys(json) == null) {
+                    return;
+                }
+                streamConfigJson = json;
+                try {
+                    FileOutputStream out = new FileOutputStream(new File(getFilesDir(), KEYS_CACHE));
+                    try {
+                        out.write(json.getBytes("UTF-8"));
+                    } finally {
+                        out.close();
+                    }
+                } catch (Exception ignored) {
+                }
+                final String quoted = JSONObject.quote(json);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        webView.evaluateJavascript(
+                            "window.onStreamConfig && window.onStreamConfig(" + quoted + ")", null);
+                    }
+                });
+            }
+        }, "pbb-keys").start();
+    }
+
+    private static String fetchKeys() {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(KEYS_URL).openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(8000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("Cache-Control", "no-cache");
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            InputStream in = conn.getInputStream();
+            try {
+                return readText(in);
+            } finally {
+                in.close();
+            }
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+    }
+
+    private static String readText(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+            out.write(buf, 0, n);
+        }
+        return new String(out.toByteArray(), "UTF-8");
+    }
+
+    private static JSONArray validKeys(String json) {
+        try {
+            JSONArray streams = new JSONObject(json).getJSONArray("streams");
+            if (streams.length() != 4) {
+                return null;
+            }
+            for (int i = 0; i < streams.length(); i++) {
+                JSONObject s = streams.getJSONObject(i);
+                if (!s.getString("url").startsWith("https://")
+                        || !s.getString("kid").matches("(?i)[0-9a-f]{32}")
+                        || !s.getString("key").matches("(?i)[0-9a-f]{32}")) {
+                    return null;
+                }
+            }
+            return streams;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -343,7 +468,7 @@ public class MainActivity extends Activity {
 
     private void startRecordService() {
         try {
-            JSONArray streams = new JSONObject(streamConfig()).getJSONArray("streams");
+            JSONArray streams = new JSONObject(streamConfigJson).getJSONArray("streams");
             if (pendingRecordIndex < 0 || pendingRecordIndex >= streams.length()) {
                 notifyRecordingState(false, "unknown stream");
                 return;
@@ -424,7 +549,12 @@ public class MainActivity extends Activity {
     public class PbbBridge {
         @JavascriptInterface
         public String getConfig() {
-            return streamConfig();
+            return streamConfigJson;
+        }
+
+        @JavascriptInterface
+        public void refreshKeys() {
+            MainActivity.this.refreshKeys();
         }
 
         @JavascriptInterface

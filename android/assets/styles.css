@@ -306,6 +306,7 @@ body.keyboard-focus button:focus-visible {
 
 .status .btn-icon { flex: 0 0 auto; }
 .recording .status-dot { background: var(--color-primary); }
+#statusBar { cursor: pointer; }
 
 .hidden { display: none !important; }
 
