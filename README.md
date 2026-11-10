@@ -107,6 +107,12 @@ ffmpeg/host_test.c plus a host build of the same minimal FFmpeg validates pbb_re
 
 Known limit: a rotated ClearKey produces a garbage file rather than an error, because remuxing copies packets without decoding them. Update STREAM_CONFIG_JSON in src/lib.rs when the broadcaster rotates keys.
 
+DASH tfdt timestamps are absolute (time since the stream began). The remuxer sets AVFMT_AVOID_NEG_TS_MAKE_ZERO so the MP4 starts at 0; otherwise mvhd/tkhd carry a duration of hours or days and only an edit list hides it, which many players ignore. Files recorded before this fix can be repaired without re-encoding:
+
+~~~bash
+ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
+~~~
+
 ## Validation performed
 
 - cargo fmt --check

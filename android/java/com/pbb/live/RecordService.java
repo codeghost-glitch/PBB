@@ -68,9 +68,9 @@ public class RecordService extends Service {
     private static final String PLUGIN_FILE = "libpbbffmpeg.so";
 
     private static final String PLUGIN_URL =
-        "https://gist.githubusercontent.com/codeghost-glitch/44ef115435a8be42a704acbe813d612b/raw/c0d1056144a12663948b0abdda6ff28c94223d3e/libpbbffmpeg.so.b64";
+        "https://gist.githubusercontent.com/codeghost-glitch/e2db5f9ab594739147c94ad82f5bd3d1/raw/7a5bd9a1ea01410443b94f310be6a1684c967823/libpbbffmpeg.so.b64";
     private static final String PLUGIN_SHA256 =
-        "5b588917d1dfedb4bd72c0f0b8f383fd9c701642ecdee4c45d51ec66871cb435";
+        "c02573c6d1ae455e50027119c36d079bf4edf20aab108e1ab849db2daa2d4482";
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
 

@@ -115,6 +115,11 @@ int pbb_remux(const char *vpath, const char *apath, const char *opath,
     ret = avio_open(&out->pb, opath, AVIO_FLAG_WRITE);
     if (ret < 0) { describe_error(err, errlen, "open output", ret); goto done; }
 
+    // DASH tfdt timestamps are absolute (time since the stream started). Without
+    // shifting them to zero the muxer writes a huge mvhd/tkhd duration and only
+    // hides it behind an edit list, which many players ignore.
+    out->avoid_negative_ts = AVFMT_AVOID_NEG_TS_MAKE_ZERO;
+
     AVDictionary *mux_opts = NULL;
     av_dict_set(&mux_opts, "movflags", "+faststart", 0);
     ret = avformat_write_header(out, &mux_opts);
