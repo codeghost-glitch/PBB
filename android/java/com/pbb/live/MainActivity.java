@@ -69,7 +69,6 @@ public class MainActivity extends Activity {
     // started together, so recording all three is one tap and one dialog.
     private final ArrayList<Integer> pendingRecordIndices = new ArrayList<Integer>();
     private final ArrayList<String> pendingRecordLabels = new ArrayList<String>();
-    private boolean orientationLocked = false;
     // The gallery's light switch: the page owns the choice, the shell follows
     // it so the window behind the WebView and the system bar icons match.
     private boolean darkTheme = false;
@@ -103,6 +102,7 @@ public class MainActivity extends Activity {
         streamConfigJson = streamConfig();
         loadCachedKeys();
         setupWebView();
+        applyOrientation();
         registerStatusReceiver();
         updatePipParams();
     }
@@ -313,9 +313,6 @@ public class MainActivity extends Activity {
 
     private void notifyRecordingState(boolean active, int index, int count, long elapsed,
             String kind, String message) {
-        if (!active && count == 0) {
-            lockLandscape(false);
-        }
         final String payload;
         try {
             JSONObject state = new JSONObject();
@@ -389,10 +386,22 @@ public class MainActivity extends Activity {
     private void applyImmersive(boolean enabled) {
         immersive = enabled;
         setBarsHidden(enabled);
+        applyOrientation();
+        applyBrightnessForScreen();
         if (rootView != null) {
             applyInsetsAsPadding(rootView.getRootWindowInsets());
             rootView.requestApplyInsets();
         }
+    }
+
+    /**
+     * The main screen is a portrait layout, so it stays portrait. Only the
+     * fullscreen picture turns the phone sideways.
+     */
+    private void applyOrientation() {
+        setRequestedOrientation(immersive
+            ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
     }
 
     private void setBarsHidden(boolean enabled) {
@@ -466,6 +475,19 @@ public class MainActivity extends Activity {
         applyBarIconAppearance();
     }
 
+    /**
+     * The remembered brightness belongs to the fullscreen picture: on the main
+     * screen the phone keeps its own brightness, and in the pip window the
+     * device brightness applies too.
+     */
+    private void applyBrightnessForScreen() {
+        if (immersive && !isInPictureInPictureMode() && appBrightnessLevel >= 0f) {
+            applyBrightness(appBrightnessLevel, false);
+        } else {
+            clearBrightnessOverride();
+        }
+    }
+
     // Window-scoped only: never written to Settings.System, and cleared when
     // the app leaves the foreground so the device keeps its own brightness.
     private void applyBrightness(float value, boolean persist) {
@@ -519,18 +541,6 @@ public class MainActivity extends Activity {
         getWindow().setAttributes(params);
     }
 
-    private void lockLandscape(boolean lock) {
-        if (lock && !orientationLocked) {
-            orientationLocked = true;
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-            return;
-        }
-        if (!lock && orientationLocked) {
-            orientationLocked = false;
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-        }
-    }
-
     private PictureInPictureParams pipParams(boolean autoEnter) {
         PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
         builder.setAspectRatio(new Rational(16, 9));
@@ -574,12 +584,7 @@ public class MainActivity extends Activity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
         isInPip = isInPictureInPictureMode;
         updatePipParams();
-        // In the pip window the device brightness applies, not the app's level.
-        if (isInPictureInPictureMode) {
-            clearBrightnessOverride();
-        } else if (appBrightnessLevel >= 0f) {
-            applyBrightness(appBrightnessLevel, false);
-        }
+        applyBrightnessForScreen();
         notifyPipState(isInPictureInPictureMode);
     }
 
@@ -737,9 +742,7 @@ public class MainActivity extends Activity {
         if (appVolumeLevel >= 0f) {
             applyVolume(appVolumeLevel, false);
         }
-        if (appBrightnessLevel >= 0f && !isInPictureInPictureMode()) {
-            applyBrightness(appBrightnessLevel, false);
-        }
+        applyBrightnessForScreen();
     }
 
     @Override
@@ -793,27 +796,6 @@ public class MainActivity extends Activity {
         public void clearFocusedStream() {
             focusedStream = -1;
             updatePipParams();
-        }
-
-        @JavascriptInterface
-        public void setOrientation(final String mode) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    // A running recording owns the orientation; the page asking
-                    // for landscape on fullscreen exit must not undo that lock.
-                    if (orientationLocked) {
-                        return;
-                    }
-                    if ("landscape".equals(mode)) {
-                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-                    } else if ("portrait".equals(mode)) {
-                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
-                    } else {
-                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                    }
-                }
-            });
         }
 
         @JavascriptInterface

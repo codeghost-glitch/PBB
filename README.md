@@ -4,7 +4,8 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 
 ## What it does
 
-- Three-feed multi-view in one screen: one large top feed and two bottom feeds in every orientation.
+- Three-feed multi-view in one screen: one large top feed and two bottom feeds. The grid is locked to portrait, because that is the layout it was drawn for. Only the fullscreen picture turns the phone sideways.
+- The brightness level belongs to the fullscreen picture. It is remembered and put back the next time a feed goes fullscreen, but on the main screen and in the pip window the phone keeps its own brightness.
 - Every card has one-click fullscreen and picture-in-picture: the button focuses that feed, plays it alone with sound, then enters the mode. Focus keeps the 16:9 frame instead of stretching.
 - On Android 12+ the system auto-enters PiP on the go-home gesture via setAutoEnterEnabled(true) once a stream is focused (any fullscreen or PiP tap focuses one). It does not fire on the recents/overview gesture. The old onUserLeaveHint trigger fired for both, so swiping up to recents used to jump into PiP. On Android 8-11 and 3-button navigation, use the PiP button.
 - Focus rings only appear for keyboard/D-pad navigation. Tapping a button does not leave the WebView focus outline stuck on it.
@@ -19,7 +20,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Each camera is an independent session with its own worker thread, temporary files and notification. The pulls run in parallel; only the final remux is serialised, because libavformat keeps process-wide state and two muxers driven at once would interleave. Stream copy, no re-encode.
 - The service writes each session's encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with that stream's ClearKey on stop.
 - The remuxer is a FFmpeg plugin that ships inside the APK as base64 in the assets. It is decoded on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). A pinned gist is the fallback for builds made without the asset. The APK is about 1.6 MB because of it, and recording works offline.
-- Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on a card only affects that camera.
+- Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on a card only affects that camera. A running recording also no longer turns the phone sideways: the recording happens in the service and the screen keeps the orientation the layout asks for.
 - Per-camera notifications come and go under one summary notification: stop a single camera from its own notification, or stop every camera from the summary or the master button.
 - Recording state lives in the service, so after the activity is recreated the page rebuilds every tally and its elapsed time from Pbb.recordingState() and the stop buttons still work.
 - In picture-in-picture the live badge, stream status, tally and controls are hidden, so only the video is shown.

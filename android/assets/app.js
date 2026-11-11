@@ -1125,8 +1125,9 @@ function toggleFullscreen(keepFocus) {
     hideControlsTimer = null;
   }
   if (window.Pbb) {
+    // The host owns the orientation: portrait on the grid, landscape for the
+    // fullscreen picture.
     Pbb.setImmersive(state.fullscreen);
-    Pbb.setOrientation(state.fullscreen ? "landscape" : "auto");
   }
   if (state.fullscreen && players[state.focused]) {
     // The rail no longer carries the name, so a short chip names the feed as
