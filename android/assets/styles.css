@@ -656,35 +656,126 @@ body.fullscreen-mode .video-wrap video {
   object-fit: contain;
 }
 
+/* Fullscreen controls: one small switcher panel, top-right. It names the feed
+   on screen and gives every key a word, because an icon on its own was a guess.
+   It slides in on a tap and gets out of the way 3.5 s later. */
 .fs-controls {
   position: fixed;
   top: 14px;
+  top: max(14px, env(safe-area-inset-top));
   right: 14px;
+  right: max(14px, env(safe-area-inset-right));
   z-index: 90;
   display: none;
+  max-width: calc(100vw - 28px);
+}
+
+.fs-deck {
+  display: flex;
   flex-direction: column;
   gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  padding: 8px;
+  background: var(--surface);
+  border: var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
 }
 
-.fs-controls .btn {
-  width: 42px;
-  height: 42px;
-  background: var(--surface);
+.fs-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 2px 7px;
+  border-bottom: var(--border);
+}
+
+.fs-num {
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fs-name {
+  max-width: 104px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.fs-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 0.56rem;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.fs-keys { display: flex; gap: 6px; }
+
+.fs-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 48px;
+  min-height: 48px;
+  padding: 5px 2px 4px;
+  background: var(--paper);
   color: var(--ink);
   border: var(--border);
-  border-radius: 11px;
+  border-radius: 9px;
   box-shadow: var(--shadow-1);
+  font-family: inherit;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.12s ease;
 }
 
-.fs-controls .btn.active {
-  background: var(--lavender);
-  color: var(--ink);
+.fs-glyph { display: flex; }
+.fs-glyph svg { width: 17px; height: 17px; }
+
+.fs-key:active { transform: translate(2px, 2px); box-shadow: none; }
+.fs-key.active { background: var(--lavender); }
+.fs-key:disabled { opacity: 0.45; cursor: default; }
+.fs-exit { background: var(--coral); }
+.fs-exit:active { background: var(--coral-ink); }
+
+@media (hover: hover) {
+  .fs-key:not(.fs-exit):not(.lock-btn):hover { background: #ffffff; }
+  .fs-exit:hover { background: var(--coral-ink); color: var(--paper); }
 }
 
-body.fullscreen-mode.controls-visible .fs-controls { display: flex; }
+body.fullscreen-mode .fs-controls {
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0s linear 0.14s;
+}
 
-body.locked .fs-controls .btn:not(.lock-btn) { display: none; }
-body.locked .fs-controls .lock-btn { background: var(--yellow); color: var(--ink); }
+body.fullscreen-mode.controls-visible .fs-controls {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+body.locked .fs-head,
+body.locked .fs-key:not(.lock-btn) { display: none; }
+body.locked .lock-btn { background: var(--yellow); }
 
 /* In-app mini tile: another feed in the bottom-right corner of fullscreen. It
    is the same card element moved by CSS, so no video is re-attached. */

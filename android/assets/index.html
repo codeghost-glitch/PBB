@@ -59,12 +59,36 @@
     </footer>
   </div>
   <div id="indicator" class="indicator hidden"></div>
-  <div class="fs-controls">
-    <button id="fsLock" class="btn btn-ghost btn-icon lock-btn" type="button" aria-label="lock controls"></button>
-    <button id="fsExit" class="btn btn-ghost btn-icon" type="button" aria-label="exit fullscreen"></button>
-    <button id="fsZoom" class="btn btn-ghost btn-icon" type="button" aria-label="zoom"></button>
-    <button id="fsSwitch" class="btn btn-ghost btn-icon" type="button" aria-label="next live feed"></button>
-    <button id="fsMini" class="btn btn-ghost btn-icon" type="button" aria-label="mini feed"></button>
+  <div class="fs-controls" role="group" aria-label="fullscreen controls">
+    <div class="fs-deck">
+      <div class="fs-head">
+        <span class="fs-num" id="fsFeedNum">01</span>
+        <span class="fs-name" id="fsFeedName">all access</span>
+        <span class="fs-live"><span class="live-pip" aria-hidden="true"></span>live</span>
+      </div>
+      <div class="fs-keys">
+        <button id="fsZoom" class="fs-key" type="button" aria-label="zoom">
+          <span class="fs-glyph" aria-hidden="true"></span>
+          <span class="fs-label">zoom</span>
+        </button>
+        <button id="fsSwitch" class="fs-key" type="button" aria-label="next live feed">
+          <span class="fs-glyph" aria-hidden="true"></span>
+          <span class="fs-label">next</span>
+        </button>
+        <button id="fsMini" class="fs-key" type="button" aria-label="mini feed">
+          <span class="fs-glyph" aria-hidden="true"></span>
+          <span class="fs-label">mini</span>
+        </button>
+        <button id="fsLock" class="fs-key lock-btn" type="button" aria-label="lock controls">
+          <span class="fs-glyph" aria-hidden="true"></span>
+          <span class="fs-label">lock</span>
+        </button>
+        <button id="fsExit" class="fs-key fs-exit" type="button" aria-label="exit fullscreen">
+          <span class="fs-glyph" aria-hidden="true"></span>
+          <span class="fs-label">exit</span>
+        </button>
+      </div>
+    </div>
   </div>
   <script src="app.js"></script>
 </body>

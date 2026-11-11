@@ -143,8 +143,15 @@ function showControls() {
     clearTimeout(hideControlsTimer);
   }
   hideControlsTimer = setTimeout(() => {
-    document.body.classList.remove("controls-visible");
     hideControlsTimer = null;
+    // A keyboard or D-pad user may still be on a key; keep the deck up until
+    // the focus leaves it instead of yanking the key out from under them.
+    if (document.body.classList.contains("keyboard-focus")
+        && document.activeElement && document.activeElement.closest(".fs-controls")) {
+      showControls();
+      return;
+    }
+    document.body.classList.remove("controls-visible");
   }, 3500);
 }
 
@@ -447,6 +454,18 @@ function setIcon(btn, name, label) {
     return;
   }
   mountIcon(btn, name);
+  if (label) {
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  }
+}
+
+// The fullscreen keys carry a word under the glyph, so only the glyph is swapped.
+function setDeckIcon(btn, name, label) {
+  if (!btn) {
+    return;
+  }
+  mountIcon(btn.querySelector(".fs-glyph"), name);
   if (label) {
     btn.setAttribute("aria-label", label);
     btn.title = label;
@@ -756,20 +775,7 @@ function updateControls() {
       state.sound === index ? `mute ${entry.stream.name}` : `sound ${entry.stream.name}`);
   }
 
-  const lockBtn = document.getElementById("fsLock");
-  setIcon(lockBtn, state.locked ? "lock" : "unlock", state.locked ? "unlock controls" : "lock controls");
-
-  const miniBtn = document.getElementById("fsMini");
-  if (miniBtn) {
-    miniBtn.classList.toggle("active", state.mini >= 0);
-    setIcon(miniBtn, "mini", state.mini >= 0 ? "hide mini feed" : "mini feed");
-  }
-
-  const zoomBtn = document.getElementById("fsZoom");
-  if (zoomBtn) {
-    zoomBtn.classList.toggle("active", zoom.mode);
-    setIcon(zoomBtn, "zoom", zoom.mode ? "zoom off" : "zoom");
-  }
+  updateDeckControls();
 
   if (recAllBtn) {
     const anyRecording = state.recording.size > 0;
@@ -786,6 +792,43 @@ function updateControls() {
       recAllCount.textContent = String(state.recording.size);
       recAllCount.classList.toggle("hidden", !anyRecording);
     }
+  }
+}
+
+// The fullscreen deck is its own little state machine: the keys swap glyphs,
+// the lock changes word, and the header follows the focused feed.
+function updateDeckControls() {
+  const lockBtn = document.getElementById("fsLock");
+  setDeckIcon(lockBtn, state.locked ? "lock" : "unlock",
+    state.locked ? "unlock controls" : "lock controls");
+  const lockLabel = lockBtn && lockBtn.querySelector(".fs-label");
+  if (lockLabel) {
+    lockLabel.textContent = state.locked ? "unlock" : "lock";
+  }
+
+  const miniBtn = document.getElementById("fsMini");
+  if (miniBtn) {
+    miniBtn.classList.toggle("active", state.mini >= 0);
+    setDeckIcon(miniBtn, "mini", state.mini >= 0 ? "hide mini feed" : "mini feed");
+  }
+
+  const zoomBtn = document.getElementById("fsZoom");
+  if (zoomBtn) {
+    zoomBtn.classList.toggle("active", zoom.mode);
+    setDeckIcon(zoomBtn, "zoom", zoom.mode ? "zoom off" : "zoom");
+  }
+
+  setDeckIcon(document.getElementById("fsSwitch"), "next", "next live feed");
+  setDeckIcon(document.getElementById("fsExit"), "exit", "exit fullscreen");
+
+  const focusedEntry = players[state.focused];
+  const fsNum = document.getElementById("fsFeedNum");
+  const fsName = document.getElementById("fsFeedName");
+  if (fsNum) {
+    fsNum.textContent = state.focused >= 0 ? String(state.focused + 1).padStart(2, "0") : "--";
+  }
+  if (fsName) {
+    fsName.textContent = focusedEntry ? focusedEntry.stream.name : "no feed";
   }
 }
 
@@ -1323,18 +1366,25 @@ function boot() {
   }
   const fsExit = document.getElementById("fsExit");
   if (fsExit) {
-    setIcon(fsExit, "exit", "exit fullscreen");
     fsExit.addEventListener("click", () => toggleFullscreen());
   }
   const fsSwitch = document.getElementById("fsSwitch");
   if (fsSwitch) {
-    setIcon(fsSwitch, "next", "next live feed");
     fsSwitch.addEventListener("click", switchFullscreen);
   }
   const fsMini = document.getElementById("fsMini");
   if (fsMini) {
-    setIcon(fsMini, "mini", "mini feed");
     fsMini.addEventListener("click", toggleMini);
+  }
+  const fsDeck = document.querySelector(".fs-controls");
+  if (fsDeck) {
+    // Using a key keeps the deck up for another few seconds instead of
+    // letting the idle timer pull it out from under the next tap.
+    fsDeck.addEventListener("click", () => {
+      if (state.fullscreen) {
+        showControls();
+      }
+    });
   }
   restoreRecordingState();
   if (Pbb.isInPip()) {
