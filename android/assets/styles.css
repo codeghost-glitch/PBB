@@ -656,17 +656,17 @@ body.fullscreen-mode .video-wrap video {
   object-fit: contain;
 }
 
-/* Fullscreen controls: a vertical rail in the right-hand lane, where a right
-   thumb lands. The lane is permanent, so the picture keeps its place and the
-   rail only fades in over it. */
+/* Fullscreen controls: a two-column keypad in the bottom-right corner, under
+   a right thumb. It floats over the picture only while it is up; the video
+   keeps its centred frame and never gives up a permanent lane. */
 .fs-controls {
   position: fixed;
-  top: 50%;
   right: 10px;
   right: max(10px, env(safe-area-inset-right));
+  bottom: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
   z-index: 90;
   display: none;
-  transform: translateY(-50%);
 }
 
 .fs-deck {
@@ -699,7 +699,11 @@ body.fullscreen-mode .video-wrap video {
 .fs-live { display: inline-flex; align-items: center; }
 .fs-live .live-pip { background: var(--ink); }
 
-.fs-keys { display: flex; flex-direction: column; gap: 6px; }
+.fs-keys {
+  display: grid;
+  grid-template-columns: repeat(2, 52px);
+  gap: 6px;
+}
 
 .fs-key {
   display: flex;
@@ -729,7 +733,11 @@ body.fullscreen-mode .video-wrap video {
 .fs-key:active { transform: translate(2px, 2px); box-shadow: none; }
 .fs-key.active { background: var(--lavender); }
 .fs-key:disabled { opacity: 0.45; cursor: default; }
-.fs-exit { background: var(--coral); }
+.fs-exit {
+  grid-column: 1 / -1;
+  width: auto;
+  background: var(--coral);
+}
 .fs-exit:active { background: var(--coral-ink); }
 
 @media (hover: hover) {
@@ -741,7 +749,7 @@ body.fullscreen-mode .fs-controls {
   display: flex;
   opacity: 0;
   visibility: hidden;
-  transform: translate(6px, -50%);
+  transform: translate(6px, 6px);
   pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease, visibility 0s linear 0.14s;
 }
@@ -749,21 +757,14 @@ body.fullscreen-mode .fs-controls {
 body.fullscreen-mode.controls-visible .fs-controls {
   opacity: 1;
   visibility: visible;
-  transform: translate(0, -50%);
+  transform: translate(0, 0);
   pointer-events: auto;
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
 
-/* The right lane belongs to the rail for the whole session. The picture is
-   letterboxed inside the rest of the screen once, on entry, and never resizes
-   or slides when the rail is tapped. */
-body.fullscreen-mode .cam-card.focused .video-wrap {
-  right: 86px;
-  right: calc(86px + env(safe-area-inset-right, 0px));
-}
-
 body.locked .fs-head,
 body.locked .fs-key:not(.lock-btn) { display: none; }
+body.locked .fs-keys { grid-template-columns: 52px; }
 body.locked .lock-btn { background: var(--yellow); }
 
 @media (max-height: 320px) {
@@ -771,21 +772,23 @@ body.locked .lock-btn { background: var(--yellow); }
   .fs-head { display: none; }
 }
 
-/* In-app mini tile: another feed in the bottom-left corner of fullscreen. It
-   is the same card element moved by CSS, so no video is re-attached. The rail
-   owns the right edge, so the tile moves to the other hand. */
+/* In-app mini tile: another feed in the top-right corner of fullscreen. It
+   is the same card element moved by CSS, so no video is re-attached. The
+   keypad sits below it in the bottom-right corner. */
 body.fullscreen-mode .cam-card.mini {
   display: block !important;
   position: fixed;
-  left: 10px;
-  left: max(10px, env(safe-area-inset-left));
-  right: auto;
-  bottom: 10px;
+  top: 10px;
+  top: max(10px, env(safe-area-inset-top));
+  right: 10px;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
   /* Above the focused card (50), below the controls (90) and indicator (95):
      a lower value paints the tile behind the fullscreen video. */
   z-index: 60;
-  width: 34vw;
-  max-width: 220px;
+  width: 26vw;
+  max-width: 180px;
   /* The card's own ratio sizes the tile; the fullscreen .video-wrap fills it. */
   aspect-ratio: 16 / 9;
   height: auto;
