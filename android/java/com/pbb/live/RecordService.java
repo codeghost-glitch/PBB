@@ -37,6 +37,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -98,6 +105,15 @@ public class RecordService extends Service {
         "c02573c6d1ae455e50027119c36d079bf4edf20aab108e1ab849db2daa2d4482";
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
+
+    /** How long a single segment pull may take before it counts as a miss. */
+    private static final long FETCH_TIMEOUT_SECONDS = 45;
+
+    /**
+     * The live edge of every manifest this app has pulled, so the next
+     * recording starts from there instead of walking the whole archive again.
+     */
+    private static final Map<String, Long> LAST_EDGE = new HashMap<String, Long>();
 
     /**
      * Start time per recording stream, in one place the activity can read while
@@ -299,14 +315,18 @@ public class RecordService extends Service {
 
     private void record(Session session) {
         int index = session.index;
-        File videoTmp = new File(getCacheDir(), "pull_video_" + index + ".mp4");
-        File audioTmp = new File(getCacheDir(), "pull_audio_" + index + ".mp4");
-        File outTmp = new File(getCacheDir(), "pull_out_" + index + ".mp4");
+        // The temp files live in filesDir, not the cache dir: Android is free
+        // to delete the cache when it needs space, and these are the only copy
+        // of the recording until the remux publishes them.
+        File videoTmp = new File(getFilesDir(), "pull_video_" + index + ".mp4");
+        File audioTmp = new File(getFilesDir(), "pull_audio_" + index + ".mp4");
+        File outTmp = new File(getFilesDir(), "pull_out_" + index + ".mp4");
         String result = "recording stopped";
         String savedMessage = null;
         boolean failed = false;
         boolean keepSegments = false;
         int totalSegments = 0;
+        ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             if (!isArm64()) {
                 throw new IOException("recorder plugin is arm64 only on this build");
@@ -333,7 +353,7 @@ public class RecordService extends Service {
                 write(videoTmp, videoInit);
                 write(audioTmp, audioInit);
 
-                long offset = findLiveOffset(plan);
+                long offset = findLiveOffset(session.mpdUrl, plan);
                 int misses = 0;
                 int segmentsThisPart = 0;
                 boolean gap = false;
@@ -342,14 +362,11 @@ public class RecordService extends Service {
                         + segmentUrl(plan.video.media, plan.video.startNumber + offset);
                     String aUrl = plan.baseUrl
                         + segmentUrl(plan.audio.media, plan.audio.startNumber + offset);
-                    byte[] v = null;
-                    byte[] a = null;
-                    try {
-                        v = fetch(vUrl);
-                        a = fetch(aUrl);
-                    } catch (IOException e) {
-                        Log.w(TAG, "segment fetch failed for camera " + index, e);
-                    }
+                    // The video and the audio travel together, so one segment
+                    // costs one round trip instead of two.
+                    byte[][] both = fetchBoth(pool, vUrl, aUrl, index);
+                    byte[] v = both[0];
+                    byte[] a = both[1];
                     if (v == null || a == null) {
                         misses++;
                         if (misses > 30) {
@@ -408,12 +425,13 @@ public class RecordService extends Service {
             failed = true;
             keepSegments = totalSegments > 0;
         } finally {
+            pool.shutdownNow();
             session.running = false;
             // A failed remux must not throw away the only copy of a long
             // recording: keep the pulled segments and say where they are. A part
             // with no media in it is just init data, so drop it instead.
             if (keepSegments && videoTmp.exists()) {
-                result = result + " - segments kept in " + getCacheDir().getAbsolutePath();
+                result = result + " - segments kept in " + getFilesDir().getAbsolutePath();
             } else {
                 delete(videoTmp);
                 delete(audioTmp);
@@ -542,10 +560,18 @@ public class RecordService extends Service {
         return plan;
     }
 
+    /**
+     * The recorder cannot adapt the way the page does, so it picks one
+     * representation and sticks to it. The rules are the page's rules: hd is
+     * the tallest variant the feed publishes, sd is the shortest. auto takes
+     * the tallest variant that is at most 1280 wide, so a recording that
+     * cannot adapt still keeps a sane file size.
+     */
     static Track pickVideo(List<Track> tracks, String quality, long liveStart) {
-        int ceiling = "sd".equals(quality) ? 640 : 1280;
+        int ceiling = "auto".equals(quality) ? 1280 : Integer.MAX_VALUE;
         Track best = null;
         Track fallback = null;
+        Track smallest = null;
         for (Track t : tracks) {
             if (t.seconds <= 0 || t.startNumber < 0 || t.media == null || t.init == null) {
                 continue;
@@ -553,13 +579,23 @@ public class RecordService extends Service {
             if (fallback == null) {
                 fallback = t;
             }
-            if (t.startNumber != liveStart || (t.width > 0 && t.width > ceiling)) {
+            if (t.startNumber != liveStart) {
+                continue;
+            }
+            if (smallest == null || t.width < smallest.width
+                || (t.width == smallest.width && t.bandwidth < smallest.bandwidth)) {
+                smallest = t;
+            }
+            if (t.width > 0 && t.width > ceiling) {
                 continue;
             }
             if (best == null || t.width > best.width
                 || (t.width == best.width && t.bandwidth > best.bandwidth)) {
                 best = t;
             }
+        }
+        if ("sd".equals(quality)) {
+            return smallest != null ? smallest : fallback;
         }
         return best == null ? fallback : best;
     }
@@ -585,12 +621,30 @@ public class RecordService extends Service {
      * and some representations have holes in their archive, so discover the live
      * edge by probing one-byte range requests: coarse scan for the highest
      * published segment, then binary search the 404 boundary.
+     *
+     * The last edge found for a manifest is remembered, because the scan from
+     * the start of the archive costs about fifty requests every time.
      */
-    private static long findLiveOffset(Plan plan) throws IOException {
+    private static long findLiveOffset(String mpdUrl, Plan plan) throws IOException {
+        long known = rememberedEdge(mpdUrl);
+        try {
+            return scanEdge(mpdUrl, plan, known >= 0 ? known : 0);
+        } catch (IOException e) {
+            if (known <= 0) {
+                throw e;
+            }
+            // The remembered edge is gone, the archive rolled past it. Walk
+            // the whole archive again.
+            return scanEdge(mpdUrl, plan, 0);
+        }
+    }
+
+    /** Scans forward from start for the last segment the server still serves. */
+    private static long scanEdge(String mpdUrl, Plan plan, long start) throws IOException {
         long best = -1;
         // 1 KiB steps keep the coarse scan under ~65 requests; the binary search
         // below then nails the edge to within one step.
-        for (long off = 0; off <= 65536L; off += 1024L) {
+        for (long off = start; off <= start + 65536L; off += 1024L) {
             if (exists(plan, off)) {
                 best = off;
             } else if (best >= 0 && off - best > 2048L) {
@@ -610,7 +664,17 @@ public class RecordService extends Service {
                 bad = mid;
             }
         }
+        synchronized (LAST_EDGE) {
+            LAST_EDGE.put(mpdUrl, Long.valueOf(good));
+        }
         return Math.max(0L, good - 1);
+    }
+
+    private static long rememberedEdge(String mpdUrl) {
+        synchronized (LAST_EDGE) {
+            Long value = LAST_EDGE.get(mpdUrl);
+            return value == null ? -1L : value.longValue();
+        }
     }
 
     private static boolean exists(Plan plan, long offset) {
@@ -722,6 +786,43 @@ public class RecordService extends Service {
         } finally {
             in.close();
             conn.disconnect();
+        }
+    }
+
+    /**
+     * Pulls the video and the audio segment at the same time. A pull that
+     * failed comes back as null and the caller counts it as a miss.
+     */
+    private static byte[][] fetchBoth(ExecutorService pool, final String vUrl,
+            final String aUrl, final int index) {
+        Future<byte[]> video = pool.submit(new Callable<byte[]>() {
+            @Override
+            public byte[] call() throws IOException {
+                return fetch(vUrl);
+            }
+        });
+        Future<byte[]> audio = pool.submit(new Callable<byte[]>() {
+            @Override
+            public byte[] call() throws IOException {
+                return fetch(aUrl);
+            }
+        });
+        return new byte[][] { pulled(video, index), pulled(audio, index) };
+    }
+
+    /** The bytes of a finished pull, or null when the pull failed. */
+    private static byte[] pulled(Future<byte[]> future, int index) {
+        try {
+            return future.get(FETCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            Log.w(TAG, "segment fetch failed for camera " + index, e.getCause());
+            return null;
+        } catch (TimeoutException e) {
+            Log.w(TAG, "segment fetch timed out for camera " + index, e);
+            return null;
         }
     }
 

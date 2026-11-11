@@ -18,7 +18,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Each recording pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: the foreground service keeps every recording alive with the app backgrounded or the screen off.
 - Each camera is an independent session with its own worker thread, temporary files and notification. The pulls run in parallel; only the final remux is serialised, because libavformat keeps process-wide state and two muxers driven at once would interleave. Stream copy, no re-encode.
 - The service writes each session's encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with that stream's ClearKey on stop.
-- The remuxer is a downloadable FFmpeg plugin, not part of the APK. It is fetched once on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). APK stays about 1 MB; the plugin is 1.3 MB downloaded on demand.
+- The remuxer is a FFmpeg plugin that ships inside the APK as base64 in the assets. It is decoded on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). A pinned gist is the fallback for builds made without the asset. The APK is about 3 MB because of it, and recording works offline.
 - Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on a card only affects that camera.
 - Per-camera notifications come and go under one summary notification: stop a single camera from its own notification, or stop every camera from the summary or the master button.
 - Recording state lives in the service, so after the activity is recreated the page rebuilds every tally and its elapsed time from Pbb.recordingState() and the stop buttons still work.
@@ -74,15 +74,16 @@ Environment overrides, all optional:
 2. cargo-ndk
 3. android SDK and NDK
 4. cargo fmt --check, cargo clippy -D warnings, cargo test
-5. ./build.sh
-6. uploads PBB-apk as a workflow artifact
-7. on main only, creates or updates the rolling GitHub release v1.0 with one asset, `PBB-1.0-<build>.apk`
+5. node --check on the page plus the page checks in android/test/app.test.mjs
+6. ./build.sh
+7. uploads PBB-apk as a workflow artifact
+8. on main only, creates or updates the rolling GitHub release v1.0 with one asset, `PBB-1.0-<build>.apk`
 
 The release tag is fixed at v1.0. The asset name includes the build number so a new download never hits a stale cached APK. The workflow deletes old .apk assets so exactly one APK is offered. App version is always 1.0; versionCode carries the build number.
 
 ## Signing
 
-The signing key is **not** in the repo: `android/release.keystore` is gitignored, and `build.sh` refuses to run without `PBB_KEYSTORE_PASS`. Locally:
+The signing key is **not** in the working tree: `android/release.keystore` is gitignored, and `build.sh` refuses to run without `PBB_KEYSTORE_PASS`. Locally:
 
 ~~~bash
 PBB_KEYSTORE_PASS=... ./build.sh
@@ -90,7 +91,21 @@ PBB_KEYSTORE_PASS=... ./build.sh
 
 CI decodes the key from the `PBB_KEYSTORE_B64` repository secret into `$RUNNER_TEMP` for the run only, so every release still carries the same signature and updates install over the previous APK. To rotate the key, generate a new keystore, replace both secrets, and bump nothing else - existing installs then need one uninstall, because Android does not accept a different signer as an update.
 
-It is a self-signed personal-release key stored in plain form in this repository, with the password in build.sh. That is deliberate for a private, non-Play-Store build. If this repository is ever made public, rotate the key and move it to repository secrets.
+### The old key is in the git history
+
+The first release committed `android/release.keystore` and the old `build.sh` had the password written in it. Both were removed later, but the file is still in the history: `git show 2858aff:android/release.keystore` hands it over, and the password in that commit was `pbb-release`.
+
+Treat that key as public. Anyone with a clone can sign an APK with the same package name and the same signature, and it installs over the real app with the app's data.
+
+A replacement key was generated on 2026-11-11 and is in place at `android/release.keystore` (gitignored). Finishing the rotation is three steps that only the operator can do:
+
+1. Set the repository secret `PBB_KEYSTORE_B64` to the base64 of that keystore.
+2. Set the repository secret `PBB_KEYSTORE_PASS` to its password. Both values are in `pbb-key-rotation.txt` next to this repository, not in the repository itself.
+3. Ship a release with it. The old installs need one uninstall first, because Android refuses to update an app signed by a different key.
+
+Until step 3 is done the old key is still valid for anyone who has a clone. If the repository was ever pushed anywhere public, the old key is already burned - do not skip step 3.
+
+Purging the file from the history is optional and does not replace the rotation: `git filter-repo --path android/release.keystore --invert-paths` (or `git filter-branch --index-filter 'git rm --cached --ignore-unmatch android/release.keystore' -- --all`) rewrites every commit id, so it needs a force push and a fresh clone everywhere.
 
 ## Requirements
 
@@ -118,6 +133,7 @@ The app uses the three feeds from https://pbb-live.vercel.app. MainActivity fetc
 - Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
 - The status strip sits below the grid: a status LED, the message, a recording badge with the number of active recordings and the longest elapsed time, a refresh icon, and the back button when a feed is focused. The LED turns red while any camera records. It is hidden in PiP and fullscreen. In the grid it never hides itself: with no message it reads "tap refresh to reload the stream keys".
 - The refresh icon calls Pbb.refreshKeys(); it is the only refresh control in the grid. Fullscreen hides the strip, so a message that arrives there is mirrored by the on-screen indicator. On 4012 the tiles say "keys rotated - tap refresh" and the strip says "keys rotated - tap refresh to reload".
+- While the keys are known to be stale the record buttons refuse to start and say so. A recording that is remuxed with the wrong key is a file that will not play, and it would land in Movies/PBB looking like a normal recording.
 - A manual refresh always resolves its status text: changed keys re-init the players, unchanged keys report that the source has not published new ones, and a failed fetch reports the connection error. Silent startup fetches never overwrite the status.
 - Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall.
 
@@ -155,7 +171,11 @@ ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 
 ## Multi-camera recording
 
-- MainActivity sends one RECORD_START intent per camera, each carrying that stream's MPD, key, file name and index. RecordService keeps a session per index: worker thread, cache files `pull_video_<index>.mp4` / `pull_audio_<index>.mp4` / `pull_out_<index>.mp4`, stop flag and notification.
+- MainActivity sends one RECORD_START intent per camera, each carrying that stream's MPD, key, file name and index. RecordService keeps a session per index: worker thread, temp files `pull_video_<index>.mp4` / `pull_audio_<index>.mp4` / `pull_out_<index>.mp4`, stop flag and notification.
+- The temp files live in filesDir, not the cache dir: Android may delete the cache when it needs space, and these are the only copy of the recording until the remux publishes it.
+- The recorder uses the same quality rules as the page: hd is the tallest variant the feed publishes, sd is the shortest, and auto - which cannot adapt like the player does - takes the tallest variant up to 1280 wide.
+- The live edge is found by probing the archive, and the last edge found for a manifest is remembered, so a second recording starts from there instead of walking the whole archive again.
+- The video and the audio segment of one step are pulled at the same time, so a segment costs one round trip instead of two.
 - ACTION_STOP with a stream index stops that session; without one it stops every session. Each per-camera notification carries its own stop action, and the summary notification carries stop all.
 - The service's static STARTED map is the source of truth for the activity. Every transition broadcasts `{active, index, count, elapsed, kind, message}`, and `Pbb.recordingState()` returns the active indices with their elapsed seconds so a rebuilt page can restore the tally lights and clocks.
 - Pulls run in parallel. The native remux is inside `REMUX_LOCK` because libavformat is not reentrant across muxers; only the final mux is serialised, not the download.
@@ -167,7 +187,8 @@ ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 - cargo clippy --all-targets -- -D warnings
 - cargo test
 - node --check android/assets/app.js
-- app.js logic exercised in a DOM harness (linkedom, stubbed Pbb bridge): three cards build, per-camera record/stop and record-all paths, tally clocks, save/error notices, and restore-from-service state
+- the page checks in android/test/app.test.mjs (stubbed DOM and Pbb bridge, no dependencies): picture-in-picture focus, the record button with rotated keys, record all, and the slider levels
+- these two run in CI on every push and inside build.sh, so a broken page fails the build
 - python3 -m json.tool keys/keys.json
 - three-feed layout measured in headless Chromium at phone portrait, phone landscape, tablet and desktop viewports (before the multi-camera redesign; no browser binary was available for a new pass)
 - tree-sitter parse of the changed Java/JS/HTML/CSS files: no ERROR nodes
@@ -179,6 +200,7 @@ ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 - aapt2 dump badging
 - No emulator or on-device playback test.
 - This workspace has no JDK or Android SDK, so javac, d8, aapt2 and the signer were not re-run for the multi-camera change; the next build.sh run must confirm them.
+- The same is true of the audit fixes: the Java changes were read, not compiled. The next build.sh run must confirm them.
 
 ## Licenses
 

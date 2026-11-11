@@ -151,6 +151,14 @@ find "$ROOT/android/test" -name '*.java' > "$OUT/test-sources.txt"
 "$JAVA_HOME/bin/java" -classpath "$PLATFORM:$OUT/classes:$TEST_OUT" \
   com.pbb.live.RecorderLogicTest
 
+echo "== page checks =="
+if command -v node >/dev/null 2>&1; then
+  node --check "$ROOT/android/assets/app.js"
+  node "$ROOT/android/test/app.test.mjs"
+else
+  echo "node not found, skipping the page checks" >&2
+fi
+
 echo "== dex =="
 find "$OUT/classes" -name '*.class' -print0 |
   xargs -0 -r "$BUILD_TOOLS/d8" --lib "$PLATFORM" --min-api 26 --output "$OUT/dex"

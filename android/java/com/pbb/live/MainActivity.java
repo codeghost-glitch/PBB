@@ -31,6 +31,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -75,6 +76,9 @@ public class MainActivity extends Activity {
     private float appVolumeLevel = -1f;
     private float appBrightnessLevel = -1f;
     private int savedSystemVolume = -1;
+    // The volume level the app itself set, so it knows whether it still owns
+    // the system volume when the activity goes away.
+    private int appliedVolume = -1;
     private volatile String streamConfigJson;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
@@ -140,8 +144,11 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setAllowFileAccessFromFileURLs(true);
+        // The page needs to fetch the manifest and the segments over https,
+        // which is what the universal access flag is for. It does not need to
+        // read the photo library or other files through content:// or file://.
+        settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -205,16 +212,8 @@ public class MainActivity extends Activity {
                     return;
                 }
                 streamConfigJson = json;
-                try {
-                    FileOutputStream out = new FileOutputStream(new File(getFilesDir(), KEYS_CACHE));
-                    try {
-                        out.write(json.getBytes("UTF-8"));
-                    } finally {
-                        out.close();
-                    }
-                } catch (Exception ignored) {
-                }
                 final String quoted = JSONObject.quote(json);
+                writeKeysCache(json);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -224,6 +223,26 @@ public class MainActivity extends Activity {
                 });
             }
         }, "pbb-keys").start();
+    }
+
+    /**
+     * Writes the keys cache through a temp file and a rename, so a crash in
+     * the middle of the write cannot leave a half written file behind.
+     */
+    private void writeKeysCache(String json) {
+        File tmp = new File(getFilesDir(), KEYS_CACHE + ".tmp");
+        try {
+            FileOutputStream out = new FileOutputStream(tmp);
+            try {
+                out.write(json.getBytes("UTF-8"));
+            } finally {
+                out.close();
+            }
+            if (!tmp.renameTo(new File(getFilesDir(), KEYS_CACHE))) {
+                throw new IOException("cannot replace the keys cache");
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void reportKeys(final String message) {
@@ -469,18 +488,26 @@ public class MainActivity extends Activity {
             return;
         }
         int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(appVolumeLevel * max), 0);
+        int level = Math.round(appVolumeLevel * max);
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0);
+        appliedVolume = level;
     }
 
+    /**
+     * Gives the system volume back, but only when the app still owns it: if
+     * the user changed the volume from the shade, that change wins.
+     */
     private void restoreSystemVolume() {
         if (savedSystemVolume < 0) {
             return;
         }
         AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (audio != null) {
+        if (audio != null && (appliedVolume < 0
+                || audio.getStreamVolume(AudioManager.STREAM_MUSIC) == appliedVolume)) {
             audio.setStreamVolume(AudioManager.STREAM_MUSIC, savedSystemVolume, 0);
         }
         savedSystemVolume = -1;
+        appliedVolume = -1;
     }
 
     private void clearBrightnessOverride() {
@@ -696,7 +723,7 @@ public class MainActivity extends Activity {
         if (!safe.regionMatches(true, 0, "PBB_", 0, 4)) {
             safe = "PBB_" + safe;
         }
-        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date());
         return safe + "_" + stamp + ".mp4";
     }
 
@@ -790,11 +817,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void setVolume(final float value) {
+        public void setVolume(final float value, final boolean persist) {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    applyVolume(value, true);
+                    applyVolume(value, persist);
                 }
             });
         }
@@ -818,11 +845,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void setBrightness(final float value) {
+        public void setBrightness(final float value, final boolean persist) {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    applyBrightness(value, true);
+                    applyBrightness(value, persist);
                 }
             });
         }
@@ -903,11 +930,6 @@ public class MainActivity extends Activity {
             });
         }
 
-        @JavascriptInterface
-        public boolean isRecording() {
-            return RecordService.isActive();
-        }
-
         /** Every recording in flight, with its elapsed seconds, so a rebuilt page
          * can restore the tally lights instead of losing them. */
         @JavascriptInterface
@@ -929,16 +951,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean isInPip() {
             return isInPip;
-        }
-
-        @JavascriptInterface
-        public void toast(String message) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    MainActivity.this.toast(message);
-                }
-            });
         }
     }
 }

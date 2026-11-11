@@ -14,7 +14,7 @@ public final class RecorderLogicTest {
     public static void main(String[] args) {
         segmentUrlPadsTheNumber();
         segmentUrlHandlesBareNumber();
-        pickVideoStaysUnderTheCeilingAndOnTheLiveEdge();
+        pickVideoFollowsThePageRules();
         pickAudioFollowsTheLiveEdge();
         partNameKeepsTheExtension();
         if (failures > 0) {
@@ -52,16 +52,21 @@ public final class RecorderLogicTest {
         return t;
     }
 
-    private static void pickVideoStaysUnderTheCeilingAndOnTheLiveEdge() {
+    private static void pickVideoFollowsThePageRules() {
         List<RecordService.Track> tracks = new ArrayList<RecordService.Track>();
         tracks.add(track(1920, 5, "v1080-$Number$.m4s"));
         tracks.add(track(1280, 5, "v720-$Number$.m4s"));
         tracks.add(track(640, 5, "v360-$Number$.m4s"));
         tracks.add(track(1280, 9, "v720-old-$Number$.m4s"));
-        check("hd pick", "v720-$Number$.m4s",
+        // hd is the tallest variant the feed publishes, like on the page.
+        check("hd pick", "v1080-$Number$.m4s",
             RecordService.pickVideo(tracks, "hd", 5).media);
+        // sd is the shortest one.
         check("sd pick", "v360-$Number$.m4s",
             RecordService.pickVideo(tracks, "sd", 5).media);
+        // auto cannot adapt, so it takes the tallest variant up to 1280 wide.
+        check("auto pick", "v720-$Number$.m4s",
+            RecordService.pickVideo(tracks, "auto", 5).media);
         check("missing edge falls back", "v1080-$Number$.m4s",
             RecordService.pickVideo(tracks, "hd", 99).media);
     }

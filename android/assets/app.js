@@ -116,10 +116,6 @@ function setStreamStatus(entry, message, bad) {
   // The steady "live" pill is noise; keep the pill only while connecting or on error.
   const hidden = !bad && message === "live";
   entry.statusEl.classList.toggle("hidden", hidden);
-  // Lets the short-landscape layout hide the buttons the status would cover.
-  if (entry.card) {
-    entry.card.classList.toggle("status-on", !hidden);
-  }
 }
 
 // A message that clears itself, so an informational refresh result does not
@@ -199,13 +195,13 @@ function applyGestureValue(value) {
     // stay at full volume so nothing attenuates twice.
     state.volume = clamped;
     if (window.Pbb) {
-      Pbb.setVolume(clamped);
+      Pbb.setVolume(clamped, false);
     }
     showIndicator(`volume ${Math.round(clamped * 100)}%`);
   } else {
     state.brightness = clamped;
     if (window.Pbb) {
-      Pbb.setBrightness(clamped);
+      Pbb.setBrightness(clamped, false);
     }
     showIndicator(`brightness ${Math.round(clamped * 100)}%`);
   }
@@ -335,10 +331,26 @@ function onTouchEnd() {
     setTimeout(() => {
       suppressTap = false;
     }, 0);
+    // The sliders change the level while the finger moves, but the level is
+    // only written to disk once, here.
+    saveLevel(gesture.mode);
   }
   gesture.tracking = false;
   gesture.active = false;
   gesture.mode = null;
+}
+
+// Writes the level the user just picked, so the file on disk is not touched
+// on every finger move.
+function saveLevel(mode) {
+  if (!window.Pbb) {
+    return;
+  }
+  if (mode === "volume") {
+    Pbb.setVolume(state.volume, true);
+  } else if (mode === "brightness") {
+    Pbb.setBrightness(state.brightness, true);
+  }
 }
 
 function el(tag, className, role, text) {
@@ -572,10 +584,6 @@ function createCard(stream, index) {
   soundBtn.addEventListener("click", () => setSound(index));
   pipBtn.addEventListener("click", () => enterPip(index));
   recordBtn.addEventListener("click", () => toggleRecord(index));
-
-  // Every card starts on "connecting...", so the short-landscape rule that
-  // hides the buttons behind the status pill applies from the first frame.
-  card.classList.add("status-on");
 
   grid.appendChild(card);
   players.push({ video, player: null, stream, statusEl, card, tally, tallyTime });
@@ -1217,6 +1225,10 @@ function toggleRecord(index) {
     markStopping(index);
     setStatusText(`stopping ${entry.stream.name}`);
     Pbb.stopRecording(index);
+  } else if (state.keysStale) {
+    // The keys already rotated, so a recording now would be remuxed with the
+    // wrong key and land in Movies/PBB as a file that will not play.
+    setStatusText("keys rotated - tap refresh before recording");
   } else {
     setStatusText(`starting ${entry.stream.name}`);
     Pbb.startRecording(index, entry.stream.name);
@@ -1237,8 +1249,12 @@ function toggleRecordAll() {
     setStatusText("stopping every recording");
     Pbb.stopRecording(-1);
   } else if (state.stopping.size === 0) {
-    setStatusText("starting every camera");
-    Pbb.recordAll();
+    if (state.keysStale) {
+      setStatusText("keys rotated - tap refresh before recording");
+    } else {
+      setStatusText("starting every camera");
+      Pbb.recordAll();
+    }
   }
   updateControls();
 }
@@ -1297,16 +1313,20 @@ function statusBelongsToRecording() {
 }
 
 window.setPipMode = (enabled) => {
-  state.pip = enabled;
   document.body.classList.toggle("pip-mode", enabled);
   if (enabled) {
     if (state.focused < 0) {
+      // focusStream refuses to run while state.pip is set, so the flag goes up
+      // after the focus and not before. Otherwise the page comes back from a
+      // killed app with no feed focused and reads players[-1].
       focusStream(0);
     }
+    state.pip = true;
     ensureSound(state.focused);
     playOnly(state.focused);
     setStatusText(`picture-in-picture: ${players[state.focused].stream.name}`);
   } else {
+    state.pip = false;
     // The small window is gone, so land on the three-feed grid with the sound
     // back on All Access. There is no "back from PiP" focus view any more.
     backToGrid();

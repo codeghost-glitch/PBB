@@ -37,6 +37,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       # install-action no longer carries cargo-ndk and its binstall fallback
       # pulls a release asset from github.com, which has 504'd mid-run.
       # Compiling from crates.io once and caching the binary avoids both.
@@ -66,6 +71,11 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets -- -D warnings
           cargo test
+
+      - name: page tests
+        run: |
+          node --check android/assets/app.js
+          node android/test/app.test.mjs
 
       # The signing key is not in the repo. Decode it from the repository secret
       # for this run only, then point build.sh at it.
