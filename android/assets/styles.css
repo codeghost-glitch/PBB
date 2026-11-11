@@ -457,14 +457,14 @@ h1 {
 }
 
 .btn-icon {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border-radius: 8px;
   flex: 0 0 auto;
 }
 
-.btn-icon svg { width: 17px; height: 17px; display: block; }
+.btn-icon svg { width: 18px; height: 18px; display: block; }
 [disabled] { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .cam-actions .btn-icon {
@@ -656,26 +656,23 @@ body.fullscreen-mode .video-wrap video {
   object-fit: contain;
 }
 
-/* Fullscreen controls: one small switcher panel, top-right. It names the feed
-   on screen and gives every key a word, because an icon on its own was a guess.
-   It slides in on a tap and gets out of the way 3.5 s later. */
+/* Fullscreen controls: a vertical rail on the left. While it is open the
+   picture moves right to make room, so no key ever sits on the stream. */
 .fs-controls {
   position: fixed;
-  top: 14px;
-  top: max(14px, env(safe-area-inset-top));
-  right: 14px;
-  right: max(14px, env(safe-area-inset-right));
+  top: 50%;
+  left: 10px;
+  left: max(10px, env(safe-area-inset-left));
   z-index: 90;
   display: none;
-  max-width: calc(100vw - 28px);
+  transform: translateY(-50%);
 }
 
 .fs-deck {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: max-content;
-  max-width: 100%;
   padding: 8px;
   background: var(--surface);
   border: var(--border);
@@ -686,39 +683,22 @@ body.fullscreen-mode .video-wrap video {
 .fs-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 0 2px 7px;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 2px 6px;
   border-bottom: var(--border);
 }
 
 .fs-num {
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   font-weight: 900;
-  letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }
 
-.fs-name {
-  max-width: 104px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 0.66rem;
-  font-weight: 800;
-}
+.fs-live { display: inline-flex; align-items: center; }
+.fs-live .live-pip { background: var(--ink); }
 
-.fs-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  font-size: 0.56rem;
-  font-weight: 900;
-  color: var(--muted);
-}
-
-.fs-keys { display: flex; gap: 6px; }
+.fs-keys { display: flex; flex-direction: column; gap: 6px; }
 
 .fs-key {
   display: flex;
@@ -726,9 +706,9 @@ body.fullscreen-mode .video-wrap video {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  width: 48px;
-  min-height: 48px;
-  padding: 5px 2px 4px;
+  width: 52px;
+  min-height: 44px;
+  padding: 4px 2px;
   background: var(--paper);
   color: var(--ink);
   border: var(--border);
@@ -760,7 +740,7 @@ body.fullscreen-mode .fs-controls {
   display: flex;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-6px);
+  transform: translate(-6px, -50%);
   pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease, visibility 0s linear 0.14s;
 }
@@ -768,14 +748,29 @@ body.fullscreen-mode .fs-controls {
 body.fullscreen-mode.controls-visible .fs-controls {
   opacity: 1;
   visibility: visible;
-  transform: none;
+  transform: translate(0, -50%);
   pointer-events: auto;
   transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+/* The picture gives the rail a lane instead of having keys laid over it. */
+body.fullscreen-mode .cam-card.focused .video-wrap {
+  transition: left 0.16s ease;
+}
+
+body.fullscreen-mode.controls-visible .cam-card.focused .video-wrap {
+  left: 88px;
+  left: calc(88px + env(safe-area-inset-left, 0px));
 }
 
 body.locked .fs-head,
 body.locked .fs-key:not(.lock-btn) { display: none; }
 body.locked .lock-btn { background: var(--yellow); }
+
+@media (max-height: 320px) {
+  .fs-key { min-height: 38px; }
+  .fs-head { display: none; }
+}
 
 /* In-app mini tile: another feed in the bottom-right corner of fullscreen. It
    is the same card element moved by CSS, so no video is re-attached. */
@@ -893,8 +888,8 @@ body.fullscreen-mode .cam-card.mini {
     z-index: 3;
     width: max-content;
     max-width: calc(100% - 12px);
-    padding: 3px;
-    gap: 3px;
+    padding: 2px;
+    gap: 2px;
     flex-wrap: wrap;
     justify-content: center;
     transform: translateX(-50%);
@@ -905,15 +900,18 @@ body.fullscreen-mode .cam-card.mini {
   }
 
   .cam-actions .btn-icon {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     border: 0;
     border-radius: 6px;
     background: transparent;
     box-shadow: none;
   }
 
-  .cam-actions .btn-icon svg { width: 16px; height: 16px; }
+  .cam-actions .btn-icon svg { width: 19px; height: 19px; }
+  /* The featured top feed has the room, so its four keys run larger. */
+  .cam-card:first-child .cam-actions .btn-icon { width: 40px; height: 40px; }
+  .cam-card:first-child .cam-actions .btn-icon svg { width: 20px; height: 20px; }
   .cam-actions .btn-icon.active { background: var(--lavender); }
   .cam-actions .record-btn.recording { background: var(--rec); }
 
@@ -926,6 +924,13 @@ body.fullscreen-mode .cam-card.mini {
     height: auto;
     margin: 0;
   }
+}
+
+/* Four 36 px keys do not fit the half-width cards below 360 px, so they step
+   down once; the full-width featured card keeps its larger keys. */
+@media (max-width: 359px) {
+  .cam-actions .btn-icon { width: 31px; height: 31px; }
+  .cam-actions .btn-icon svg { width: 17px; height: 17px; }
 }
 
 /* In a short landscape card a centred status pill and the button pill cannot

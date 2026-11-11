@@ -821,14 +821,9 @@ function updateDeckControls() {
   setDeckIcon(document.getElementById("fsSwitch"), "next", "next live feed");
   setDeckIcon(document.getElementById("fsExit"), "exit", "exit fullscreen");
 
-  const focusedEntry = players[state.focused];
   const fsNum = document.getElementById("fsFeedNum");
-  const fsName = document.getElementById("fsFeedName");
   if (fsNum) {
     fsNum.textContent = state.focused >= 0 ? String(state.focused + 1).padStart(2, "0") : "--";
-  }
-  if (fsName) {
-    fsName.textContent = focusedEntry ? focusedEntry.stream.name : "no feed";
   }
 }
 
@@ -990,6 +985,11 @@ function fullscreenStream(index) {
   }
 }
 
+function feedLabel(index) {
+  const entry = players[index];
+  return `${String(index + 1).padStart(2, "0")} - ${entry ? entry.stream.name : "no feed"}`;
+}
+
 function enterPip(index) {
   if (state.fullscreen) {
     // Keep the focus: the small window shows the same feed as fullscreen.
@@ -1030,6 +1030,11 @@ function toggleFullscreen(keepFocus) {
   if (window.Pbb) {
     Pbb.setImmersive(state.fullscreen);
     Pbb.setOrientation(state.fullscreen ? "landscape" : "auto");
+  }
+  if (state.fullscreen && players[state.focused]) {
+    // The rail no longer carries the name, so a short chip names the feed as
+    // it opens instead of leaving the picture anonymous.
+    showIndicator(feedLabel(state.focused), 1200);
   }
   playOnly(state.focused);
   updateControls();
@@ -1090,10 +1095,12 @@ function switchFullscreen() {
     // The tile is already the next feed: promote it and hand it the old big
     // feed, instead of making one card both the big feed and the tile.
     swapMini();
+    showIndicator(feedLabel(state.focused), 1000);
     showControls();
     return;
   }
   focusStream(next);
+  showIndicator(feedLabel(next), 1000);
   showControls();
 }
 
