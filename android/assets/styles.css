@@ -656,13 +656,14 @@ body.fullscreen-mode .video-wrap video {
   object-fit: contain;
 }
 
-/* Fullscreen controls: a vertical rail on the left. While it is open the
-   picture moves right to make room, so no key ever sits on the stream. */
+/* Fullscreen controls: a vertical rail in the right-hand lane, where a right
+   thumb lands. The lane is permanent, so the picture keeps its place and the
+   rail only fades in over it. */
 .fs-controls {
   position: fixed;
   top: 50%;
-  left: 10px;
-  left: max(10px, env(safe-area-inset-left));
+  right: 10px;
+  right: max(10px, env(safe-area-inset-right));
   z-index: 90;
   display: none;
   transform: translateY(-50%);
@@ -740,7 +741,7 @@ body.fullscreen-mode .fs-controls {
   display: flex;
   opacity: 0;
   visibility: hidden;
-  transform: translate(-6px, -50%);
+  transform: translate(6px, -50%);
   pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease, visibility 0s linear 0.14s;
 }
@@ -753,14 +754,12 @@ body.fullscreen-mode.controls-visible .fs-controls {
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
 
-/* The picture gives the rail a lane instead of having keys laid over it. */
+/* The right lane belongs to the rail for the whole session. The picture is
+   letterboxed inside the rest of the screen once, on entry, and never resizes
+   or slides when the rail is tapped. */
 body.fullscreen-mode .cam-card.focused .video-wrap {
-  transition: left 0.16s ease;
-}
-
-body.fullscreen-mode.controls-visible .cam-card.focused .video-wrap {
-  left: 88px;
-  left: calc(88px + env(safe-area-inset-left, 0px));
+  right: 86px;
+  right: calc(86px + env(safe-area-inset-right, 0px));
 }
 
 body.locked .fs-head,
@@ -772,12 +771,15 @@ body.locked .lock-btn { background: var(--yellow); }
   .fs-head { display: none; }
 }
 
-/* In-app mini tile: another feed in the bottom-right corner of fullscreen. It
-   is the same card element moved by CSS, so no video is re-attached. */
+/* In-app mini tile: another feed in the bottom-left corner of fullscreen. It
+   is the same card element moved by CSS, so no video is re-attached. The rail
+   owns the right edge, so the tile moves to the other hand. */
 body.fullscreen-mode .cam-card.mini {
   display: block !important;
   position: fixed;
-  right: 10px;
+  left: 10px;
+  left: max(10px, env(safe-area-inset-left));
+  right: auto;
   bottom: 10px;
   /* Above the focused card (50), below the controls (90) and indicator (95):
      a lower value paints the tile behind the fullscreen video. */
@@ -842,7 +844,8 @@ body.fullscreen-mode .cam-card.mini {
 }
 
 /* Phone-sized cards and landscape have too little room for chrome stacked
-   below the video, so the name and buttons float over the picture instead.
+   below the video, so the name chips over the picture and the four keys get
+   a shelf along the card's bottom edge instead of a floating pill.
    Kept last so it also wins over the focus-mode rules above. */
 @media (max-width: 520px), (max-height: 520px) {
   .page { padding: 6px; }
@@ -850,10 +853,14 @@ body.fullscreen-mode .cam-card.mini {
   .status { margin-top: 7px; padding: 4px 6px 4px 9px; }
   .brand-copy p { display: none; }
 
-  .cam-card { padding: 0; gap: 0; }
+  .cam-card { --key: 36px; padding: 0; gap: 0; }
+  .cam-card:first-child { --key: 40px; }
   .video-wrap {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--key) + 10px);
     border: 0;
     border-radius: 0;
   }
@@ -883,35 +890,35 @@ body.fullscreen-mode .cam-card.mini {
 
   .cam-actions {
     position: absolute;
-    left: 50%;
-    bottom: 6px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 3;
-    width: max-content;
-    max-width: calc(100% - 12px);
-    padding: 2px;
-    gap: 2px;
-    flex-wrap: wrap;
-    justify-content: center;
-    transform: translateX(-50%);
+    height: calc(var(--key) + 10px);
+    padding: 4px 6px;
+    gap: 0;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
     background: var(--surface);
-    border: var(--border);
-    border-radius: 8px;
-    box-shadow: 2px 2px 0 var(--ink);
+    border: 0;
+    border-top: var(--border);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .cam-actions .btn-icon {
-    width: 36px;
-    height: 36px;
+    width: var(--key);
+    height: var(--key);
     border: 0;
     border-radius: 6px;
     background: transparent;
     box-shadow: none;
   }
 
-  .cam-actions .btn-icon svg { width: 19px; height: 19px; }
-  /* The featured top feed has the room, so its four keys run larger. */
-  .cam-card:first-child .cam-actions .btn-icon { width: 40px; height: 40px; }
-  .cam-card:first-child .cam-actions .btn-icon svg { width: 20px; height: 20px; }
+  .cam-actions .btn-icon svg {
+    width: calc(var(--key) * 0.52);
+    height: calc(var(--key) * 0.52);
+  }
   .cam-actions .btn-icon.active { background: var(--lavender); }
   .cam-actions .record-btn.recording { background: var(--rec); }
 
@@ -926,17 +933,10 @@ body.fullscreen-mode .cam-card.mini {
   }
 }
 
-/* Four 36 px keys do not fit the half-width cards below 360 px, so they step
-   down once; the full-width featured card keeps its larger keys. */
+/* Four 36 px keys do not fit the half-width cards below 360 px, so their
+   shelf and keys step down once; the featured card keeps its larger keys. */
 @media (max-width: 359px) {
-  .cam-actions .btn-icon { width: 31px; height: 31px; }
-  .cam-actions .btn-icon svg { width: 17px; height: 17px; }
-}
-
-/* In a short landscape card a centred status pill and the button pill cannot
-   both fit, so the status wins while it is showing. */
-@media (max-height: 520px) {
-  .cam-card.status-on .cam-actions { display: none; }
+  .cam-card:not(:first-child) { --key: 31px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
