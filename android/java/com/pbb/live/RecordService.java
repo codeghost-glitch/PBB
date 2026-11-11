@@ -29,19 +29,27 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Records a stream by pulling its DASH segments directly. No MediaProjection,
- * no activity, no foreground window: the service keeps working with the app in
- * the background or the screen off.
+ * Records one or more streams by pulling their DASH segments directly. No
+ * MediaProjection, no activity, no foreground window: the service keeps working
+ * with the app in the background or the screen off.
+ *
+ * Each stream is an independent session with its own worker thread, temporary
+ * files and notification, so several cameras can record at the same time. The
+ * sessions share the foreground service, the downloaded ffmpeg plugin and one
+ * remux lock: libavformat is not safe to drive from two threads at once, but the
+ * pulls run in parallel and only the final mux is serialised.
  *
  * The ffmpeg remuxer is downloaded on demand instead of shipping in the APK.
  * Android 10+ forbids execve() on files in an app's home directory, so the
@@ -55,14 +63,31 @@ public class RecordService extends Service {
     public static final String EXTRA_MPD_URL = "mpd_url";
     public static final String EXTRA_KEY = "key";
     public static final String EXTRA_DISPLAY_NAME = "display_name";
+    public static final String EXTRA_STREAM_NAME = "stream_name";
     public static final String EXTRA_QUALITY = "quality";
     public static final String EXTRA_STREAM_INDEX = "stream_index";
     public static final String EXTRA_RECORDING = "recording";
     public static final String EXTRA_MESSAGE = "message";
+    public static final String EXTRA_KIND = "kind";
+    public static final String EXTRA_COUNT = "count";
+    public static final String EXTRA_ELAPSED = "elapsed";
+
+    /** A stream started recording. */
+    public static final String KIND_START = "start";
+    /** A notice about the request itself, not about a recording's progress. */
+    public static final String KIND_NOTICE = "notice";
+    /** The stream stopped cleanly and its file is in Movies/PBB. */
+    public static final String KIND_DONE = "done";
+    /** The stream stopped because of a failure. */
+    public static final String KIND_ERROR = "error";
 
     private static final String CHANNEL_ID = "pbb_recording";
-    private static final int NOTIFICATION_ID = 4101;
-    private static final int STOP_REQUEST_CODE = 4102;
+    private static final String GROUP = "pbb_recording_group";
+    private static final int SUMMARY_ID = 4101;
+    private static final int SESSION_ID_BASE = 4200;
+    private static final int SESSION_REQUEST_BASE = 4300;
+    private static final int STOP_ALL_REQUEST_CODE = 4102;
+    private static final int OPEN_REQUEST_CODE = 4103;
     private static final String TAG = "PbbRecordService";
     private static final String PLUGIN_FILE = "libpbbffmpeg.so";
     private static final String PLUGIN_ASSET = "libpbbffmpeg.so.b64";
@@ -74,22 +99,60 @@ public class RecordService extends Service {
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
 
+    /**
+     * Start time per recording stream, in one place the activity can read while
+     * the UI is rebuilt. Keyed by stream index.
+     */
+    private static final Map<Integer, Long> STARTED = new HashMap<Integer, Long>();
+
     private static boolean pluginLoaded = false;
-    private static volatile boolean active = false;
-    private static volatile int activeIndex = -1;
+    private static final Object REMUX_LOCK = new Object();
 
     public static boolean isActive() {
-        return active;
+        synchronized (STARTED) {
+            return !STARTED.isEmpty();
+        }
     }
 
-    public static int activeStream() {
-        return activeIndex;
+    public static boolean isActive(int index) {
+        synchronized (STARTED) {
+            return STARTED.containsKey(index);
+        }
     }
 
-    private volatile boolean running = false;
-    private volatile boolean stopping = false;
-    private Thread worker;
-    private String quality = "auto";
+    public static int activeCount() {
+        synchronized (STARTED) {
+            return STARTED.size();
+        }
+    }
+
+    /** Stream indices recording right now, ascending. */
+    public static int[] activeStreams() {
+        synchronized (STARTED) {
+            int[] out = new int[STARTED.size()];
+            int i = 0;
+            for (Integer key : STARTED.keySet()) {
+                out[i++] = key;
+            }
+            Arrays.sort(out);
+            return out;
+        }
+    }
+
+    /** Seconds the stream has been recording, or 0 when it is not recording. */
+    public static long elapsedSeconds(int index) {
+        long started;
+        synchronized (STARTED) {
+            Long value = STARTED.get(index);
+            if (value == null) {
+                return 0L;
+            }
+            started = value;
+        }
+        return Math.max(0L, (System.currentTimeMillis() - started) / 1000L);
+    }
+
+    private final Map<Integer, Session> sessions = new HashMap<Integer, Session>();
 
     private static native void nativeRemux(String video, String audio, String output, String keyHex);
 
@@ -126,6 +189,30 @@ public class RecordService extends Service {
         }
     }
 
+    /** One stream recording: its own arguments, worker and stop flag. */
+    private static final class Session {
+        final int index;
+        final String mpdUrl;
+        final String key;
+        final String displayName;
+        final String streamName;
+        final String quality;
+        final long startedAt;
+        volatile boolean running = true;
+        Thread worker;
+
+        Session(int index, String mpdUrl, String key, String displayName,
+                String streamName, String quality) {
+            this.index = index;
+            this.mpdUrl = mpdUrl;
+            this.key = key;
+            this.displayName = displayName;
+            this.streamName = streamName;
+            this.quality = quality;
+            this.startedAt = System.currentTimeMillis();
+        }
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -135,86 +222,109 @@ public class RecordService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) {
-            stopSelf();
+            stopIfIdle();
             return START_NOT_STICKY;
         }
         if (ACTION_STOP.equals(intent.getAction())) {
-            stopping = true;
-            running = false;
-            if (worker != null) {
-                worker.interrupt();
+            int index = intent.getIntExtra(EXTRA_STREAM_INDEX, -1);
+            if (index < 0) {
+                stopAll();
+            } else {
+                stopSession(index);
             }
             return START_NOT_STICKY;
         }
         if (!ACTION_START.equals(intent.getAction())) {
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-        if (running) {
-            status(true, "recording already active");
+            stopIfIdle();
             return START_NOT_STICKY;
         }
 
         final String mpdUrl = intent.getStringExtra(EXTRA_MPD_URL);
         final String key = intent.getStringExtra(EXTRA_KEY);
         final String name = intent.getStringExtra(EXTRA_DISPLAY_NAME);
-        String q = intent.getStringExtra(EXTRA_QUALITY);
-        quality = q == null ? "auto" : q;
-        if (mpdUrl == null || key == null) {
-            status(false, "missing stream config");
-            stopSelf();
+        final String streamName = intent.getStringExtra(EXTRA_STREAM_NAME);
+        final String quality = intent.getStringExtra(EXTRA_QUALITY);
+        int index = intent.getIntExtra(EXTRA_STREAM_INDEX, -1);
+        if (mpdUrl == null || key == null || index < 0) {
+            status(false, -1, "missing stream config", KIND_ERROR);
+            stopIfIdle();
             return START_NOT_STICKY;
         }
 
-        startForegroundWithNotification();
-        running = true;
-        stopping = false;
-        active = true;
-        activeIndex = intent.getIntExtra(EXTRA_STREAM_INDEX, 0);
-        worker = new Thread(new Runnable() {
+        final Session session;
+        synchronized (sessions) {
+            if (sessions.containsKey(index)) {
+                session = null;
+            } else {
+                session = new Session(index, mpdUrl, key,
+                    name == null ? "PBB_recording.mp4" : name,
+                    streamName == null ? "camera " + (index + 1) : streamName,
+                    quality == null ? "auto" : quality);
+                sessions.put(index, session);
+            }
+        }
+        if (session == null) {
+            // The service is already foreground, but answer this start with an
+            // updated notification rather than leaving the call unanswered.
+            updateSummary();
+            status(true, index, "this camera is already recording", KIND_NOTICE);
+            return START_NOT_STICKY;
+        }
+        synchronized (STARTED) {
+            STARTED.put(index, session.startedAt);
+        }
+
+        updateSummary();
+        notifySession(session);
+        status(true, index, "", KIND_START);
+
+        Thread worker = new Thread(new Runnable() {
             @Override
             public void run() {
-                record(mpdUrl, key, name == null ? "PBB_recording.mp4" : name);
+                record(session);
             }
-        }, "pbb-pull-record");
+        }, "pbb-pull-record-" + index);
+        session.worker = worker;
         worker.start();
         return START_NOT_STICKY;
     }
 
     /**
-     * Android 15 caps dataSync foreground services at six hours. Stop the pull so
+     * Android 15 caps dataSync foreground services at six hours. Stop the pulls so
      * the normal path still remuxes and publishes what was recorded.
      */
     public void onTimeout(int startId, int foregroundServiceType) {
-        stopping = true;
-        running = false;
+        stopAll();
     }
 
-    private void record(String mpdUrl, String key, String displayName) {
-        File videoTmp = new File(getCacheDir(), "pull_video.mp4");
-        File audioTmp = new File(getCacheDir(), "pull_audio.mp4");
-        File outTmp = new File(getCacheDir(), "pull_out.mp4");
-        String result = null;
-        boolean saved = false;
+    private void record(Session session) {
+        int index = session.index;
+        File videoTmp = new File(getCacheDir(), "pull_video_" + index + ".mp4");
+        File audioTmp = new File(getCacheDir(), "pull_audio_" + index + ".mp4");
+        File outTmp = new File(getCacheDir(), "pull_out_" + index + ".mp4");
+        String result = "recording stopped";
+        String savedMessage = null;
+        boolean failed = false;
+        boolean keepSegments = false;
+        int totalSegments = 0;
         try {
             if (!isArm64()) {
                 throw new IOException("recorder plugin is arm64 only on this build");
             }
-            status(true, "preparing the recorder");
             loadPlugin(this);
 
             // One part per uninterrupted run. A gap in the archive ends a part and
             // a second file continues, so no file ever splices across a hole.
-            String name = displayName;
-            for (int part = 1; running && !stopping; part++) {
+            String name = session.displayName;
+            for (int part = 1; session.running; part++) {
                 if (part > 1) {
-                    name = partName(displayName, part);
+                    name = partName(session.displayName, part);
                 }
                 delete(videoTmp);
                 delete(audioTmp);
                 delete(outTmp);
 
-                Plan plan = loadPlan(mpdUrl);
+                Plan plan = loadPlan(session.mpdUrl, session.quality);
                 byte[] videoInit = fetch(plan.baseUrl + plan.video.init);
                 byte[] audioInit = fetch(plan.baseUrl + plan.audio.init);
                 if (videoInit == null || audioInit == null) {
@@ -223,22 +333,22 @@ public class RecordService extends Service {
                 write(videoTmp, videoInit);
                 write(audioTmp, audioInit);
 
-                status(true, "finding the live edge");
                 long offset = findLiveOffset(plan);
                 int misses = 0;
-                int segments = 0;
+                int segmentsThisPart = 0;
                 boolean gap = false;
-                status(true, "recording to Movies/PBB/" + name);
-                while (running && !stopping) {
-                    String vUrl = plan.baseUrl + segmentUrl(plan.video.media, plan.video.startNumber + offset);
-                    String aUrl = plan.baseUrl + segmentUrl(plan.audio.media, plan.audio.startNumber + offset);
+                while (session.running) {
+                    String vUrl = plan.baseUrl
+                        + segmentUrl(plan.video.media, plan.video.startNumber + offset);
+                    String aUrl = plan.baseUrl
+                        + segmentUrl(plan.audio.media, plan.audio.startNumber + offset);
                     byte[] v = null;
                     byte[] a = null;
                     try {
                         v = fetch(vUrl);
                         a = fetch(aUrl);
                     } catch (IOException e) {
-                        Log.w(TAG, "segment fetch failed", e);
+                        Log.w(TAG, "segment fetch failed for camera " + index, e);
                     }
                     if (v == null || a == null) {
                         misses++;
@@ -257,46 +367,78 @@ public class RecordService extends Service {
                     }
                     append(videoTmp, v);
                     append(audioTmp, a);
-                    segments++;
+                    segmentsThisPart++;
                     misses = 0;
                     offset++;
                 }
 
-                if (segments == 0) {
-                    result = gap ? "nothing recorded before the stream gap" : "nothing recorded";
+                if (segmentsThisPart == 0) {
+                    // A gap part can be abandoned before its first segment; do not
+                    // replace the file the previous part already published.
+                    result = savedMessage != null ? savedMessage
+                        : gap ? "nothing recorded before the stream gap" : "nothing recorded";
                     break;
                 }
-                status(true, "saving " + segments + " segments");
-                nativeRemux(videoTmp.getAbsolutePath(), audioTmp.getAbsolutePath(),
-                    outTmp.getAbsolutePath(), key);
-                result = "saved to " + publish(outTmp, name);
-                saved = true;
+                totalSegments += segmentsThisPart;
+                // libavformat keeps process-wide state; two remuxes at once would
+                // interleave their muxers. Pull in parallel, mux one at a time.
+                try {
+                    synchronized (REMUX_LOCK) {
+                        nativeRemux(videoTmp.getAbsolutePath(), audioTmp.getAbsolutePath(),
+                            outTmp.getAbsolutePath(), session.key);
+                    }
+                    result = "saved to " + publish(outTmp, name);
+                    savedMessage = result;
+                } catch (Throwable t) {
+                    // Keep this part's segments: a remux failure is recoverable,
+                    // the pulled media is not.
+                    Log.e(TAG, "remux failed for camera " + index, t);
+                    result = "recording failed: " + t.getMessage();
+                    failed = true;
+                    keepSegments = true;
+                    break;
+                }
                 if (!gap) {
                     break;
                 }
             }
-            if (result == null) {
-                result = "recording stopped";
-            }
         } catch (Throwable t) {
-            Log.e(TAG, "recording failed", t);
+            Log.e(TAG, "recording failed for camera " + index, t);
             result = "recording failed: " + t.getMessage();
+            failed = true;
+            keepSegments = totalSegments > 0;
         } finally {
-            running = false;
-            active = false;
-            activeIndex = -1;
+            session.running = false;
             // A failed remux must not throw away the only copy of a long
-            // recording: keep the pulled segments and say where they are.
-            if (saved) {
+            // recording: keep the pulled segments and say where they are. A part
+            // with no media in it is just init data, so drop it instead.
+            if (keepSegments && videoTmp.exists()) {
+                result = result + " - segments kept in " + getCacheDir().getAbsolutePath();
+            } else {
                 delete(videoTmp);
                 delete(audioTmp);
                 delete(outTmp);
-            } else if (videoTmp.exists()) {
-                result = result + " - segments kept in " + getCacheDir().getAbsolutePath();
             }
-            status(false, result);
-            stopForeground(true);
-            stopSelf();
+            boolean last;
+            synchronized (sessions) {
+                sessions.remove(index);
+                last = sessions.isEmpty();
+            }
+            synchronized (STARTED) {
+                STARTED.remove(index);
+            }
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.cancel(SESSION_ID_BASE + index);
+            }
+            if (!last) {
+                updateSummary();
+            }
+            status(false, index, result, failed ? KIND_ERROR : KIND_DONE);
+            if (last) {
+                stopForeground(true);
+                stopSelf();
+            }
         }
     }
 
@@ -374,7 +516,7 @@ public class RecordService extends Service {
             new String(encoded, StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
     }
 
-    private Plan loadPlan(String mpdUrl) throws Exception {
+    private Plan loadPlan(String mpdUrl, String quality) throws Exception {
         byte[] body = Http.getBytes(mpdUrl, 15000, 20000);
         if (body == null) {
             throw new IOException("manifest request failed");
@@ -534,6 +676,7 @@ public class RecordService extends Service {
     private static void merge(XmlPullParser p, Template t) {
         String v;
         if ((v = p.getAttributeValue(null, "media")) != null) t.media = v;
+        if ((v = p.getAttributeValue(null, "init")) != null) t.init = v;
         if ((v = p.getAttributeValue(null, "initialization")) != null) t.init = v;
         long n;
         if ((n = longAttr(p, "startNumber")) >= 0) t.startNumber = n;
@@ -700,36 +843,157 @@ public class RecordService extends Service {
         }
     }
 
-    private PendingIntent stopIntent() {
+    private void stopSession(int index) {
+        Session session;
+        synchronized (sessions) {
+            session = sessions.get(index);
+        }
+        if (session == null) {
+            stopIfIdle();
+            return;
+        }
+        session.running = false;
+        if (session.worker != null) {
+            session.worker.interrupt();
+        }
+    }
+
+    private void stopAll() {
+        List<Session> copy;
+        synchronized (sessions) {
+            copy = new ArrayList<Session>(sessions.values());
+        }
+        if (copy.isEmpty()) {
+            stopIfIdle();
+            return;
+        }
+        for (Session session : copy) {
+            session.running = false;
+            if (session.worker != null) {
+                session.worker.interrupt();
+            }
+        }
+    }
+
+    private void stopIfIdle() {
+        boolean idle;
+        synchronized (sessions) {
+            idle = sessions.isEmpty();
+        }
+        if (idle) {
+            stopForeground(true);
+            stopSelf();
+        }
+    }
+
+    private String summaryTitle(int count) {
+        return count == 1 ? "1 camera recording" : count + " cameras recording";
+    }
+
+    /**
+     * The foreground notification is the group summary: it stays put while the
+     * per-camera notifications come and go underneath it. Count and names are
+     * read in one lock, and the names are sorted, so the notification does not
+     * flicker or reorder while sessions come and go.
+     */
+    private void updateSummary() {
+        final int count;
+        final String text;
+        synchronized (sessions) {
+            count = sessions.size();
+            Integer[] keys = sessions.keySet().toArray(new Integer[0]);
+            Arrays.sort(keys);
+            StringBuilder sb = new StringBuilder();
+            for (Integer key : keys) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append(sessions.get(key).streamName);
+            }
+            text = sb.toString();
+        }
+        if (count == 0) {
+            return;
+        }
+        Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(summaryTitle(count))
+            .setContentText(text)
+            .setStyle(new Notification.BigTextStyle().bigText(text))
+            .setOngoing(true)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setGroup(GROUP)
+            .setGroupSummary(true)
+            .setContentIntent(openIntent())
+            .addAction(android.R.drawable.ic_media_pause, "stop all", stopAllIntent());
+        Notification notification = builder.build();
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(SUMMARY_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        } else {
+            startForeground(SUMMARY_ID, notification);
+        }
+    }
+
+    private void notifySession(Session session) {
+        Notification notification = new Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(session.streamName)
+            .setContentText("recording to Movies/PBB")
+            .setOngoing(true)
+            .setShowWhen(true)
+            .setWhen(session.startedAt)
+            .setOnlyAlertOnce(true)
+            .setGroup(GROUP)
+            .setContentIntent(openIntent())
+            .addAction(android.R.drawable.ic_media_pause, "stop", stopIntent(session.index))
+            .build();
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.notify(SESSION_ID_BASE + session.index, notification);
+        }
+    }
+
+    private PendingIntent stopIntent(int index) {
+        Intent stop = new Intent(this, RecordService.class)
+            .setAction(ACTION_STOP)
+            .putExtra(EXTRA_STREAM_INDEX, index);
+        return pending(stop, SESSION_REQUEST_BASE + index);
+    }
+
+    private PendingIntent stopAllIntent() {
         Intent stop = new Intent(this, RecordService.class).setAction(ACTION_STOP);
+        return pending(stop, STOP_ALL_REQUEST_CODE);
+    }
+
+    private PendingIntent openIntent() {
+        Intent open = new Intent(this, MainActivity.class)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= 23) {
             flags |= PendingIntent.FLAG_IMMUTABLE;
         }
-        return PendingIntent.getService(this, STOP_REQUEST_CODE, stop, flags);
+        return PendingIntent.getActivity(this, OPEN_REQUEST_CODE, open, flags);
     }
 
-    private void startForegroundWithNotification() {
-        Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("PBB recording")
-            .setContentText("pulling stream to Movies/PBB")
-            .setOngoing(true)
-            .setCategory(Notification.CATEGORY_SERVICE)
-            .addAction(android.R.drawable.ic_media_pause, "stop", stopIntent());
-        Notification notification = builder.build();
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+    private PendingIntent pending(Intent intent, int requestCode) {
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
         }
+        return PendingIntent.getService(this, requestCode, intent, flags);
     }
 
-    private void status(boolean active, String message) {
+    private void status(boolean active, int index, String message, String kind) {
         Intent intent = new Intent(ACTION_STATUS).setPackage(getPackageName());
         intent.putExtra(EXTRA_RECORDING, active);
+        intent.putExtra(EXTRA_STREAM_INDEX, index);
         intent.putExtra(EXTRA_MESSAGE, message == null ? "" : message);
+        intent.putExtra(EXTRA_KIND, kind == null ? KIND_NOTICE : kind);
+        intent.putExtra(EXTRA_COUNT, activeCount());
+        intent.putExtra(EXTRA_ELAPSED, elapsedSeconds(index));
         sendBroadcast(intent);
     }
 
@@ -748,7 +1012,20 @@ public class RecordService extends Service {
 
     @Override
     public void onDestroy() {
-        running = false;
+        List<Session> copy;
+        synchronized (sessions) {
+            copy = new ArrayList<Session>(sessions.values());
+            sessions.clear();
+        }
+        for (Session session : copy) {
+            session.running = false;
+            if (session.worker != null) {
+                session.worker.interrupt();
+            }
+        }
+        synchronized (STARTED) {
+            STARTED.clear();
+        }
         super.onDestroy();
     }
 }

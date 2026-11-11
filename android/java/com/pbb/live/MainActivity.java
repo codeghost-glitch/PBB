@@ -62,11 +62,12 @@ public class MainActivity extends Activity {
     private WebView webView;
     private FrameLayout rootView;
     private boolean immersive = false;
-    private boolean recording = false;
     private boolean isInPip = false;
     private int focusedStream = -1;
-    private int pendingRecordIndex = -1;
-    private String pendingRecordLabel = "stream";
+    // Permissions are requested once for a batch, then every waiting camera is
+    // started together, so recording all three is one tap and one dialog.
+    private final ArrayList<Integer> pendingRecordIndices = new ArrayList<Integer>();
+    private final ArrayList<String> pendingRecordLabels = new ArrayList<String>();
     private boolean orientationLocked = false;
     private float appVolumeLevel = -1f;
     private float appBrightnessLevel = -1f;
@@ -77,8 +78,12 @@ public class MainActivity extends Activity {
         @Override
         public void onReceive(Context context, Intent intent) {
             boolean active = intent.getBooleanExtra(RecordService.EXTRA_RECORDING, false);
+            int index = intent.getIntExtra(RecordService.EXTRA_STREAM_INDEX, -1);
+            int count = intent.getIntExtra(RecordService.EXTRA_COUNT, 0);
+            long elapsed = intent.getLongExtra(RecordService.EXTRA_ELAPSED, 0);
+            String kind = intent.getStringExtra(RecordService.EXTRA_KIND);
             String message = intent.getStringExtra(RecordService.EXTRA_MESSAGE);
-            notifyRecordingState(active, message);
+            notifyRecordingState(active, index, count, elapsed, kind, message);
         }
     };
 
@@ -284,17 +289,29 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void notifyRecordingState(boolean active, String message) {
-        recording = active;
-        if (!active) {
+    private void notifyRecordingState(boolean active, int index, int count, long elapsed,
+            String kind, String message) {
+        if (!active && count == 0) {
             lockLandscape(false);
         }
-        final String quoted = JSONObject.quote(message == null ? "" : message);
+        final String payload;
+        try {
+            JSONObject state = new JSONObject();
+            state.put("active", active);
+            state.put("index", index);
+            state.put("count", count);
+            state.put("elapsed", elapsed);
+            state.put("kind", kind == null ? "" : kind);
+            state.put("message", message == null ? "" : message);
+            payload = state.toString();
+        } catch (Exception e) {
+            return;
+        }
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 webView.evaluateJavascript(
-                    "window.onRecordingState && window.onRecordingState(" + (active ? "true" : "false") + ", " + quoted + ")",
+                    "window.onRecordingState && window.onRecordingState(" + payload + ")",
                     null);
             }
         });
@@ -537,25 +554,42 @@ public class MainActivity extends Activity {
             return;
         }
         if (grantResults.length == 0) {
-            notifyRecordingState(false, "permission denied");
+            notifyRecordingState(false, -1, RecordService.activeCount(), 0,
+                RecordService.KIND_ERROR, "permission denied, so nothing started recording");
             return;
         }
         for (int result : grantResults) {
             if (result != PackageManager.PERMISSION_GRANTED) {
-                notifyRecordingState(false, "permission denied");
+                notifyRecordingState(false, -1, RecordService.activeCount(), 0,
+                    RecordService.KIND_ERROR, "permission denied, so nothing started recording");
                 return;
             }
         }
         startRecordService();
     }
 
-    private void requestRecording(int index, String label) {
-        if (recording || RecordService.isActive()) {
-            stopRecording();
+    /** Starts every camera in the batch that is not already recording. */
+    private void requestRecording(int[] indices, String[] labels) {
+        ArrayList<Integer> wantedIndices = new ArrayList<Integer>();
+        ArrayList<String> wantedLabels = new ArrayList<String>();
+        for (int i = 0; i < indices.length; i++) {
+            if (indices[i] < 0 || RecordService.isActive(indices[i])) {
+                continue;
+            }
+            wantedIndices.add(indices[i]);
+            wantedLabels.add(labels != null && i < labels.length && labels[i] != null
+                ? labels[i] : "stream");
+        }
+        if (wantedIndices.isEmpty()) {
+            notifyRecordingState(false, -1, RecordService.activeCount(), 0,
+                RecordService.KIND_NOTICE, "that camera is already recording");
             return;
         }
-        pendingRecordIndex = index;
-        pendingRecordLabel = label;
+        pendingRecordIndices.clear();
+        pendingRecordLabels.clear();
+        pendingRecordIndices.addAll(wantedIndices);
+        pendingRecordLabels.addAll(wantedLabels);
+
         ArrayList<String> needed = new ArrayList<String>();
         if (Build.VERSION.SDK_INT <= 28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             needed.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
@@ -571,39 +605,63 @@ public class MainActivity extends Activity {
     }
 
     private void startRecordService() {
+        ArrayList<Integer> indices = new ArrayList<Integer>(pendingRecordIndices);
+        ArrayList<String> labels = new ArrayList<String>(pendingRecordLabels);
+        pendingRecordIndices.clear();
+        pendingRecordLabels.clear();
+        if (indices.isEmpty()) {
+            return;
+        }
+        JSONArray streams;
         try {
-            JSONArray streams = new JSONObject(streamConfigJson).getJSONArray("streams");
-            if (pendingRecordIndex < 0 || pendingRecordIndex >= streams.length()) {
-                notifyRecordingState(false, "unknown stream");
-                return;
-            }
-            JSONObject stream = streams.getJSONObject(pendingRecordIndex);
-            String displayName = makeDisplayName(pendingRecordLabel);
-            Intent service = new Intent(this, RecordService.class);
-            service.setAction(RecordService.ACTION_START);
-            service.putExtra(RecordService.EXTRA_MPD_URL, stream.getString("url"));
-            service.putExtra(RecordService.EXTRA_KEY, stream.getString("key"));
-            service.putExtra(RecordService.EXTRA_DISPLAY_NAME, displayName);
-            service.putExtra(RecordService.EXTRA_QUALITY, defaultQuality(getFilesDir().getAbsolutePath()));
-            service.putExtra(RecordService.EXTRA_STREAM_INDEX, pendingRecordIndex);
-            startForegroundService(service);
-            recording = true;
-            notifyRecordingState(true, "recording to Movies/PBB/" + displayName);
+            streams = new JSONObject(streamConfigJson).getJSONArray("streams");
         } catch (Exception e) {
-            notifyRecordingState(false, "cannot start recording: " + e.getMessage());
+            notifyRecordingState(false, -1, RecordService.activeCount(), 0,
+                RecordService.KIND_ERROR, "cannot start recording: " + e.getMessage());
+            return;
+        }
+        int started = 0;
+        for (int i = 0; i < indices.size(); i++) {
+            int index = indices.get(i);
+            String label = labels.get(i);
+            try {
+                if (index < 0 || index >= streams.length()) {
+                    continue;
+                }
+                JSONObject stream = streams.getJSONObject(index);
+                Intent service = new Intent(this, RecordService.class);
+                service.setAction(RecordService.ACTION_START);
+                service.putExtra(RecordService.EXTRA_MPD_URL, stream.getString("url"));
+                service.putExtra(RecordService.EXTRA_KEY, stream.getString("key"));
+                service.putExtra(RecordService.EXTRA_DISPLAY_NAME, makeDisplayName(label));
+                service.putExtra(RecordService.EXTRA_STREAM_NAME, stream.optString("name", label));
+                service.putExtra(RecordService.EXTRA_QUALITY,
+                    defaultQuality(getFilesDir().getAbsolutePath()));
+                service.putExtra(RecordService.EXTRA_STREAM_INDEX, index);
+                startForegroundService(service);
+                started++;
+            } catch (Exception e) {
+                notifyRecordingState(false, index, RecordService.activeCount(), 0,
+                    RecordService.KIND_ERROR, "cannot start recording: " + e.getMessage());
+            }
+        }
+        if (started == 0) {
+            notifyRecordingState(false, -1, RecordService.activeCount(), 0,
+                RecordService.KIND_ERROR, "nothing to record");
         }
     }
 
-    private void stopRecording() {
-        if (!recording && !RecordService.isActive()) {
-            notifyRecordingState(false, "not recording");
+    /** Stops one camera, or every camera when the index is negative. */
+    private void stopRecording(int index) {
+        if (!RecordService.isActive()) {
+            notifyRecordingState(false, -1, 0, 0,
+                RecordService.KIND_NOTICE, "nothing is recording");
             return;
         }
         Intent service = new Intent(this, RecordService.class);
         service.setAction(RecordService.ACTION_STOP);
+        service.putExtra(RecordService.EXTRA_STREAM_INDEX, index);
         startService(service);
-        recording = false;
-        notifyRecordingState(false, "stopping recording...");
     }
 
     private String makeDisplayName(String label) {
@@ -611,8 +669,12 @@ public class MainActivity extends Activity {
         if (safe.isEmpty()) {
             safe = "stream";
         }
+        // The stream names already start with PBB; do not stack a second prefix.
+        if (!safe.regionMatches(true, 0, "PBB_", 0, 4)) {
+            safe = "PBB_" + safe;
+        }
         String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-        return "PBB_" + safe + "_" + stamp + ".mp4";
+        return safe + "_" + stamp + ".mp4";
     }
 
     @Override
@@ -769,30 +831,65 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    requestRecording(streamIndex, streamLabel);
+                    requestRecording(new int[] {streamIndex}, new String[] {streamLabel});
                 }
             });
         }
 
         @JavascriptInterface
-        public void stopRecording() {
+        public void recordAll() {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    MainActivity.this.stopRecording();
+                    try {
+                        JSONArray streams = new JSONObject(streamConfigJson).getJSONArray("streams");
+                        int count = streams.length();
+                        int[] indices = new int[count];
+                        String[] labels = new String[count];
+                        for (int i = 0; i < count; i++) {
+                            indices[i] = i;
+                            labels[i] = streams.getJSONObject(i).optString("name", "stream " + (i + 1));
+                        }
+                        requestRecording(indices, labels);
+                    } catch (Exception e) {
+                        notifyRecordingState(false, -1, RecordService.activeCount(), 0,
+                            RecordService.KIND_ERROR, "cannot start recording: " + e.getMessage());
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void stopRecording(final int index) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    MainActivity.this.stopRecording(index);
                 }
             });
         }
 
         @JavascriptInterface
         public boolean isRecording() {
-            return recording || RecordService.isActive();
+            return RecordService.isActive();
         }
 
+        /** Every recording in flight, with its elapsed seconds, so a rebuilt page
+         * can restore the tally lights instead of losing them. */
         @JavascriptInterface
-        public int recordingStream() {
-            int index = RecordService.activeStream();
-            return index >= 0 ? index : pendingRecordIndex;
+        public String recordingState() {
+            try {
+                JSONArray streams = new JSONArray();
+                for (int index : RecordService.activeStreams()) {
+                    JSONObject item = new JSONObject();
+                    item.put("index", index);
+                    item.put("elapsed", RecordService.elapsedSeconds(index));
+                    streams.put(item);
+                }
+                return new JSONObject().put("streams", streams).toString();
+            } catch (Exception e) {
+                return "{\"streams\":[]}";
+            }
         }
 
         @JavascriptInterface

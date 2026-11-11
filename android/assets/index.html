@@ -4,69 +4,57 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FBF7DE">
   <title>PBB live</title>
   <link rel="stylesheet" href="styles.css">
   <script src="shaka-player.compiled.min.js"></script>
 </head>
 <body>
   <div class="page">
-    <svg class="deco deco-star star-1 spin" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="#111111" stroke-width="1.6"></path>
-      <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#111111" stroke-width="1.6"></circle>
-      <circle cx="16" cy="16" r="1.9" fill="#111111"></circle>
-    </svg>
-    <svg class="deco deco-blob blob-1" width="78" height="78" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#F9A8B8" stroke="#111111" stroke-width="1.6"></path>
-      <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#111111" stroke-width="1.6"></circle>
-      <circle cx="16" cy="16" r="1.9" fill="#111111"></circle>
-    </svg>
-    <svg class="deco deco-star star-2" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#4ECDC4" stroke="#111111" stroke-width="1.6"></path>
-      <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#111111" stroke-width="1.6"></circle>
-      <circle cx="16" cy="16" r="1.9" fill="#111111"></circle>
-    </svg>
-
-    <header class="nav card shadow">
+    <header class="nav">
       <div class="brand">
-        <div class="icon-box" aria-hidden="true">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"></path>
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+            <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="#14110C" stroke-width="1.8"></path>
+            <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#14110C" stroke-width="1.8"></circle>
+            <circle cx="16" cy="16" r="1.9" fill="#14110C"></circle>
           </svg>
         </div>
-        <div>
+        <div class="brand-copy">
           <h1>pbb live</h1>
-          <p>pinoy big brother collab 3.0 cameras, live</p>
+          <p>three cameras around the house, streaming now</p>
         </div>
       </div>
-      <div class="nav-actions">
-        <span class="tag tag-filled">3 live</span>
-        <div class="quality" role="group" aria-label="default quality">
-          <span class="quality-label">default quality</span>
-          <button class="btn btn-tiny quality-btn" type="button" data-quality="auto">auto</button>
-          <button class="btn btn-tiny quality-btn" type="button" data-quality="hd">hd</button>
-          <button class="btn btn-tiny quality-btn" type="button" data-quality="sd">sd</button>
+      <div class="desk-actions">
+        <span class="live-tag"><span class="live-pip" aria-hidden="true"></span>3 live</span>
+        <div class="seg" role="group" aria-label="default quality">
+          <span class="seg-label">quality</span>
+          <button class="seg-btn" type="button" data-quality="auto">auto</button>
+          <button class="seg-btn" type="button" data-quality="hd">hd</button>
+          <button class="seg-btn" type="button" data-quality="sd">sd</button>
         </div>
+        <button id="recAll" class="rec-master" type="button" aria-pressed="false" aria-label="record all cameras">
+          <span class="glyph" data-role="recglyph" aria-hidden="true"></span>
+          <span id="recAllLabel" class="rec-copy">record all</span>
+          <span id="recAllCount" class="rec-master-count hidden" aria-hidden="true">0</span>
+        </button>
       </div>
     </header>
 
     <main class="stage">
-      <svg class="deco deco-star star-3" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#C4B5FD" stroke="#111111" stroke-width="1.6"></path>
-        <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#111111" stroke-width="1.6"></circle>
-        <circle cx="16" cy="16" r="1.9" fill="#111111"></circle>
-      </svg>
-      <svg class="deco deco-blob blob-2" width="54" height="54" viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="#111111" stroke-width="1.6"></path>
-        <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#111111" stroke-width="1.6"></circle>
-        <circle cx="16" cy="16" r="1.9" fill="#111111"></circle>
-      </svg>
-
       <div id="grid" class="grid" aria-label="live camera feeds"></div>
     </main>
 
-    <footer class="status card card-flat" id="statusBar" aria-live="polite">
-      <span class="status-dot" aria-hidden="true"></span>
+    <footer class="status" id="statusBar" aria-live="polite">
+      <span class="status-led" aria-hidden="true"></span>
       <span id="statusText">loading streams...</span>
+      <span class="rec-badge hidden" id="recBadge" aria-hidden="true">
+        <span class="rec-badge-dot" aria-hidden="true"></span>
+        <span id="recCount">0</span>
+        <span class="rec-badge-label">rec</span>
+        <span id="recTime">0:00</span>
+      </span>
+      <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
       <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
     </footer>
   </div>

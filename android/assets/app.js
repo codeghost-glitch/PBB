@@ -2,8 +2,10 @@ const state = {
   quality: "auto",
   focused: -1,
   pip: false,
-  recording: -1,
-  pendingRecord: -1,
+  // Stream indices, not a single slot: every camera can record on its own.
+  recording: new Set(),
+  stopping: new Set(),
+  recordStarted: new Map(),
   sound: 0,
   fullscreen: false,
   locked: false,
@@ -38,6 +40,13 @@ let grid;
 let backBtn;
 let statusText;
 let qualityButtons;
+let recAllBtn;
+let recAllGlyph;
+let recAllLabel;
+let recAllCount;
+let recBadge;
+let recCount;
+let recTime;
 let hideControlsTimer = null;
 let indicator;
 let indicatorTimer = null;
@@ -74,10 +83,22 @@ function uuidKid(kid) {
   return kid.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-$3-$4-$5");
 }
 
+const IDLE_HINT = "tap refresh to reload the stream keys";
+
+function defaultStatus() {
+  const count = state.recording.size;
+  if (count === 1) {
+    return "recording 1 camera";
+  }
+  if (count > 1) {
+    return `recording ${count} cameras`;
+  }
+  return IDLE_HINT;
+}
+
 function setStatusText(message) {
-  // The footer is the refresh control, so it never hides itself: an idle label
-  // takes the place of the message instead.
-  statusText.textContent = message || "tap to refresh";
+  // The footer never hides itself: an idle label takes the place of the message.
+  statusText.textContent = message || defaultStatus();
   const bar = document.getElementById("statusBar");
   if (bar) {
     bar.classList.remove("hidden");
@@ -388,6 +409,10 @@ const ICONS = {
     ["rect", { x: 4, y: 11, width: 16, height: 10, rx: 2 }],
     ["path", { d: "M8 11V7a4 4 0 0 1 7.5-2" }],
   ],
+  refresh: [
+    ["path", { d: "M21 12a9 9 0 1 1-3-6.7" }],
+    ["path", { d: "M21 4v5h-5" }],
+  ],
 };
 
 const SVG_ATTRS = {
@@ -421,14 +446,21 @@ function setIcon(btn, name, label) {
   if (!btn) {
     return;
   }
-  if (btn.dataset.icon !== name) {
-    btn.dataset.icon = name;
-    btn.replaceChildren(iconNode(name));
-  }
+  mountIcon(btn, name);
   if (label) {
     btn.setAttribute("aria-label", label);
     btn.title = label;
   }
+}
+
+// Replaces the children of any node with an icon, so the master record button
+// can keep its text label next to a glyph that swaps between record and stop.
+function mountIcon(node, name) {
+  if (!node || node.dataset.icon === name) {
+    return;
+  }
+  node.dataset.icon = name;
+  node.replaceChildren(iconNode(name));
 }
 
 function makeIconButton(className, role) {
@@ -438,7 +470,7 @@ function makeIconButton(className, role) {
 }
 
 function createCard(stream, index) {
-  const card = el("article", "cam-card card shadow", null, null);
+  const card = el("article", "cam-card", null, null);
   card.setAttribute("data-index", String(index));
 
   const videoWrap = el("div", "video-wrap", null, null);
@@ -451,15 +483,25 @@ function createCard(stream, index) {
   video.controls = false;
   video.setAttribute("aria-label", `${stream.name} live video`);
   const statusEl = el("div", "stream-status", "status", "connecting...");
+  // The tally light: the card that is recording says so on the picture, with
+  // the running time, instead of hiding it in a toolbar.
+  const tally = el("div", "tally", "tally", null);
+  tally.setAttribute("aria-hidden", "true");
+  tally.appendChild(el("span", "tally-dot", null, null));
+  tally.appendChild(el("span", "tally-label", null, "rec"));
+  const tallyTime = el("span", "tally-time", "tally-time", "0:00");
+  tally.appendChild(tallyTime);
   videoWrap.appendChild(video);
   videoWrap.appendChild(statusEl);
+  videoWrap.appendChild(tally);
 
-  const camMeta = el("div", "cam-meta", null, null);
-  const titleWrap = el("div", null, null, null);
-  titleWrap.appendChild(el("div", "cam-title", "name", stream.name));
-  titleWrap.appendChild(el("div", "cam-sub", "feed", `camera feed 0${index + 1}`));
-  camMeta.appendChild(titleWrap);
-  camMeta.appendChild(el("span", "live-badge", "badge", "live"));
+  const rack = el("div", "cam-rack", null, null);
+  const camId = el("div", "cam-id", null, null);
+  camId.appendChild(el("span", "cam-num", null, `0${index + 1}`));
+  camId.appendChild(el("span", "cam-title", "name", stream.name));
+  const liveBadge = el("span", "live-badge", "badge", null);
+  liveBadge.appendChild(el("span", "live-pip", null, null));
+  liveBadge.appendChild(document.createTextNode("live"));
 
   const actions = el("div", "cam-actions", null, null);
   const fsBtn = makeIconButton("btn btn-ghost btn-icon", "fs");
@@ -471,9 +513,12 @@ function createCard(stream, index) {
   actions.appendChild(pipBtn);
   actions.appendChild(recordBtn);
 
+  rack.appendChild(camId);
+  rack.appendChild(liveBadge);
+  rack.appendChild(actions);
+
   card.appendChild(videoWrap);
-  card.appendChild(camMeta);
-  card.appendChild(actions);
+  card.appendChild(rack);
 
   card.addEventListener("click", (event) => {
     if (event.target.closest("button") || suppressTap) {
@@ -500,7 +545,7 @@ function createCard(stream, index) {
   card.classList.add("status-on");
 
   grid.appendChild(card);
-  players.push({ video, player: null, stream, statusEl, card });
+  players.push({ video, player: null, stream, statusEl, card, tally, tallyTime });
 }
 
 // 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT are transient on live
@@ -573,7 +618,7 @@ async function initPlayer(entry, index) {
     if (Number(detail.code) === 4012) {
       state.keysStale = true;
       setStreamStatus(entry, "keys rotated - tap refresh", true);
-      setStatusText("keys rotated - tap this bar to refresh");
+      setStatusText("keys rotated - tap refresh to reload");
       return;
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
@@ -690,17 +735,25 @@ function updateControls() {
     fsBtn.classList.toggle("hidden", state.pip || state.fullscreen);
     fsBtn.disabled = state.pip;
 
+    // Recording is per camera now: each card owns its own tally light and stop
+    // button, and the set survives whichever camera is focused.
+    const armed = state.recording.has(index);
+    const stopping = state.stopping.has(index);
     const recordBtn = card.querySelector('[data-role="record"]');
-    recordBtn.classList.toggle("recording", state.recording === index);
-    recordBtn.disabled = false;
+    recordBtn.classList.toggle("recording", armed);
+    recordBtn.disabled = stopping;
+    recordBtn.setAttribute("aria-pressed", armed ? "true" : "false");
+    card.classList.toggle("rec", armed);
 
     const soundBtn = card.querySelector('[data-role="sound"]');
     soundBtn.classList.toggle("active", state.sound === index);
 
-    setIcon(pipBtn, "pip", "picture-in-picture");
-    setIcon(fsBtn, "fullscreen", "fullscreen");
-    setIcon(recordBtn, state.recording === index ? "stop" : "record", state.recording === index ? "stop recording" : "record");
-    setIcon(soundBtn, state.sound === index ? "soundOn" : "soundOff", state.sound === index ? "mute" : "sound");
+    setIcon(pipBtn, "pip", `picture-in-picture ${entry.stream.name}`);
+    setIcon(fsBtn, "fullscreen", `fullscreen ${entry.stream.name}`);
+    setIcon(recordBtn, armed ? "stop" : "record",
+      armed ? `stop recording ${entry.stream.name}` : `record ${entry.stream.name}`);
+    setIcon(soundBtn, state.sound === index ? "soundOn" : "soundOff",
+      state.sound === index ? `mute ${entry.stream.name}` : `sound ${entry.stream.name}`);
   }
 
   const lockBtn = document.getElementById("fsLock");
@@ -717,6 +770,67 @@ function updateControls() {
     zoomBtn.classList.toggle("active", zoom.mode);
     setIcon(zoomBtn, "zoom", zoom.mode ? "zoom off" : "zoom");
   }
+
+  if (recAllBtn) {
+    const anyRecording = state.recording.size > 0;
+    recAllBtn.disabled = state.pip || state.stopping.size > 0;
+    recAllBtn.classList.toggle("armed", anyRecording);
+    recAllBtn.setAttribute("aria-pressed", anyRecording ? "true" : "false");
+    recAllBtn.setAttribute("aria-label",
+      anyRecording ? "stop all recordings" : "record all cameras");
+    mountIcon(recAllGlyph, anyRecording ? "stop" : "record");
+    if (recAllLabel) {
+      recAllLabel.textContent = anyRecording ? "stop all" : "record all";
+    }
+    if (recAllCount) {
+      recAllCount.textContent = String(state.recording.size);
+      recAllCount.classList.toggle("hidden", !anyRecording);
+    }
+  }
+}
+
+// m:ss, or h:mm:ss once a recording passes the hour. Tabular figures in the
+// stylesheet keep the tally from jittering as the digits change.
+function formatClock(totalSeconds) {
+  const total = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+// One ticker for every tally and the footer badge. It only touches text, so a
+// per-second update is cheaper than re-running updateControls.
+function updateTimers() {
+  const anyRecording = state.recording.size > 0;
+  document.body.classList.toggle("recording", anyRecording);
+  const now = Date.now();
+  let longest = 0;
+  for (const [index, entry] of players.entries()) {
+    const started = state.recordStarted.get(index);
+    const armed = state.recording.has(index) && Number.isFinite(started);
+    if (!armed) {
+      if (entry.tallyTime.textContent) {
+        entry.tallyTime.textContent = "";
+      }
+      continue;
+    }
+    const seconds = Math.max(0, (now - started) / 1000);
+    longest = Math.max(longest, seconds);
+    entry.tallyTime.textContent = formatClock(seconds);
+  }
+  if (!recBadge || !recCount || !recTime) {
+    return;
+  }
+  recBadge.classList.toggle("hidden", !anyRecording);
+  if (!anyRecording) {
+    return;
+  }
+  recCount.textContent = String(state.recording.size);
+  recTime.textContent = formatClock(longest);
 }
 
 // The focused feed carries the sound, and the mini tile is audible over it, so
@@ -815,7 +929,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText(state.keysStale ? "keys rotated - tap this bar to refresh" : "");
+  setStatusText(state.keysStale ? "keys rotated - tap refresh to reload" : "");
   updateControls();
   return true;
 }
@@ -940,28 +1054,108 @@ function switchFullscreen() {
   showControls();
 }
 
-function toggleRecord(index) {
-  if (state.recording >= 0) {
-    Pbb.stopRecording();
-    return;
-  }
-  state.pendingRecord = index;
-  setStatusText("pulling the stream directly — keeps recording in the background");
-  Pbb.startRecording(index, players[index].stream.name);
+function markStopping(index) {
+  state.stopping.add(index);
+  // A stop can take a few seconds while the pull ends. Never leave the button
+  // disabled forever if the service never answers.
+  setTimeout(() => {
+    if (state.stopping.delete(index)) {
+      updateControls();
+      updateTimers();
+    }
+  }, 20000);
 }
 
-window.onRecordingState = (active, message) => {
-  if (active && state.pendingRecord < 0 && window.Pbb) {
-    state.pendingRecord = Math.max(0, Number(Pbb.recordingStream()) || 0);
+function toggleRecord(index) {
+  if (!window.Pbb || state.stopping.has(index)) {
+    return;
   }
-  state.recording = active ? state.pendingRecord : -1;
-  if (!active) {
-    state.pendingRecord = -1;
+  const entry = players[index];
+  if (!entry) {
+    return;
   }
-  document.body.classList.toggle("recording", active);
-  setStatusText(message || (active ? "recording..." : "recording stopped"));
+  if (state.recording.has(index)) {
+    markStopping(index);
+    setStatusText(`stopping ${entry.stream.name}`);
+    Pbb.stopRecording(index);
+  } else {
+    setStatusText(`starting ${entry.stream.name}`);
+    Pbb.startRecording(index, entry.stream.name);
+  }
   updateControls();
+}
+
+// The master control records every camera, or stops every camera that is still
+// running. A camera already recording is left alone when the batch starts.
+function toggleRecordAll() {
+  if (!window.Pbb) {
+    return;
+  }
+  if (state.recording.size > 0) {
+    for (const index of state.recording) {
+      markStopping(index);
+    }
+    setStatusText("stopping every recording");
+    Pbb.stopRecording(-1);
+  } else if (state.stopping.size === 0) {
+    setStatusText("starting every camera");
+    Pbb.recordAll();
+  }
+  updateControls();
+}
+
+// Java is the source of truth: a start is confirmed with the stream index, a
+// stop clears it, and the elapsed time comes back so a rebuilt page can show
+// the running tally instead of starting at zero.
+window.onRecordingState = (payload) => {
+  const update = payload && typeof payload === "object" ? payload : {};
+  const index = Number(update.index);
+  const kind = String(update.kind || "");
+  const message = String(update.message || "");
+  const elapsed = Math.max(0, Number(update.elapsed) || 0);
+  const known = Number.isInteger(index) && index >= 0 && index < players.length;
+
+  if (known) {
+    if (update.active) {
+      if (!state.recording.has(index)) {
+        state.recordStarted.set(index, Date.now() - elapsed * 1000);
+      }
+      state.recording.add(index);
+      state.stopping.delete(index);
+    } else {
+      state.recording.delete(index);
+      state.recordStarted.delete(index);
+      state.stopping.delete(index);
+    }
+  }
+
+  if (kind === "done" || kind === "error" || kind === "notice") {
+    if (message) {
+      setTransientStatus(message, kind === "error" ? 6500 : 4500);
+    }
+  }
+
+  updateTimers();
+  updateControls();
+  // The footer copy belongs to the recording count unless a transient message
+  // (saved, failed, notice), a key warning or a refresh owns it right now.
+  if (!transientStatusTimer && statusBelongsToRecording()) {
+    setStatusText("");
+  }
 };
+
+// True when the footer is showing idle copy, a recording count, or a start/stop
+// message: all places that the next recording state should overwrite. Anything
+// else (a save result, a key warning, a quality change) stays put.
+function statusBelongsToRecording() {
+  const text = statusText.textContent;
+  return !text
+    || text === "all three feeds ready"
+    || text === IDLE_HINT
+    || /^recording \d+ camera/.test(text)
+    || text.startsWith("starting ")
+    || text.startsWith("stopping ");
+}
 
 window.setPipMode = (enabled) => {
   state.pip = enabled;
@@ -1056,6 +1250,13 @@ function boot() {
   backBtn = document.getElementById("backBtn");
   statusText = document.getElementById("statusText");
   qualityButtons = Array.from(document.querySelectorAll("[data-quality]"));
+  recAllBtn = document.getElementById("recAll");
+  recAllGlyph = document.querySelector('[data-role="recglyph"]');
+  recAllLabel = document.getElementById("recAllLabel");
+  recAllCount = document.getElementById("recAllCount");
+  recBadge = document.getElementById("recBadge");
+  recCount = document.getElementById("recCount");
+  recTime = document.getElementById("recTime");
 
   document.addEventListener("keydown", () => document.body.classList.add("keyboard-focus"), true);
   document.addEventListener("pointerdown", () => document.body.classList.remove("keyboard-focus"), true);
@@ -1102,9 +1303,13 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
-  const statusBar = document.getElementById("statusBar");
-  if (statusBar) {
-    statusBar.addEventListener("click", refreshKeysFromUi);
+  const refreshBtn = document.getElementById("refreshBtn");
+  if (refreshBtn) {
+    setIcon(refreshBtn, "refresh", "refresh stream keys");
+    refreshBtn.addEventListener("click", refreshKeysFromUi);
+  }
+  if (recAllBtn) {
+    recAllBtn.addEventListener("click", toggleRecordAll);
   }
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
@@ -1131,14 +1336,40 @@ function boot() {
     setIcon(fsMini, "mini", "mini feed");
     fsMini.addEventListener("click", toggleMini);
   }
+  restoreRecordingState();
   if (Pbb.isInPip()) {
     window.setPipMode(true);
   }
   updateControls();
-  if (Pbb.isRecording()) {
-    const idx = Math.max(0, Number(Pbb.recordingStream()) || 0);
-    state.recording = idx;
-    state.pendingRecord = idx;
+  updateTimers();
+  setInterval(updateTimers, 1000);
+}
+
+// The page can be destroyed while recordings keep running (the service is
+// separate), so rebuild the set and the elapsed clocks from the service.
+function restoreRecordingState() {
+  if (!window.Pbb || typeof Pbb.recordingState !== "function") {
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(Pbb.recordingState());
+  } catch {
+    return;
+  }
+  const list = parsed && parsed.streams;
+  if (!Array.isArray(list)) {
+    return;
+  }
+  const now = Date.now();
+  for (const item of list) {
+    const index = Number(item && item.index);
+    if (!Number.isInteger(index) || index < 0 || index >= players.length) {
+      continue;
+    }
+    const elapsed = Math.max(0, Number(item.elapsed) || 0);
+    state.recording.add(index);
+    state.recordStarted.set(index, now - elapsed * 1000);
   }
 }
 

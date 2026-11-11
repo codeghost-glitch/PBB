@@ -13,20 +13,23 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Fullscreen button on every card: hides system bars, letterboxes the feed on black, exits with the floating button or the back key. The control column has lock, exit, zoom, next feed, and a mini-feed button: the mini feed shows the next camera in a small tile in the bottom-right corner of fullscreen, and tapping that tile swaps it with the big feed. The mini tile keeps hd and its own sound, so both feeds are audible at once; the feed hidden behind fullscreen is the only one that drops to sd. A swap clears the zoom - the feed arriving in the big slot starts unzoomed and the zoom button loses its highlight. It is the same card element moved by CSS, so no video is re-attached and both feeds keep playing. The card-level PiP button is still there for watching while you leave the app. Exiting fullscreen drops the focus and lands on the three-feed grid.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage. hd is the tallest variant the feed publishes; while one feed is focused the other two drop to sd, so the phone is not decoding three 1080p streams at once.
 - PBB All Access is the default sound stream on launch.
-- Record button turns pink with a stop icon while a recording runs. It pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: a foreground service keeps recording with the app backgrounded or the screen off.
-- The service writes the encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with the ClearKey on stop. Stream copy, no re-encode.
+- Record any camera on its own: the record button on a card starts that camera, or stops it, while the other cameras keep recording. All three can run at once. Every tap is confirmed by the service, and a recording card gets a red tally on the picture with its running time.
+- The header has a master record button: "record all" starts every camera that is not already recording, then turns into "stop all" with the number of active recordings. Starting a batch asks for the notification permission once, not once per camera.
+- Each recording pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: the foreground service keeps every recording alive with the app backgrounded or the screen off.
+- Each camera is an independent session with its own worker thread, temporary files and notification. The pulls run in parallel; only the final remux is serialised, because libavformat keeps process-wide state and two muxers driven at once would interleave. Stream copy, no re-encode.
+- The service writes each session's encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with that stream's ClearKey on stop.
 - The remuxer is a downloadable FFmpeg plugin, not part of the APK. It is fetched once on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). APK stays about 1 MB; the plugin is 1.3 MB downloaded on demand.
-- Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on any card stops a running recording.
-- Stop from the notification shade. Swiping the app away from recents does not stop the recording.
-- Recording state lives in the service, so after the activity is recreated the UI still shows which stream is recording and the stop button still works.
-- In picture-in-picture the live badge, stream status, and controls are hidden, so only the video is shown.
+- Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on a card only affects that camera.
+- Per-camera notifications come and go under one summary notification: stop a single camera from its own notification, or stop every camera from the summary or the master button.
+- Recording state lives in the service, so after the activity is recreated the page rebuilds every tally and its elapsed time from Pbb.recordingState() and the stop buttons still work.
+- In picture-in-picture the live badge, stream status, tally and controls are hidden, so only the video is shown.
 - Android 15 forces edge to edge, so the WebView sits in a container padded by the system bar and cutout insets. The top bar clears the phone's status bar and the footer clears the navigation bar; immersive fullscreen zeroes the insets and the padding drops again.
-- Neobrutalism styling from /home/rey/Downloads/Projects/neobrutalism with Coral & Cream defaults: warm cream, 2px black borders, 4px hard shadows, rounded cards, lowercase headings, scattered stars/blobs, mechanical press-down buttons.
+- Control-desk styling on the neobrutalism system: warm cream paper with a faint dot grid, 2px ink borders, hard offset shadows, lowercase headings, and mechanical press-down buttons. The header is one row on phones - eye mark, live count, a segmented quality control, and an ink master record button. A recording card is the loudest thing on screen: red border, red hard shadow, and a steady tally with the elapsed time on the picture. No pulsing.
 
 ## Shape
 
 - Rust: stream config, clear keys, default-quality validation and persistence, JNI exports.
-- Java: thin WebView host, PiP lifecycle, headless direct-pull recording service, MPD parsing and segment fetching.
+- Java: thin WebView host, PiP lifecycle, multi-session direct-pull recording service, MPD parsing and segment fetching.
 - Downloadable FFmpeg plugin (C + NDK build script in ffmpeg/): decrypts CENC samples and muxes video + audio into an MP4.
 - WebView assets: local DM Sans, vendored Shaka Player 4.14.8, local HTML/CSS/JS.
 - No Gradle, no AndroidX, no Kotlin, no network font/CDN runtime dependency.
@@ -112,8 +115,8 @@ The app uses the three feeds from https://pbb-live.vercel.app. MainActivity fetc
 - Fetched off the UI thread with short timeouts; all three channel responses must be clearkey feeds with https MPDs and 32-hex KID/key pairs. The combined config is cached in filesDir/streams.json and used as the last-good config when offline.
 - Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback with the last known three feeds.
 - Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
-- The status bar is the thin footer card at the bottom of the page, below the three-feed grid: a teal dot plus the status text, with the back button when focused. It is hidden in PiP and fullscreen. In the grid it never hides itself: with no message it reads "tap to refresh", because the card is also the refresh control.
-- The status bar is the refresh control: tapping it calls Pbb.refreshKeys(). There is no separate refresh icon in the top bar or in fullscreen. On 4012 the tiles say "keys rotated - tap refresh" and the status bar says "keys rotated - tap this bar to refresh".
+- The status strip sits below the grid: a status LED, the message, a recording badge with the number of active recordings and the longest elapsed time, a refresh icon, and the back button when a feed is focused. The LED turns red while any camera records. It is hidden in PiP and fullscreen. In the grid it never hides itself: with no message it reads "tap refresh to reload the stream keys".
+- The refresh icon calls Pbb.refreshKeys(); it is the only refresh control in the grid. Fullscreen hides the strip, so a message that arrives there is mirrored by the on-screen indicator. On 4012 the tiles say "keys rotated - tap refresh" and the strip says "keys rotated - tap refresh to reload".
 - A manual refresh always resolves its status text: changed keys re-init the players, unchanged keys report that the source has not published new ones, and a failed fetch reports the connection error. Silent startup fetches never overwrite the status.
 - Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall.
 
@@ -149,14 +152,24 @@ DASH tfdt timestamps are absolute (time since the stream began). The remuxer set
 ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 ~~~
 
+## Multi-camera recording
+
+- MainActivity sends one RECORD_START intent per camera, each carrying that stream's MPD, key, file name and index. RecordService keeps a session per index: worker thread, cache files `pull_video_<index>.mp4` / `pull_audio_<index>.mp4` / `pull_out_<index>.mp4`, stop flag and notification.
+- ACTION_STOP with a stream index stops that session; without one it stops every session. Each per-camera notification carries its own stop action, and the summary notification carries stop all.
+- The service's static STARTED map is the source of truth for the activity. Every transition broadcasts `{active, index, count, elapsed, kind, message}`, and `Pbb.recordingState()` returns the active indices with their elapsed seconds so a rebuilt page can restore the tally lights and clocks.
+- Pulls run in parallel. The native remux is inside `REMUX_LOCK` because libavformat is not reentrant across muxers; only the final mux is serialised, not the download.
+- Each file is named from its camera, so concurrent saves never collide in Movies/PBB/. One dataSync foreground service covers every session, so the Android 15 six-hour budget is shared rather than multiplied.
+
 ## Validation performed
 
 - cargo fmt --check
 - cargo clippy --all-targets -- -D warnings
 - cargo test
 - node --check android/assets/app.js
+- app.js logic exercised in a DOM harness (linkedom, stubbed Pbb bridge): three cards build, per-camera record/stop and record-all paths, tally clocks, save/error notices, and restore-from-service state
 - python3 -m json.tool keys/keys.json
-- three-feed layout measured in headless Chromium at phone portrait, phone landscape, tablet and desktop viewports: every card keeps a visible video area, no clipped controls, no overlapping chrome
+- three-feed layout measured in headless Chromium at phone portrait, phone landscape, tablet and desktop viewports (before the multi-camera redesign; no browser binary was available for a new pass)
+- tree-sitter parse of the changed Java/JS/HTML/CSS files: no ERROR nodes
 - cargo ndk build for arm64-v8a, armeabi-v7a, x86_64
 - javac against android.jar
 - d8 dexing
@@ -164,6 +177,7 @@ ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 - apksigner verify
 - aapt2 dump badging
 - No emulator or on-device playback test.
+- This workspace has no JDK or Android SDK, so javac, d8, aapt2 and the signer were not re-run for the multi-camera change; the next build.sh run must confirm them.
 
 ## Licenses
 
