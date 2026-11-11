@@ -3,9 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="light">
-  <meta name="theme-color" content="#FBF7DE">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FBF7DE" id="themeColor">
   <title>PBB live</title>
+  <script>
+    // The room's light switch, set before the first paint: a stored choice
+    // wins, otherwise the desk follows the phone's own dark mode.
+    (function () {
+      var theme;
+      try {
+        theme = localStorage.getItem("pbb-theme");
+      } catch (e) {
+        theme = null;
+      }
+      if (theme !== "dark" && theme !== "light") {
+        theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
   <link rel="stylesheet" href="styles.css">
   <script src="shaka-player.compiled.min.js"></script>
 </head>
@@ -15,8 +31,8 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-            <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="#14110C" stroke-width="1.8"></path>
-            <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="#14110C" stroke-width="1.8"></circle>
+            <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="currentColor" stroke-width="1.8"></path>
+            <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="currentColor" stroke-width="1.8"></circle>
             <circle cx="16" cy="16" r="1.9" fill="#14110C"></circle>
           </svg>
         </div>
@@ -33,6 +49,7 @@
           <button class="seg-btn" type="button" data-quality="hd">hd</button>
           <button class="seg-btn" type="button" data-quality="sd">sd</button>
         </div>
+        <button id="themeBtn" class="desk-key" type="button" aria-label="switch to dark theme"></button>
         <button id="recAll" class="rec-master" type="button" aria-pressed="false" aria-label="record all cameras">
           <span class="glyph" data-role="recglyph" aria-hidden="true"></span>
           <span id="recAllLabel" class="rec-copy">record all</span>

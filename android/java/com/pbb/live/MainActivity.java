@@ -69,6 +69,9 @@ public class MainActivity extends Activity {
     private final ArrayList<Integer> pendingRecordIndices = new ArrayList<Integer>();
     private final ArrayList<String> pendingRecordLabels = new ArrayList<String>();
     private boolean orientationLocked = false;
+    // The gallery's light switch: the page owns the choice, the shell follows
+    // it so the window behind the WebView and the system bar icons match.
+    private boolean darkTheme = false;
     private float appVolumeLevel = -1f;
     private float appBrightnessLevel = -1f;
     private int savedSystemVolume = -1;
@@ -386,13 +389,12 @@ public class MainActivity extends Activity {
             } else {
                 controller.show(WindowInsets.Type.systemBars());
             }
+            applyBarIconAppearance();
             return;
         }
         if (enabled) {
             decor.setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                    | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -401,27 +403,48 @@ public class MainActivity extends Activity {
         } else {
             decor.setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_VISIBLE
-                    | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                    | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         }
+        applyBarIconAppearance();
     }
 
-    // The bars sit over the cream page, where white clock and icon glyphs are
-    // unreadable, so ask for the dark variants.
+    // The bars sit over the desk, so the icon glyphs have to fight whatever
+    // the page is painted: dark glyphs on the cream day desk, pale glyphs on
+    // the charcoal night one.
     private void applyBarIconAppearance() {
         View decor = getWindow().getDecorView();
+        boolean dark = darkTheme;
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = decor.getWindowInsetsController();
             if (controller != null) {
                 int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                     | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                controller.setSystemBarsAppearance(light, light);
+                controller.setSystemBarsAppearance(dark ? 0 : light, light);
             }
             return;
         }
-        decor.setSystemUiVisibility(decor.getSystemUiVisibility()
-            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        int flags = decor.getSystemUiVisibility();
+        flags &= ~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        if (!dark) {
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
+        decor.setSystemUiVisibility(flags);
+    }
+
+    // Paints the shell behind the page in the same colour as the desk, so
+    // there is no pale flash before the first frame of a dark gallery.
+    private void applyTheme(boolean dark) {
+        darkTheme = dark;
+        int background = dark ? 0xFF171310 : 0xFFFAFADF;
+        if (rootView != null) {
+            rootView.setBackgroundColor(background);
+        }
+        if (webView != null) {
+            webView.setBackgroundColor(background);
+        }
+        applyBarIconAppearance();
     }
 
     // Window-scoped only: never written to Settings.System, and cleared when
@@ -800,6 +823,17 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     applyBrightness(value, true);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setTheme(final String name) {
+            final boolean dark = "dark".equals(name);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    applyTheme(dark);
                 }
             });
         }

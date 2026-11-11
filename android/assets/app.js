@@ -420,6 +420,20 @@ const ICONS = {
     ["path", { d: "M21 12a9 9 0 1 1-3-6.7" }],
     ["path", { d: "M21 4v5h-5" }],
   ],
+  sun: [
+    ["circle", { cx: 12, cy: 12, r: 4.2 }],
+    ["path", { d: "M12 1.8v2.4" }],
+    ["path", { d: "M12 19.8v2.4" }],
+    ["path", { d: "M4.6 4.6 6.3 6.3" }],
+    ["path", { d: "M17.7 17.7 19.4 19.4" }],
+    ["path", { d: "M1.8 12h2.4" }],
+    ["path", { d: "M19.8 12h2.4" }],
+    ["path", { d: "M4.6 19.4 6.3 17.7" }],
+    ["path", { d: "M17.7 6.3 19.4 4.6" }],
+  ],
+  moon: [
+    ["path", { d: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" }],
+  ],
 };
 
 const SVG_ATTRS = {
@@ -829,6 +843,81 @@ function updateDeckControls() {
 
 // m:ss, or h:mm:ss once a recording passes the hour. Tabular figures in the
 // stylesheet keep the tally from jittering as the digits change.
+// The gallery's light switch. A stored choice wins; without one the desk
+// follows the phone's own dark mode.
+const THEME_KEY = "pbb-theme";
+const THEME_COLORS = { light: "#FBF7DE", dark: "#171310" };
+
+function systemTheme() {
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function storedTheme() {
+  try {
+    const value = localStorage.getItem(THEME_KEY);
+    return value === "dark" || value === "light" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyTheme(theme, persist) {
+  const name = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", name);
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_KEY, name);
+    } catch {
+      // Blocked storage still leaves the desk switched for this session.
+    }
+  }
+  const meta = document.getElementById("themeColor");
+  if (meta) {
+    meta.setAttribute("content", THEME_COLORS[name]);
+  }
+  if (window.Pbb && typeof Pbb.setTheme === "function") {
+    Pbb.setTheme(name);
+  }
+  updateThemeKey();
+}
+
+function updateThemeKey() {
+  const btn = document.getElementById("themeBtn");
+  if (!btn) {
+    return;
+  }
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  mountIcon(btn, dark ? "sun" : "moon");
+  const label = dark ? "switch to light theme" : "switch to dark theme";
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+}
+
+function wireTheme() {
+  const btn = document.getElementById("themeBtn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      applyTheme(dark ? "light" : "dark", true);
+    });
+  }
+  applyTheme(storedTheme() || systemTheme(), false);
+  // While the desk has no stored choice it follows the phone's own setting.
+  if (window.matchMedia) {
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if (!storedTheme()) {
+        applyTheme(systemTheme(), false);
+      }
+    };
+    if (query.addEventListener) {
+      query.addEventListener("change", onChange);
+    } else if (query.addListener) {
+      query.addListener(onChange);
+    }
+  }
+}
+
 function formatClock(totalSeconds) {
   const total = Math.max(0, Math.floor(Number(totalSeconds) || 0));
   const hours = Math.floor(total / 3600);
@@ -1310,6 +1399,8 @@ function boot() {
 
   document.addEventListener("keydown", () => document.body.classList.add("keyboard-focus"), true);
   document.addEventListener("pointerdown", () => document.body.classList.remove("keyboard-focus"), true);
+
+  wireTheme();
 
   if (!window.Pbb) {
     setStatusText("android bridge missing");

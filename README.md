@@ -25,6 +25,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - In picture-in-picture the live badge, stream status, tally and controls are hidden, so only the video is shown.
 - Android 15 forces edge to edge, so the WebView sits in a container padded by the system bar and cutout insets. The top bar clears the phone's status bar and the footer clears the navigation bar; immersive fullscreen zeroes the insets and the padding drops again.
 - Control-desk styling on the neobrutalism system: warm cream paper with a faint dot grid, 2px ink borders, hard offset shadows, lowercase headings, and mechanical press-down buttons. The header is one row on phones - eye mark, live count, a segmented quality control, and an ink master record button. A recording card is the loudest thing on screen: red border, red hard shadow, and a steady tally with the elapsed time on the picture. No pulsing. The launcher icon is the header eye with a red tally dot: a vector for adaptive and themed icons, rasterised with an ink frame for legacy densities.
+- A night palette for the gallery: the key beside the master record button puts the desk into the dark - warm charcoal room, cream silkscreen lines, black offset shadows. The red tally is unchanged, because a tally is a lamp and a lamp does not change colour when the lights go out. The desk follows the phone's own dark mode until you press the key; after that your choice is remembered. The shell follows too, so the window behind the page and the system bar icons match the room.
 
 ## Shape
 
