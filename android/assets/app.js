@@ -539,8 +539,8 @@ function createCard(stream, index) {
   video.controls = false;
   video.setAttribute("aria-label", `${stream.name} live video`);
   const statusEl = el("div", "stream-status", "status", "connecting...");
-  // The tally light: the card that is recording says so on the picture, with
-  // the running time, instead of hiding it in a toolbar.
+  // The tally light lives in the card's top strip, with the running time,
+  // instead of floating over the picture or hiding in a toolbar.
   const tally = el("div", "tally", "tally", null);
   tally.setAttribute("aria-hidden", "true");
   tally.appendChild(el("span", "tally-dot", null, null));
@@ -549,15 +549,15 @@ function createCard(stream, index) {
   tally.appendChild(tallyTime);
   videoWrap.appendChild(video);
   videoWrap.appendChild(statusEl);
-  videoWrap.appendChild(tally);
 
-  const rack = el("div", "cam-rack", null, null);
-  const camId = el("div", "cam-id", null, null);
-  camId.appendChild(el("span", "cam-num", null, `0${index + 1}`));
-  camId.appendChild(el("span", "cam-title", "name", stream.name));
+  const top = el("div", "cam-top", null, null);
+  top.appendChild(el("span", "cam-num", null, `0${index + 1}`));
+  top.appendChild(el("span", "cam-title", "name", stream.name));
   const liveBadge = el("span", "live-badge", "badge", null);
   liveBadge.appendChild(el("span", "live-pip", null, null));
   liveBadge.appendChild(document.createTextNode("live"));
+  top.appendChild(liveBadge);
+  top.appendChild(tally);
 
   const actions = el("div", "cam-actions", null, null);
   const fsBtn = makeIconButton("btn btn-ghost btn-icon", "fs");
@@ -569,12 +569,9 @@ function createCard(stream, index) {
   actions.appendChild(pipBtn);
   actions.appendChild(recordBtn);
 
-  rack.appendChild(camId);
-  rack.appendChild(liveBadge);
-  rack.appendChild(actions);
-
+  card.appendChild(top);
   card.appendChild(videoWrap);
-  card.appendChild(rack);
+  card.appendChild(actions);
 
   card.addEventListener("click", (event) => {
     if (event.target.closest("button") || suppressTap) {

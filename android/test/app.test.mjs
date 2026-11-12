@@ -463,6 +463,22 @@ function fullscreenKeepsThePictureWhole() {
     css.includes("--fs-rail") || css.includes("--fs-dock") || css.includes(".fs-dock"));
 }
 
+function controlRoomStructure() {
+  const app = fs.readFileSync(APP, "utf8");
+  const css = fs.readFileSync(CSS, "utf8");
+  check("each card has a numbered top strip", true, app.includes('"cam-top"'));
+  check("each card has a key strip", true, app.includes('"cam-actions"'));
+  check("the old floating rack is gone", false,
+    app.includes('"cam-rack"') || css.includes(".cam-rack"));
+  check("the program rail is a flat strip", true,
+    /\.nav \{[^}]*border-bottom: var\(--console-rule\)/s.test(css));
+  check("the status ticker is a flat strip", true,
+    /\.status \{[^}]*border-top: var\(--console-rule\)/s.test(css));
+  check("camera chrome owns its own lanes", true,
+    /\.cam-top \{[^}]*border-bottom: var\(--border\)/s.test(css)
+    && /\.cam-actions \{[^}]*border-top: var\(--border\)/s.test(css));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -478,6 +494,7 @@ const tests = [
   sourceJsonIsRead,
   sourceApplyStoresTheChannel,
   fullscreenKeepsThePictureWhole,
+  controlRoomStructure,
 ];
 
 for (const test of tests) {

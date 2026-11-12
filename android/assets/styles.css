@@ -32,6 +32,9 @@
   --line: 2px;
   --border: var(--line) solid var(--ink);
   --border-thin: 1.5px solid var(--ink);
+  /* The program bar and the status ticker are separated by one heavy rule
+     instead of another rounded card with a soft shadow. */
+  --console-rule: 3px solid var(--ink);
 
   --r-sm: 8px;
   --r-md: 14px;
@@ -105,67 +108,62 @@ body.keyboard-focus :focus-visible {
   flex-direction: column;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 8px;
+  padding: 6px;
   height: 100%;
   overflow: hidden;
 }
 
 /* ---------------------------------------------------------------- header */
 
+/* Program rail: one flat strip, not a pill. The heavy bottom rule is the
+   desk's first structural line; the controls sit on the same plane. */
 .nav {
   position: relative;
   z-index: 20;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 8px;
   flex: 0 0 auto;
-  padding: 7px 10px;
+  padding: 6px 8px;
   background: var(--surface);
-  border: var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-2);
+  border: 0;
+  border-bottom: var(--console-rule);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 
 .brand-mark {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  background: var(--surface);
+  background: var(--yellow);
   color: var(--ink);
   border: var(--border);
-  border-radius: 11px;
-  box-shadow: var(--shadow-1);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 var(--shade);
 }
 
 .brand-copy { min-width: 0; }
 
 h1 {
-  font-size: 1.02rem;
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.035em;
+  font-size: 1.12rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.05em;
 }
 
-.brand-copy p {
-  max-width: 32ch;
-  font-size: 0.64rem;
-  line-height: 1.25;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.brand-copy p { display: none; }
 
 .desk-actions {
   display: flex;
@@ -205,21 +203,13 @@ h1 {
   display: inline-flex;
   align-items: stretch;
   background: var(--surface);
-  border: var(--border-thin);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-1);
+  border: var(--border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 var(--shade);
   overflow: hidden;
 }
 
-.seg-label {
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  border-right: var(--border-thin);
-  color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: 700;
-}
+.seg-label { display: none; }
 
 .seg-btn {
   min-width: 34px;
@@ -251,8 +241,8 @@ h1 {
   background: var(--surface);
   color: var(--ink);
   border: var(--border);
-  border-radius: 9px;
-  box-shadow: var(--shadow-1);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 var(--shade);
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
 }
@@ -270,57 +260,133 @@ h1 {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 9px;
+  margin-top: 6px;
 }
 
+/* Monitor wall: one full-width program frame over two equal preview frames.
+   The gap is ink, the big frame carries the only large hard shadow. */
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 9px;
+  gap: 6px;
   height: 100%;
 }
 
 .grid .cam-card:first-child { grid-column: 1 / -1; }
 
 @media (min-width: 700px) {
-  .grid { gap: 14px; }
+  .grid { gap: 10px; }
 }
 
 /* ----------------------------------------------------------------- cards */
 
+/* Every camera is a rack monitor: a numbered top strip, the picture, then a
+   key strip. Chrome owns its own lanes; nothing is painted over the feed. */
 .cam-card {
+  --key: 34px;
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   min-height: 0;
-  padding: 6px;
+  padding: 0;
   background: var(--surface);
   border: var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow-1);
   overflow: hidden;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* The tally: a recording card changes its border and its hard shadow colour,
-   so it reads as "on air" from across the room. Steady, never pulsing. */
+/* The program frame is the one bold element: a deeper hard shadow. */
+.cam-card:first-child { --key: 38px; box-shadow: var(--shadow-3); }
+
+/* A recording card changes its border and hard shadow colour, so it reads as
+   "on air" from across the room. Steady, never pulsing. */
 .cam-card.rec {
   background: var(--rec-wash);
   border-color: var(--rec);
   box-shadow: 5px 5px 0 var(--rec);
 }
 
+.cam-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 2px 6px;
+  background: var(--paper);
+  border-bottom: var(--border);
+}
+
+.cam-num {
+  flex: none;
+  min-width: 22px;
+  padding: 1px 4px;
+  background: var(--yellow);
+  color: var(--on-bright);
+  border: var(--border-thin);
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1.4;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.cam-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+}
+
+.live-badge { margin-left: auto; }
+
+.tally {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  background: var(--rec);
+  color: #FFFFFF;
+  border: var(--border-thin);
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.cam-card.rec .tally { display: inline-flex; }
+
+.tally-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #FFFFFF;
+}
+
+.tally-time { letter-spacing: 0.02em; }
+
 .video-wrap {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  background: #0B0A08;
-  border: var(--border);
-  border-radius: 9px;
+  background: #000000;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -354,86 +420,16 @@ h1 {
 
 .stream-status.bad { background: var(--rec); color: #FFFFFF; }
 
-.tally {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 4;
-  display: none;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px 2px 6px;
-  background: var(--rec);
-  color: #FFFFFF;
-  border: var(--border-thin);
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 var(--shade);
-  font-size: 0.6rem;
-  font-weight: 800;
-  line-height: 1.35;
-  font-variant-numeric: tabular-nums;
-}
-
-.cam-card.rec .tally { display: inline-flex; }
-
-.tally-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: #FFFFFF;
-}
-
-.tally-time { letter-spacing: 0.02em; }
-
-/* The rack under the picture: camera name on the left, controls on the right. */
-.cam-rack {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.cam-id {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.cam-num {
-  flex: none;
-  padding: 0 4px;
-  background: var(--paper);
-  border: var(--border-thin);
-  border-radius: 5px;
-  color: var(--muted);
-  font-size: 0.56rem;
-  font-weight: 800;
-  line-height: 1.5;
-  letter-spacing: 0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.cam-title {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-  text-transform: lowercase;
-}
-
 .cam-actions {
   display: flex;
   align-items: center;
+  justify-content: space-around;
   gap: 4px;
   flex: 0 0 auto;
+  min-height: calc(var(--key) + 8px);
+  padding: 3px 5px;
+  background: var(--surface);
+  border-top: var(--border);
 }
 
 /* --------------------------------------------------------------- buttons */
@@ -485,11 +481,17 @@ h1 {
 [disabled] { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .cam-actions .btn-icon {
+  width: var(--key);
+  height: var(--key);
+  padding: 0;
   background: var(--paper);
   color: var(--ink);
   border: var(--border-thin);
+  border-radius: 6px;
   box-shadow: 2px 2px 0 var(--shade);
 }
+
+.cam-actions .btn-icon svg { width: 18px; height: 18px; }
 
 .cam-actions .btn-icon.active { background: var(--lavender); color: var(--on-bright); }
 
@@ -505,17 +507,20 @@ h1 {
 
 /* ---------------------------------------------------------------- footer */
 
+/* Status ticker: a flat strip under the monitor wall. The heavy top rule
+   closes the console; the LED and keys stay on the same plane. */
 .status {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
-  margin-top: 9px;
-  padding: 5px 7px 5px 10px;
+  margin-top: 6px;
+  padding: 5px 6px 5px 8px;
   background: var(--surface);
-  border: var(--border);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-1);
+  border: 0;
+  border-top: var(--console-rule);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .status-led {
@@ -535,9 +540,9 @@ h1 {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .rec-badge {
@@ -566,12 +571,12 @@ h1 {
 .rec-badge-label { font-weight: 600; opacity: 0.85; }
 
 .status .btn-icon {
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
   background: var(--paper);
   border: var(--border-thin);
-  border-radius: 7px;
-  box-shadow: none;
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 var(--shade);
 }
 
 .status .btn-icon svg { width: 15px; height: 15px; }
@@ -609,12 +614,14 @@ body.fullscreen-mode .page {
 
 .pip-mode .nav,
 .pip-mode .status,
-.pip-mode .cam-rack,
+.pip-mode .cam-top,
+.pip-mode .cam-actions,
 .pip-mode .stream-status,
 .pip-mode .tally,
 body.fullscreen-mode .nav,
 body.fullscreen-mode .status,
-body.fullscreen-mode .cam-rack,
+body.fullscreen-mode .cam-top,
+body.fullscreen-mode .cam-actions,
 body.fullscreen-mode .stream-status { display: none !important; }
 
 .pip-mode .grid,
@@ -824,9 +831,22 @@ body.fullscreen-mode .cam-card.mini {
   overflow: hidden;
 }
 
-/* The fullscreen rules above hide the stream status and the rack, so the
-   mini monitor is just its picture: no badge, no label, no clock. */
+/* The fullscreen rules above hide the top strip, key strip and stream
+   status, so the mini monitor is just its picture. */
 .cam-card.mini .tally { display: none; }
+
+body.fullscreen-mode .cam-card.mini .cam-top,
+body.fullscreen-mode .cam-card.mini .cam-actions { display: none !important; }
+
+body.fullscreen-mode .cam-card.mini .video-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+}
 
 .indicator {
   position: fixed;
@@ -960,99 +980,46 @@ body.fullscreen-mode .cam-card.mini {
 
 /* --------------------------------------------------------- tight layouts */
 
-/* One-row desk on phones: mark, live count, quality, master record. The brand
-   line and the button word disappear before the controls start wrapping. */
+/* One-row desk on phones: mark, live count, quality, backlight. */
 @media (max-width: 559px) {
-  .nav { flex-wrap: nowrap; gap: 8px; padding: 6px 8px; }
-  .brand { flex: 1 1 auto; }
-  .brand-mark { width: 32px; height: 32px; border-radius: 9px; }
-  .brand-copy p { display: none; }
-  h1 { font-size: 0.94rem; }
-  .desk-actions { gap: 6px; }
-  .seg-label { display: none; }
+  .nav { padding: 5px 6px; gap: 6px; }
+  .brand { gap: 6px; }
+  .brand-mark { width: 30px; height: 30px; }
+  h1 { font-size: 1rem; }
+  .desk-actions { gap: 5px; }
+  .seg-btn { min-width: 30px; padding: 5px 6px; font-size: 0.62rem; }
+  .desk-key { width: 30px; height: 30px; }
 }
 
 @media (max-width: 359px) {
   .live-tag { display: none; }
-  .seg-btn { min-width: 30px; padding: 5px 5px; }
+  .seg-btn { min-width: 28px; padding: 5px 4px; }
 }
 
-/* Phone-sized cards and landscape have too little room for chrome stacked
-   below the video, so the name chips over the picture and the four keys get
-   a shelf along the card's bottom edge instead of a floating pill.
+/* Phone-sized cards keep their rack strips; only the chrome gets thinner.
    Kept last so it also wins over the focus-mode rules above. */
 @media (max-width: 520px), (max-height: 520px) {
-  .page { padding: 6px; }
-  .stage { margin-top: 7px; }
-  .status { margin-top: 7px; padding: 4px 6px 4px 9px; }
-  .brand-copy p { display: none; }
+  .page { padding: 5px; }
+  .stage { margin-top: 5px; }
+  .status { margin-top: 5px; padding: 4px 5px 4px 7px; }
 
-  .cam-card { --key: 36px; padding: 0; gap: 0; }
-  .cam-card:first-child { --key: 40px; }
-  .video-wrap {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--key) + 10px);
-    border: 0;
-    border-radius: 0;
-  }
-
-  /* The rack dissolves: its children position against the card itself. */
-  .cam-rack { display: contents; }
-
-  .cam-id {
-    position: absolute;
-    left: 6px;
-    top: 6px;
-    z-index: 3;
-    max-width: 60%;
-    padding: 1px 6px;
-    background: var(--surface);
-    border: var(--border-thin);
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--shade);
-  }
-
-  .cam-num { display: none; }
-  .cam-title { font-size: 0.68rem; }
+  .cam-card { --key: 30px; }
+  .cam-card:first-child { --key: 34px; }
+  .cam-top { min-height: 22px; padding: 1px 5px; gap: 4px; }
+  .cam-num { min-width: 20px; font-size: 0.54rem; }
+  .cam-title { font-size: 0.66rem; }
   .live-badge { display: none; }
-
-  .tally { top: 6px; left: auto; right: 6px; }
+  .tally { padding: 1px 5px; font-size: 0.54rem; }
   .tally-label { display: none; }
 
-  .cam-actions {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 3;
-    height: calc(var(--key) + 10px);
-    padding: 4px 6px;
-    gap: 0;
-    flex-wrap: nowrap;
-    justify-content: space-evenly;
-    background: var(--surface);
-    border: 0;
-    border-top: var(--border);
-    border-radius: 0;
-    box-shadow: none;
-  }
-
+  .cam-actions { min-height: calc(var(--key) + 6px); padding: 2px 4px; gap: 0; }
   .cam-actions .btn-icon {
-    width: var(--key);
-    height: var(--key);
     border: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     background: transparent;
     box-shadow: none;
   }
-
-  .cam-actions .btn-icon svg {
-    width: calc(var(--key) * 0.52);
-    height: calc(var(--key) * 0.52);
-  }
+  .cam-actions .btn-icon svg { width: 16px; height: 16px; }
   .cam-actions .btn-icon.active { background: var(--lavender); color: var(--on-bright); }
   .cam-actions .record-btn.recording { background: var(--rec); }
 
