@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.join(HERE, "..", "assets", "app.js");
+const HTML = path.join(HERE, "..", "assets", "index.html");
+const CSS = path.join(HERE, "..", "assets", "styles.css");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
 
@@ -208,6 +210,7 @@ function loadPage() {
   parseSourceText,
   openSourceSheet,
   applySource,
+  setMini,
   focusStream,
   toggleRecord,
   applyGestureValue,
@@ -450,6 +453,34 @@ function sourceApplyStoresTheChannel() {
   check("the sheet closes after a store", true, page.fields.sourceSheet.classList.contains("hidden"));
 }
 
+function miniDockReservesItsLane() {
+  const page = loadPage();
+  page.state.fullscreen = true;
+  page.setMini(1);
+  check("the preview dock opens", true,
+    page.window.document.body.classList.contains("mini-on"));
+  page.setMini(-1);
+  check("the preview dock closes", false,
+    page.window.document.body.classList.contains("mini-on"));
+}
+
+function fullscreenConsoleKeepsThePictureClear() {
+  const html = fs.readFileSync(HTML, "utf8");
+  const css = fs.readFileSync(CSS, "utf8");
+  check("the rail carries five keys", 5, (html.match(/<button[^>]*class="fs-key/g) || []).length);
+  check("the rail sits at the top", true, /\.fs-controls \{[^}]*top: 0;/s.test(css));
+  check("the dock sits at the bottom", true, /\.fs-dock \{[^}]*bottom: 0;/s.test(css));
+  check("the picture keeps its own stage", true,
+    css.includes("top: var(--fs-rail, 0px)")
+    && css.includes("bottom: var(--fs-dock, 0px)"));
+  check("the mini tile is docked, not floating over the picture", true,
+    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*bottom:/s.test(css));
+  check("the dock only appears with a mini feed", true,
+    css.includes("body.fullscreen-mode.mini-on .fs-dock { display: flex; }"));
+  check("a short landscape screen shrinks the monitor with its dock", true,
+    /@media \(max-height: 320px\) \{[^}]*body\.fullscreen-mode \.cam-card\.mini \{ height: 72px; \}/s.test(css));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -464,6 +495,8 @@ const tests = [
   sourceTextDropsTheFullStop,
   sourceJsonIsRead,
   sourceApplyStoresTheChannel,
+  miniDockReservesItsLane,
+  fullscreenConsoleKeepsThePictureClear,
 ];
 
 for (const test of tests) {

@@ -101,8 +101,11 @@
   <div class="fs-controls" role="group" aria-label="fullscreen controls">
     <div class="fs-deck">
       <div class="fs-head">
-        <span class="fs-num" id="fsFeedNum">01</span>
-        <span class="fs-live" aria-hidden="true"><span class="live-pip"></span></span>
+        <span class="fs-head-label">on air</span>
+        <div class="fs-head-line">
+          <span class="fs-num" id="fsFeedNum">01</span>
+          <span class="fs-live" aria-hidden="true"><span class="live-pip"></span></span>
+        </div>
       </div>
       <div class="fs-keys">
         <button id="fsZoom" class="fs-key" type="button" aria-label="zoom">
@@ -126,6 +129,12 @@
           <span class="fs-label">exit</span>
         </button>
       </div>
+    </div>
+  </div>
+  <div class="fs-dock" aria-hidden="true">
+    <div class="fs-dock-copy">
+      <span class="fs-dock-label">on deck</span>
+      <span class="fs-dock-hint">tap the small screen to swap</span>
     </div>
   </div>
   <script src="app.js"></script>
