@@ -66,9 +66,36 @@
         <span class="rec-badge-label">rec</span>
         <span id="recTime">0:00</span>
       </span>
+      <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="edit stream source"></button>
       <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
       <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
     </footer>
+  </div>
+  <div class="sheet hidden" id="sourceSheet" role="dialog" aria-modal="true" aria-label="stream source">
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <h2>sources</h2>
+        <button id="sourceClose" class="btn btn-ghost btn-icon" type="button" aria-label="close sources"></button>
+      </div>
+      <div class="sheet-chips" id="sourceChips" role="group" aria-label="channel"></div>
+      <label class="sheet-field">
+        <span>manifest (.mpd)</span>
+        <input id="sourceUrl" class="sheet-input" type="text" inputmode="url" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="sheet-field">
+        <span>kid</span>
+        <input id="sourceKid" class="sheet-input" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="sheet-field">
+        <span>key</span>
+        <input id="sourceKey" class="sheet-input" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="sheet-note" id="sourceNote">paste a manifest link or a kid:key line into any box - it fills the rest</p>
+      <div class="sheet-actions">
+        <button id="sourceDetect" class="btn btn-ghost" type="button">detect kid</button>
+        <button id="sourceApply" class="btn" type="button">apply</button>
+      </div>
+    </div>
   </div>
   <div id="indicator" class="indicator hidden"></div>
   <div class="fs-controls" role="group" aria-label="fullscreen controls">

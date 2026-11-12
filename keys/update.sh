@@ -1,47 +1,51 @@
 #!/usr/bin/env bash
-# Refresh the checked-in fallback snapshot from pbb-live.vercel.app.
-# The runtime app fetches the same API directly; this rewrites both places the
-# last known keys live, so the Rust fallback can not drift from the snapshot.
+# Refresh the checked-in fallback snapshot from the live channel list.
+# The runtime app fetches the same file directly; this rewrites both places
+# the last known keys live, so the Rust fallback can not drift from the
+# snapshot.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-python3 - "$HERE/keys.json" "$HERE/../src/lib.rs" <<'PY'
+# One place holds the list URL: the app itself.
+LIST_URL="$(grep -A1 'CHANNEL_LIST_URL =' "$HERE/../android/java/com/pbb/live/MainActivity.java" \
+  | grep -o 'https[^"]*' | head -1)"
+if [ -z "$LIST_URL" ]; then
+  echo "no channel list URL in MainActivity.java" >&2
+  exit 1
+fi
+
+python3 - "$LIST_URL" "$HERE/keys.json" "$HERE/../src/lib.rs" <<'PY'
 import json
 import re
 import sys
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
-base = "https://pbb-live.vercel.app/api/stream"
-channels = [
-    ("PBB All Access", "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22"),
-    ("PBB Dining Area", "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44"),
-    ("PBB External Den", "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"),
-]
+url = sys.argv[1]
+request = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "PBB/1.0"})
+with urllib.request.urlopen(request, timeout=20) as response:
+    data = json.load(response)
+
+listed = data.get("streams")
+if not isinstance(listed, list) or len(listed) != 3:
+    raise RuntimeError("the channel list needs 3 channels")
 streams = []
-for name, channel in channels:
-    url = base + "?" + urllib.parse.urlencode({"channel": channel})
-    request = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "PBB/1.0"})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        data = json.load(response)
-    if not data.get("requiresDrm") or data.get("drmMode") != "clearkey":
-        raise RuntimeError("unexpected DRM mode for " + name)
-    pair = data.get("ClearKey") or {}
-    kid = pair.get("k1", "")
-    key = pair.get("k2", "")
-    mpd = data.get("directManifestUri", "")
+for entry in listed:
+    name = entry.get("name") or "Channel"
+    mpd = entry.get("url", "")
+    kid = entry.get("kid", "").replace("-", "")
+    key = entry.get("key", "").replace("-", "")
     if not re.fullmatch(r"[0-9a-fA-F]{32}", kid) or not re.fullmatch(r"[0-9a-fA-F]{32}", key):
         raise RuntimeError("bad KID/key pair for " + name)
     if not mpd.startswith("https://"):
-        raise RuntimeError("bad direct manifest URL for " + name)
+        raise RuntimeError("bad manifest URL for " + name)
     streams.append({"name": name, "url": mpd, "kid": kid, "key": key})
 
-out = Path(sys.argv[1])
+out = Path(sys.argv[2])
 out.write_text(json.dumps({"streams": streams}, indent=2) + "\n", encoding="utf-8")
 print(f"wrote {out} ({len(streams)} streams)")
 
-rust = Path(sys.argv[2])
+rust = Path(sys.argv[3])
 block = 'const STREAM_CONFIG_JSON: &str = r#"' + json.dumps(
     {"app": "PBB", "streams": streams}, indent=2) + '"#;'
 source = rust.read_text(encoding="utf-8")
@@ -56,5 +60,4 @@ if patched == source and block not in source:
     raise RuntimeError("STREAM_CONFIG_JSON block not found in " + str(rust))
 rust.write_text(patched, encoding="utf-8")
 print(f"wrote {rust}")
-PY
 PY

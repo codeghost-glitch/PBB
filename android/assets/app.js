@@ -79,7 +79,7 @@ function uuidKid(kid) {
   return kid.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-$3-$4-$5");
 }
 
-const IDLE_HINT = "tap refresh to reload the stream keys";
+const IDLE_HINT = "tap refresh or open sources for the stream keys";
 
 function defaultStatus() {
   const count = state.recording.size;
@@ -428,6 +428,21 @@ const ICONS = {
     ["path", { d: "M21 12a9 9 0 1 1-3-6.7" }],
     ["path", { d: "M21 4v5h-5" }],
   ],
+  close: [
+    ["path", { d: "M6 6l12 12" }],
+    ["path", { d: "M18 6 6 18" }],
+  ],
+  sliders: [
+    ["path", { d: "M4 7h9" }],
+    ["path", { d: "M18 7h2" }],
+    ["path", { d: "M4 12h3" }],
+    ["path", { d: "M12 12h8" }],
+    ["path", { d: "M4 17h9" }],
+    ["path", { d: "M18 17h2" }],
+    ["circle", { cx: 15, cy: 7, r: 2 }],
+    ["circle", { cx: 9, cy: 12, r: 2 }],
+    ["circle", { cx: 15, cy: 17, r: 2 }],
+  ],
   sun: [
     ["circle", { cx: 12, cy: 12, r: 4.2 }],
     ["path", { d: "M12 1.8v2.4" }],
@@ -654,8 +669,8 @@ async function initPlayer(entry, index) {
     const message = detail.message || detail.code || detail;
     if (Number(detail.code) === 4012) {
       state.keysStale = true;
-      setStreamStatus(entry, "keys rotated - tap refresh", true);
-      setStatusText("keys rotated - tap refresh to reload");
+      setStreamStatus(entry, "keys rotated - open sources", true);
+      setStatusText("keys rotated - open sources to paste the new key");
       return;
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
@@ -1043,7 +1058,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText(state.keysStale ? "keys rotated - tap refresh to reload" : "");
+  setStatusText(state.keysStale ? "keys rotated - open sources to paste the new key" : "");
   updateControls();
   return true;
 }
@@ -1208,7 +1223,7 @@ function toggleRecord(index) {
   } else if (state.keysStale) {
     // The keys already rotated, so a recording now would be remuxed with the
     // wrong key and land in Movies/PBB as a file that will not play.
-    setStatusText("keys rotated - tap refresh before recording");
+    setStatusText("keys rotated - open sources before recording");
   } else {
     setStatusText(`starting ${entry.stream.name}`);
     Pbb.startRecording(index, entry.stream.name);
@@ -1361,6 +1376,245 @@ window.onStreamConfig = async (raw) => {
   setStatusText("keys refreshed - reconnecting streams");
 };
 
+// ------------------------------------------------------------------- sources
+
+// The broadcaster rotates the manifest and the clear key every few days. This
+// sheet is the Auto License Tool the web site has, in the app: a link, a
+// kid:key line or a blob of notes goes in, and the boxes it understands come
+// out filled. A new source is a paste, not a new build.
+const sourceSheet = { index: 0 };
+
+const HEX32 = /^[0-9a-f]{32}$/i;
+
+function sourceField(id) {
+  return document.getElementById(id);
+}
+
+function setSourceField(id, value) {
+  const field = sourceField(id);
+  if (field) {
+    field.value = value;
+  }
+}
+
+function setSourceNote(message) {
+  const note = sourceField("sourceNote");
+  if (note) {
+    note.textContent = message;
+  }
+}
+
+function normalizeHex(value) {
+  return String(value || "").replace(/-/g, "").trim().toLowerCase();
+}
+
+// Pulls a manifest link and a kid:key pair out of whatever was pasted: a
+// forum line, a note, a json blob.
+function parseSourceText(text) {
+  const blob = String(text || "");
+  const found = { url: "", kid: "", key: "" };
+  const urls = blob.match(/https?:\/\/[^\s"'<>\\]+/gi) || [];
+  const manifest = urls.find((u) => /\.mpd(\?|$)/i.test(u))
+    || urls.find((u) => !/licen|widevine|drm/i.test(u));
+  if (manifest) {
+    // A forum line ends the link with a comma or a full stop.
+    found.url = manifest.replace(/[),.;:]+$/, "");
+  }
+  const withoutUrls = blob.replace(/https?:\/\/[^\s"'<>\\]+/gi, " ");
+  const pair = withoutUrls.match(/([0-9a-f-]{32,36})\s*[:=]\s*([0-9a-f-]{32,36})/i);
+  if (pair) {
+    found.kid = normalizeHex(pair[1]);
+    found.key = normalizeHex(pair[2]);
+    return found;
+  }
+  try {
+    const json = JSON.parse(blob);
+    const keys = Array.isArray(json) ? json : (json && json.keys);
+    if (Array.isArray(keys) && keys.length) {
+      const entry = keys[0] || {};
+      found.kid = normalizeHex(entry.kid || "");
+      found.key = normalizeHex(entry.k || entry.key || "");
+    }
+  } catch {
+    // not json, the loose scan below still gets a look
+  }
+  const loose = (withoutUrls.match(/[0-9a-f-]{32,36}/gi) || [])
+    .map(normalizeHex)
+    .filter((value) => HEX32.test(value));
+  if (!found.kid && loose.length >= 2) {
+    found.kid = loose[0];
+    found.key = loose[1];
+  }
+  return found;
+}
+
+function sourceStreams() {
+  return players.map((entry) => entry.stream).filter(Boolean);
+}
+
+function selectSourceChannel(index) {
+  const stream = sourceStreams()[index];
+  if (!stream) {
+    return;
+  }
+  sourceSheet.index = index;
+  const chips = document.querySelectorAll("#sourceChips .chip");
+  for (const chip of chips) {
+    chip.classList.toggle("active", Number(chip.dataset.index) === index);
+  }
+  setSourceField("sourceUrl", stream.url || "");
+  setSourceField("sourceKid", stream.kid || "");
+  setSourceField("sourceKey", stream.key || "");
+  setSourceNote("paste a manifest link or a kid:key line into any box - it fills the rest");
+}
+
+function openSourceSheet(index) {
+  const sheet = sourceField("sourceSheet");
+  if (!sheet) {
+    return;
+  }
+  const list = sourceStreams();
+  if (!list.length) {
+    setTransientStatus("no channels yet");
+    return;
+  }
+  const row = sourceField("sourceChips");
+  if (row) {
+    row.replaceChildren();
+    list.forEach((stream, i) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.dataset.index = String(i);
+      chip.textContent = (stream.name || "channel " + (i + 1)).toLowerCase();
+      chip.addEventListener("click", () => selectSourceChannel(i));
+      row.appendChild(chip);
+    });
+  }
+  selectSourceChannel(Math.max(0, Math.min(list.length - 1, index)));
+  sheet.classList.remove("hidden");
+}
+
+function closeSourceSheet() {
+  const sheet = sourceField("sourceSheet");
+  if (sheet) {
+    sheet.classList.add("hidden");
+  }
+}
+
+// A paste into any box fills the boxes it understands: a link goes to the
+// manifest, a kid:key pair goes to the kid and the key.
+function onSourcePaste(event) {
+  const target = event.target;
+  const text = event.clipboardData ? event.clipboardData.getData("text") : "";
+  if (!text) {
+    return;
+  }
+  const found = parseSourceText(text);
+  const hex = normalizeHex(text.trim());
+  if (target && target.id === "sourceKey" && HEX32.test(hex)) {
+    event.preventDefault();
+    setSourceField("sourceKey", hex);
+    return;
+  }
+  if (target && target.id === "sourceKid" && HEX32.test(hex)) {
+    event.preventDefault();
+    setSourceField("sourceKid", hex);
+    return;
+  }
+  if (!found.url && !found.kid && !found.key) {
+    return;
+  }
+  event.preventDefault();
+  if (found.url) {
+    setSourceField("sourceUrl", found.url);
+  } else if (target && target.id === "sourceUrl") {
+    // Nothing usable in the paste, so the link box keeps no rubbish either.
+    setSourceField("sourceUrl", "");
+  }
+  if (found.kid) {
+    setSourceField("sourceKid", found.kid);
+  }
+  if (found.key) {
+    setSourceField("sourceKey", found.key);
+  }
+  setSourceNote("read the paste - check the boxes and apply");
+}
+
+// The manifest carries the kid, so a link alone is enough to fill that box.
+async function detectSourceKid() {
+  const field = sourceField("sourceUrl");
+  const url = (field && field.value.trim()) || "";
+  if (!url) {
+    setSourceNote("no manifest link to inspect");
+    return;
+  }
+  setSourceNote("reading the manifest...");
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("http " + response.status);
+    }
+    const xml = await response.text();
+    const hit = xml.match(/default_KID="([0-9a-fA-F-]{32,36})"/);
+    const kid = hit ? normalizeHex(hit[1]) : "";
+    if (!HEX32.test(kid)) {
+      setSourceNote("no kid in that manifest");
+      return;
+    }
+    setSourceField("sourceKid", kid);
+    setSourceNote("kid detected - add the key and apply");
+  } catch (error) {
+    setSourceNote("could not read the manifest: " + error.message);
+  }
+}
+
+function applySource() {
+  const urlField = sourceField("sourceUrl");
+  const kidField = sourceField("sourceKid");
+  const keyField = sourceField("sourceKey");
+  const url = (urlField && urlField.value.trim()) || "";
+  const kid = normalizeHex((kidField && kidField.value) || "");
+  const key = normalizeHex((keyField && keyField.value) || "");
+  if (!window.Pbb || typeof Pbb.setSource !== "function") {
+    setSourceNote("android bridge missing");
+    return;
+  }
+  const error = Pbb.setSource(sourceSheet.index, url, kid, key);
+  if (error) {
+    setSourceNote(error);
+    return;
+  }
+  closeSourceSheet();
+  setTransientStatus("source updated - reconnecting");
+}
+
+function wireSourceSheet() {
+  const sheet = sourceField("sourceSheet");
+  if (!sheet) {
+    return;
+  }
+  sheet.addEventListener("paste", onSourcePaste);
+  sheet.addEventListener("click", (event) => {
+    if (event.target === sheet) {
+      closeSourceSheet();
+    }
+  });
+  const close = sourceField("sourceClose");
+  if (close) {
+    setIcon(close, "close", "close sources");
+    close.addEventListener("click", closeSourceSheet);
+  }
+  const detect = sourceField("sourceDetect");
+  if (detect) {
+    detect.addEventListener("click", detectSourceKid);
+  }
+  const apply = sourceField("sourceApply");
+  if (apply) {
+    apply.addEventListener("click", applySource);
+  }
+}
+
 function boot() {
   grid = document.getElementById("grid");
   backBtn = document.getElementById("backBtn");
@@ -1422,6 +1676,12 @@ function boot() {
     setIcon(refreshBtn, "refresh", "refresh stream keys");
     refreshBtn.addEventListener("click", refreshKeysFromUi);
   }
+  const sourceBtn = document.getElementById("sourceBtn");
+  if (sourceBtn) {
+    setIcon(sourceBtn, "sliders", "edit stream source");
+    sourceBtn.addEventListener("click", () => openSourceSheet(sourceSheet.index));
+  }
+  wireSourceSheet();
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
   const fsLock = document.getElementById("fsLock");

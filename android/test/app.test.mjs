@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.join(HERE, "..", "assets", "app.js");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
+const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
 
 let failures = 0;
 
@@ -126,10 +127,29 @@ function loadPage() {
     setOrientation: (mode) => calls.push(["setOrientation", mode]),
     setTheme: (name) => calls.push(["setTheme", name]),
     enterPip: () => calls.push(["enterPip"]),
+    setSource: (index, url, kid, key) => {
+      calls.push(["setSource", index, url, kid, key]);
+      return "";
+    },
   };
 
   const statusText = makeElement("span");
   const backBtn = makeElement("button");
+  const sourceUrl = makeElement("input");
+  const sourceKid = makeElement("input");
+  const sourceKey = makeElement("input");
+  const sourceNote = makeElement("p");
+  const sourceSheet = makeElement("div");
+  const sourceChips = makeElement("div");
+  const fields = {
+    statusText,
+    sourceUrl,
+    sourceKid,
+    sourceKey,
+    sourceNote,
+    sourceSheet,
+    sourceChips,
+  };
   const windowStub = {
     Pbb,
     matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
@@ -144,7 +164,7 @@ function loadPage() {
     removeEventListener() {},
     createElement: (tag) => makeElement(tag),
     createElementNS: (_ns, tag) => makeElement(tag),
-    getElementById: (id) => (id === "statusText" ? statusText : null),
+    getElementById: (id) => fields[id] || null,
     querySelector: () => null,
     querySelectorAll: () => [],
   };
@@ -184,6 +204,10 @@ function loadPage() {
   state,
   players,
   gesture,
+  sourceSheet,
+  parseSourceText,
+  openSourceSheet,
+  applySource,
   focusStream,
   toggleRecord,
   applyGestureValue,
@@ -214,6 +238,7 @@ function loadPage() {
   page.window = windowStub;
   page.statusText = statusText;
   page.calls = calls;
+  page.fields = fields;
   return page;
 }
 
@@ -344,6 +369,83 @@ function bridgeContract() {
   }
 }
 
+function channelListContract() {
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  const url = /CHANNEL_LIST_URL\s*=\s*"([^"]+)"/.exec(java);
+  check("the app has a channel list URL", true, Boolean(url));
+  if (!url) {
+    return;
+  }
+  check("the channel list URL is https", true, url[1].startsWith("https://"));
+
+  const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
+  const streams = snapshot.streams;
+  check("the snapshot holds a streams array", true, Array.isArray(streams));
+  if (!Array.isArray(streams)) {
+    return;
+  }
+  const count = /CHANNEL_COUNT\s*=\s*(\d+)/.exec(java);
+  check("the app and the snapshot agree on the channel count", streams.length, Number(count[1]));
+  for (const stream of streams) {
+    check(`manifest URL of ${stream.name} is https`, true, stream.url.startsWith("https://"));
+    check(`KID of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.kid));
+    check(`key of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.key));
+  }
+}
+
+function sourceTextIsRead() {
+  const page = loadPage();
+  const found = page.parseSourceText(
+    "PBB ALL ACCESS\nhttps://absp-live.akamaized.net/dash/live/2099522/x/manifest.mpd\n"
+    + "8150b74d-1632-4bb4-b2ff-62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5");
+  check("the manifest link is read",
+    "https://absp-live.akamaized.net/dash/live/2099522/x/manifest.mpd", found.url);
+  check("the kid is read without dashes", "8150b74d16324bb4b2ff62e3e202fc7a", found.kid);
+  check("the key is read", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", found.key);
+}
+
+function sourceTextPrefersTheManifest() {
+  const page = loadPage();
+  const found = page.parseSourceText(
+    "license https://license.example.invalid/widevine\nstream https://cdn.example.invalid/manifest.mpd?x=1");
+  check("the manifest wins over the license link",
+    "https://cdn.example.invalid/manifest.mpd?x=1", found.url);
+}
+
+function sourceTextDropsTheFullStop() {
+  const page = loadPage();
+  const found = page.parseSourceText(
+    "see https://cdn.example.invalid/manifest.mpd, then the key");
+  check("the link keeps no full stop",
+    "https://cdn.example.invalid/manifest.mpd", found.url);
+}
+
+function sourceJsonIsRead() {
+  const page = loadPage();
+  const found = page.parseSourceText(
+    '{"keys":[{"kid":"8150b74d16324bb4b2ff62e3e202fc7a","k":"0c5ed4f9db9d4ee61bbc91b3a51ef8b5"}]}');
+  check("the kid is read from json", "8150b74d16324bb4b2ff62e3e202fc7a", found.kid);
+  check("the key is read from json", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", found.key);
+}
+
+function sourceApplyStoresTheChannel() {
+  const page = loadPage();
+  page.fields.sourceUrl.value = "https://cdn.example.invalid/manifest.mpd";
+  page.fields.sourceKid.value = "8150b74d-1632-4bb4-b2ff-62e3e202fc7a";
+  page.fields.sourceKey.value = "0c5ed4f9db9d4ee61bbc91b3a51ef8b5";
+  page.sourceSheet.index = 1;
+  page.applySource();
+  const call = page.calls.find((entry) => entry[0] === "setSource");
+  check("the source is stored", true, Boolean(call));
+  if (call) {
+    check("the channel is stored", 1, call[1]);
+    check("the manifest is stored", "https://cdn.example.invalid/manifest.mpd", call[2]);
+    check("the kid is stored without dashes", "8150b74d16324bb4b2ff62e3e202fc7a", call[3]);
+    check("the key is stored", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", call[4]);
+  }
+  check("the sheet closes after a store", true, page.fields.sourceSheet.classList.contains("hidden"));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -352,6 +454,12 @@ const tests = [
   recordingStartsWhenTheKeysAreGood,
   sliderLevelIsSavedOnce,
   bridgeContract,
+  channelListContract,
+  sourceTextIsRead,
+  sourceTextPrefersTheManifest,
+  sourceTextDropsTheFullStop,
+  sourceJsonIsRead,
+  sourceApplyStoresTheChannel,
 ];
 
 for (const test of tests) {

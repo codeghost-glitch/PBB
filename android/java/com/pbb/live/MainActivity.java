@@ -39,13 +39,14 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    private static final String STREAM_API =
-        "https://pbb-live.vercel.app/api/stream?channel=";
-    private static final String[][] CHANNELS = {
-        {"PBB All Access", "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22"},
-        {"PBB Dining Area", "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44"},
-        {"PBB External Den", "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"}
-    };
+    // The live channel list: one JSON file with the name, manifest URL and
+    // clear key of every channel. It sits outside the app, so a rotated feed
+    // is a file edit and not a new build.
+    private static final String CHANNEL_LIST_URL =
+        "https://pbbliveaccess.lovable.app/channels.json";
+    // The gallery is one large feed over two small ones, so the list has to
+    // hold the same number of channels as the built-in config.
+    private static final int CHANNEL_COUNT = 3;
     private static final String KEYS_CACHE = "streams.json";
 
     static {
@@ -207,8 +208,13 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 final String json = fetchKeys();
-                if (json == null || validKeys(json) == null) {
-                    reportKeys("could not reach pbb-live.vercel.app - tap refresh to retry");
+                if (json == null) {
+                    reportKeys("could not read the channel list - tap refresh to retry");
+                    return;
+                }
+                if (validKeys(json) == null) {
+                    reportKeys("channel list rejected - it needs " + CHANNEL_COUNT
+                        + " channels with url, kid and key");
                     return;
                 }
                 streamConfigJson = json;
@@ -245,6 +251,50 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * Stores a new source for one channel: the manifest link, the kid and the
+     * key. The config goes to filesDir/streams.json, so the source survives a
+     * restart, and it is pushed to the page like a fetched config, so the
+     * players pick it up without a restart.
+     */
+    private String setSource(int index, String url, String kid, String key) {
+        String cleanUrl = url == null ? "" : url.trim();
+        String cleanKid = kid == null ? "" : kid.replace("-", "").toLowerCase();
+        String cleanKey = key == null ? "" : key.replace("-", "").toLowerCase();
+        if (!cleanUrl.startsWith("https://")) {
+            return "the manifest link has to be https";
+        }
+        if (!cleanKid.matches("[0-9a-f]{32}") || !cleanKey.matches("[0-9a-f]{32}")) {
+            return "the kid and the key are 32 hex characters";
+        }
+        String json;
+        try {
+            JSONObject config = new JSONObject(streamConfigJson);
+            JSONArray streams = config.getJSONArray("streams");
+            if (index < 0 || index >= streams.length()) {
+                return "no such channel";
+            }
+            JSONObject stream = streams.getJSONObject(index);
+            stream.put("url", cleanUrl);
+            stream.put("kid", cleanKid);
+            stream.put("key", cleanKey);
+            json = config.toString();
+        } catch (Exception e) {
+            return "could not store the source";
+        }
+        streamConfigJson = json;
+        writeKeysCache(json);
+        final String quoted = JSONObject.quote(json);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                webView.evaluateJavascript(
+                    "window.onStreamConfig && window.onStreamConfig(" + quoted + ")", null);
+            }
+        });
+        return "";
+    }
+
     private void reportKeys(final String message) {
         runOnUiThread(new Runnable() {
             @Override
@@ -255,36 +305,33 @@ public class MainActivity extends Activity {
         });
     }
 
+    /**
+     * Reads the channel list: one JSON file with the same shape as the
+     * built-in config, a "streams" array of name, url, kid and key. The KID
+     * may be written with or without dashes.
+     */
     private static String fetchKeys() {
-        JSONArray streams = new JSONArray();
-        for (String[] channel : CHANNELS) {
-            String raw;
-            try {
-                raw = Http.getText(STREAM_API + channel[1], 5000, 8000);
-            } catch (Exception e) {
-                return null;
-            }
-            if (raw == null) {
-                return null;
-            }
-            try {
-                JSONObject response = new JSONObject(raw);
-                if (!response.getBoolean("requiresDrm")
-                        || !"clearkey".equals(response.getString("drmMode"))) {
-                    return null;
-                }
-                JSONObject clearKey = response.getJSONObject("ClearKey");
-                JSONObject stream = new JSONObject();
-                stream.put("name", channel[0]);
-                stream.put("url", response.getString("directManifestUri"));
-                stream.put("kid", clearKey.getString("k1"));
-                stream.put("key", clearKey.getString("k2"));
-                streams.put(stream);
-            } catch (Exception e) {
-                return null;
-            }
+        String raw;
+        try {
+            raw = Http.getText(CHANNEL_LIST_URL, 5000, 8000);
+        } catch (Exception e) {
+            return null;
+        }
+        if (raw == null) {
+            return null;
         }
         try {
+            JSONArray listed = new JSONObject(raw).getJSONArray("streams");
+            JSONArray streams = new JSONArray();
+            for (int i = 0; i < listed.length(); i++) {
+                JSONObject entry = listed.getJSONObject(i);
+                JSONObject stream = new JSONObject();
+                stream.put("name", entry.optString("name", "Channel " + (i + 1)));
+                stream.put("url", entry.getString("url"));
+                stream.put("kid", entry.getString("kid").replace("-", ""));
+                stream.put("key", entry.getString("key").replace("-", ""));
+                streams.put(stream);
+            }
             return new JSONObject().put("streams", streams).toString();
         } catch (Exception e) {
             return null;
@@ -294,7 +341,7 @@ public class MainActivity extends Activity {
     private static JSONArray validKeys(String json) {
         try {
             JSONArray streams = new JSONObject(json).getJSONArray("streams");
-            if (streams.length() != CHANNELS.length) {
+            if (streams.length() != CHANNEL_COUNT) {
                 return null;
             }
             for (int i = 0; i < streams.length(); i++) {
@@ -774,6 +821,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void refreshKeys() {
             MainActivity.this.refreshKeys();
+        }
+
+        /** Returns an empty string when the source was stored. */
+        @JavascriptInterface
+        public String setSource(int index, String url, String kid, String key) {
+            return MainActivity.this.setSource(index, url, kid, key);
         }
 
         @JavascriptInterface
