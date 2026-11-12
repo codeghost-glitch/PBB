@@ -817,6 +817,17 @@ body.fullscreen-mode.controls-visible .fs-controls {
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
 
+/* In fullscreen the recording clock takes the top left corner: the keypad
+   owns the bottom right and the mini tile the top right. */
+body.fullscreen-mode .tally {
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: max(10px, env(safe-area-inset-left, 0px));
+  right: auto;
+}
+
+/* The full screen has room for the word again. */
+body.fullscreen-mode .tally-label { display: inline; }
+
 body.locked .fs-head,
 body.locked .fs-key:not(.lock-btn) { display: none; }
 body.locked .fs-keys { grid-template-columns: 52px; }
