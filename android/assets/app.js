@@ -1015,7 +1015,6 @@ function focusStream(index, skipQuality) {
       entry.card.classList.remove("mini");
     }
     state.mini = -1;
-    document.body.classList.remove("mini-on");
   }
   // The arriving feed starts unzoomed, so zoom mode and its highlight go with it.
   zoom.mode = false;
@@ -1112,7 +1111,6 @@ function toggleFullscreen(keepFocus) {
     for (const entry of players) {
       entry.card.classList.remove("mini");
     }
-    document.body.classList.remove("mini-on");
     applyAudio();
   }
   document.body.classList.remove("controls-visible");
@@ -1126,8 +1124,8 @@ function toggleFullscreen(keepFocus) {
     Pbb.setImmersive(state.fullscreen);
   }
   if (state.fullscreen && players[state.focused]) {
-    // The rail does not carry the name, so a short chip names the feed as it
-    // opens, and the console takes its lane above the picture.
+    // The keypad does not carry the name, so a short chip names the feed as
+    // it opens, and the keys are up in their corner from the first frame.
     showIndicator(feedLabel(state.focused), 1200);
     showControls();
   }
@@ -1140,14 +1138,13 @@ function toggleFullscreen(keepFocus) {
   }
 }
 
-// A second feed in the preview dock: the card is the same element, only moved
-// and resized by CSS, so its video keeps playing.
+// A second feed in the corner of fullscreen: the card is the same element,
+// only moved and resized by CSS, so its video keeps playing.
 function setMini(index) {
   state.mini = index;
   for (const [i, entry] of players.entries()) {
     entry.card.classList.toggle("mini", i === index);
   }
-  document.body.classList.toggle("mini-on", index >= 0 && state.fullscreen);
   if (index >= 0) {
     players[index].video.play().catch(() => {});
   } else {
