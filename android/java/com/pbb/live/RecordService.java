@@ -105,6 +105,8 @@ public class RecordService extends Service {
         "c02573c6d1ae455e50027119c36d079bf4edf20aab108e1ab849db2daa2d4482";
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
+    private static final Pattern DEFAULT_KID =
+        Pattern.compile("default_KID=\\\"([0-9a-fA-F-]{32,36})\\\"");
 
     /** How long a single segment pull may take before it counts as a miss. */
     private static final long FETCH_TIMEOUT_SECONDS = 45;
@@ -753,6 +755,19 @@ public class RecordService extends Service {
         track.init = t.init;
         track.startNumber = t.startNumber;
         track.seconds = t.timescale > 0 ? (double) t.duration / t.timescale : 0;
+    }
+
+    /**
+     * The kid a manifest carries, as 32 hex characters, or an empty string
+     * when the manifest has none. A manifest with another kid than the
+     * config is a rotated channel.
+     */
+    static String manifestKid(String xml) {
+        Matcher m = DEFAULT_KID.matcher(xml);
+        if (!m.find()) {
+            return "";
+        }
+        return m.group(1).replace("-", "").toLowerCase();
     }
 
     static String segmentUrl(String template, long number) {

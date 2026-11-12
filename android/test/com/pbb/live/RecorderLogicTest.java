@@ -12,6 +12,7 @@ public final class RecorderLogicTest {
     private static int failures = 0;
 
     public static void main(String[] args) {
+        manifestCarriesTheKid();
         segmentUrlPadsTheNumber();
         segmentUrlHandlesBareNumber();
         pickVideoFollowsThePageRules();
@@ -29,6 +30,15 @@ public final class RecorderLogicTest {
             failures++;
             System.err.println(what + ": expected " + expected + ", got " + actual);
         }
+    }
+
+    private static void manifestCarriesTheKid() {
+        check("the kid is read",
+            "8150b74d16324bb4b2ff62e3e202fc7a",
+            RecordService.manifestKid(
+                "<ContentProtection cenc:default_KID=\"8150b74d-1632-4bb4-b2ff-62e3e202fc7a\"/>"));
+        check("a manifest without a kid has none", "",
+            RecordService.manifestKid("<MPD></MPD>"));
     }
 
     private static void segmentUrlPadsTheNumber() {

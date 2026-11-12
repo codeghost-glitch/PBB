@@ -208,13 +208,8 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 final String json = fetchKeys();
-                if (json == null) {
-                    reportKeys("could not read the channel list - tap refresh to retry");
-                    return;
-                }
-                if (validKeys(json) == null) {
-                    reportKeys("channel list rejected - it needs " + CHANNEL_COUNT
-                        + " channels with url, kid and key");
+                if (json == null || validKeys(json) == null) {
+                    reportKeys(rotationReport());
                     return;
                 }
                 streamConfigJson = json;
@@ -303,6 +298,66 @@ public class MainActivity extends Activity {
                     "window.onKeysMessage && window.onKeysMessage(" + JSONObject.quote(message) + ")", null);
             }
         });
+    }
+
+    /**
+     * Reads the kid out of every manifest and compares it with the kid the
+     * app plays with. A manifest that carries another kid is a rotated
+     * channel: the key in the config is old and that tile will not play.
+     */
+    private String rotationReport() {
+        JSONArray streams;
+        try {
+            streams = new JSONObject(streamConfigJson).getJSONArray("streams");
+        } catch (Exception e) {
+            return "cannot read the sources";
+        }
+        StringBuilder rotated = new StringBuilder();
+        int answered = 0;
+        for (int i = 0; i < streams.length(); i++) {
+            JSONObject stream;
+            try {
+                stream = streams.getJSONObject(i);
+            } catch (Exception e) {
+                continue;
+            }
+            String url = stream.optString("url", "");
+            String kid = stream.optString("kid", "").replace("-", "").toLowerCase();
+            if (!url.startsWith("https://") || kid.isEmpty()) {
+                continue;
+            }
+            String found = manifestKid(url);
+            if (found.isEmpty()) {
+                continue;
+            }
+            answered++;
+            if (!found.equals(kid)) {
+                if (rotated.length() > 0) {
+                    rotated.append(", ");
+                }
+                rotated.append(stream.optString("name", "channel " + (i + 1)).toLowerCase());
+            }
+        }
+        if (rotated.length() > 0) {
+            return "keys rotated on " + rotated + " - open sources to paste the new key";
+        }
+        if (answered == 0) {
+            return "could not reach the streams - tap refresh to retry";
+        }
+        return "no published channel list - the sources sheet holds the current feed";
+    }
+
+    private static String manifestKid(String url) {
+        String raw;
+        try {
+            raw = Http.getText(url, 4000, 5000);
+        } catch (Exception e) {
+            return "";
+        }
+        if (raw == null) {
+            return "";
+        }
+        return RecordService.manifestKid(raw);
     }
 
     /**
