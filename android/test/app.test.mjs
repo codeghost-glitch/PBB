@@ -371,12 +371,16 @@ function bridgeContract() {
 
 function channelListContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  const url = /CHANNEL_LIST_URL\s*=\s*"([^"]+)"/.exec(java);
-  check("the app has a channel list URL", true, Boolean(url));
-  if (!url) {
+  const block = /CHANNEL_LIST_URLS\s*=\s*\{([^}]*)\}/.exec(java);
+  check("the app has channel list addresses", true, Boolean(block));
+  if (!block) {
     return;
   }
-  check("the channel list URL is https", true, url[1].startsWith("https://"));
+  const urls = block[1].match(/https?:\/\/[^"]+/g) || [];
+  check("the app has at least one channel list address", true, urls.length > 0);
+  for (const url of urls) {
+    check(`the channel list address ${url.slice(0, 40)} is https`, true, url.startsWith("https://"));
+  }
 
   const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
   const streams = snapshot.streams;

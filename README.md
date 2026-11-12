@@ -128,13 +128,18 @@ Purging the file from the history is optional and does not replace the rotation:
 
 The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; an in-flight recording would also produce garbage files because it uses the same key.
 
-The app reads its three channels from one JSON file on the web: https://pbbliveaccess.lovable.app/channels.json. It is the public/channels.json file of the PBB Live Access Lovable project and holds the same shape as the built-in config:
+The app reads its three channels from one JSON file on the web, with the same shape as the built-in config:
 
 ~~~json
 {"streams":[{"name":"PBB All Access","url":"https://absp-live.akamaized.net/.../manifest.mpd","kid":"<32 hex>","key":"<32 hex>"}]}
 ~~~
 
-MainActivity fetches that one file at startup and on manual refresh and turns it into the app's `{name,url,kid,key}` config. The file lives outside the app, so a rotated feed is an edit of the file and not a new build: change the url, kid and key of a channel and the next refresh picks it up.
+It looks at two places and takes the first one that answers with a valid list:
+
+- https://gist.githubusercontent.com/codeghost-glitch/8ebdedbe5aedff46245b00e5bde6726a/raw/pbb-channels.json - a gist the operator owns and edits from the phone. A gist is unlisted but public, so the keys in it are readable by anyone with the link; they are throwaway keys for a public broadcast and they rotate every few days.
+- https://pbbliveaccess.lovable.app/channels.json - the static file of the PBB Live Access Lovable project, for whoever can publish one there.
+
+MainActivity fetches the list at startup and on manual refresh and turns it into the app's `{name,url,kid,key}` config. The list lives outside the app, so a rotated feed is an edit of that file and not a new build: change the url, kid and key of a channel and the next refresh picks it up.
 
 ### The sources sheet
 

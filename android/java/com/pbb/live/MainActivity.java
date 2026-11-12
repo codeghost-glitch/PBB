@@ -39,11 +39,15 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    // The live channel list: one JSON file with the name, manifest URL and
-    // clear key of every channel. It sits outside the app, so a rotated feed
-    // is a file edit and not a new build.
-    private static final String CHANNEL_LIST_URL =
-        "https://pbbliveaccess.lovable.app/channels.json";
+    // Where the live channel list can be published: one JSON file with the
+    // name, manifest URL and clear key of every channel. It sits outside the
+    // app, so a rotated feed is a file edit and not a new build. The first
+    // address that answers with a valid list wins: a gist the operator
+    // edits from the phone, and the static file of the Lovable project.
+    private static final String[] CHANNEL_LIST_URLS = {
+        "https://gist.githubusercontent.com/codeghost-glitch/8ebdedbe5aedff46245b00e5bde6726a/raw/pbb-channels.json",
+        "https://pbbliveaccess.lovable.app/channels.json"
+    };
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
@@ -207,8 +211,8 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final String json = fetchKeys();
-                if (json == null || validKeys(json) == null) {
+                final String json = publishedConfig();
+                if (json == null) {
                     reportKeys(rotationReport());
                     return;
                 }
@@ -360,15 +364,26 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
+    /** The first published list that answers with a valid one. */
+    private static String publishedConfig() {
+        for (String url : CHANNEL_LIST_URLS) {
+            String candidate = fetchKeys(url);
+            if (candidate != null && validKeys(candidate) != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
     /**
      * Reads the channel list: one JSON file with the same shape as the
      * built-in config, a "streams" array of name, url, kid and key. The KID
      * may be written with or without dashes.
      */
-    private static String fetchKeys() {
+    private static String fetchKeys(String url) {
         String raw;
         try {
-            raw = Http.getText(CHANNEL_LIST_URL, 5000, 8000);
+            raw = Http.getText(url, 5000, 8000);
         } catch (Exception e) {
             return null;
         }

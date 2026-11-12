@@ -7,7 +7,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # One place holds the list URL: the app itself.
-LIST_URL="$(grep -A1 'CHANNEL_LIST_URL =' "$HERE/../android/java/com/pbb/live/MainActivity.java" \
+LIST_URL="$(grep -A3 'CHANNEL_LIST_URLS' "$HERE/../android/java/com/pbb/live/MainActivity.java" \
   | grep -o 'https[^"]*' | head -1)"
 if [ -z "$LIST_URL" ]; then
   echo "no channel list URL in MainActivity.java" >&2
