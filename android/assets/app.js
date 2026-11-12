@@ -40,10 +40,6 @@ let grid;
 let backBtn;
 let statusText;
 let qualityButtons;
-let recAllBtn;
-let recAllGlyph;
-let recAllLabel;
-let recAllCount;
 let recBadge;
 let recCount;
 let recTime;
@@ -798,23 +794,6 @@ function updateControls() {
   }
 
   updateDeckControls();
-
-  if (recAllBtn) {
-    const anyRecording = state.recording.size > 0;
-    recAllBtn.disabled = state.pip || state.stopping.size > 0;
-    recAllBtn.classList.toggle("armed", anyRecording);
-    recAllBtn.setAttribute("aria-pressed", anyRecording ? "true" : "false");
-    recAllBtn.setAttribute("aria-label",
-      anyRecording ? "stop all recordings" : "record all cameras");
-    mountIcon(recAllGlyph, anyRecording ? "stop" : "record");
-    if (recAllLabel) {
-      recAllLabel.textContent = anyRecording ? "stop all" : "record all";
-    }
-    if (recAllCount) {
-      recAllCount.textContent = String(state.recording.size);
-      recAllCount.classList.toggle("hidden", !anyRecording);
-    }
-  }
 }
 
 // The fullscreen deck is its own little state machine: the keys swap glyphs,
@@ -1237,29 +1216,6 @@ function toggleRecord(index) {
   updateControls();
 }
 
-// The master control records every camera, or stops every camera that is still
-// running. A camera already recording is left alone when the batch starts.
-function toggleRecordAll() {
-  if (!window.Pbb) {
-    return;
-  }
-  if (state.recording.size > 0) {
-    for (const index of state.recording) {
-      markStopping(index);
-    }
-    setStatusText("stopping every recording");
-    Pbb.stopRecording(-1);
-  } else if (state.stopping.size === 0) {
-    if (state.keysStale) {
-      setStatusText("keys rotated - tap refresh before recording");
-    } else {
-      setStatusText("starting every camera");
-      Pbb.recordAll();
-    }
-  }
-  updateControls();
-}
-
 // Java is the source of truth: a start is confirmed with the stream index, a
 // stop clears it, and the elapsed time comes back so a rebuilt page can show
 // the running tally instead of starting at zero.
@@ -1410,10 +1366,6 @@ function boot() {
   backBtn = document.getElementById("backBtn");
   statusText = document.getElementById("statusText");
   qualityButtons = Array.from(document.querySelectorAll("[data-quality]"));
-  recAllBtn = document.getElementById("recAll");
-  recAllGlyph = document.querySelector('[data-role="recglyph"]');
-  recAllLabel = document.getElementById("recAllLabel");
-  recAllCount = document.getElementById("recAllCount");
   recBadge = document.getElementById("recBadge");
   recCount = document.getElementById("recCount");
   recTime = document.getElementById("recTime");
@@ -1469,9 +1421,6 @@ function boot() {
   if (refreshBtn) {
     setIcon(refreshBtn, "refresh", "refresh stream keys");
     refreshBtn.addEventListener("click", refreshKeysFromUi);
-  }
-  if (recAllBtn) {
-    recAllBtn.addEventListener("click", toggleRecordAll);
   }
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");

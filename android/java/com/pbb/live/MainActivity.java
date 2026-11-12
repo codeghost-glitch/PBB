@@ -880,29 +880,6 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void recordAll() {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        JSONArray streams = new JSONObject(streamConfigJson).getJSONArray("streams");
-                        int count = streams.length();
-                        int[] indices = new int[count];
-                        String[] labels = new String[count];
-                        for (int i = 0; i < count; i++) {
-                            indices[i] = i;
-                            labels[i] = streams.getJSONObject(i).optString("name", "stream " + (i + 1));
-                        }
-                        requestRecording(indices, labels);
-                    } catch (Exception e) {
-                        notifyRecordingState(false, -1, RecordService.activeCount(), 0,
-                            RecordService.KIND_ERROR, "cannot start recording: " + e.getMessage());
-                    }
-                }
-            });
-        }
-
-        @JavascriptInterface
         public void stopRecording(final int index) {
             runOnUiThread(new Runnable() {
                 @Override
