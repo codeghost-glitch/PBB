@@ -120,7 +120,6 @@ function loadPage() {
     setBrightness: (value, persist) => calls.push(["setBrightness", value, persist]),
     startRecording: (index, label) => calls.push(["startRecording", index, label]),
     stopRecording: (index) => calls.push(["stopRecording", index]),
-    recordAll: () => calls.push(["recordAll"]),
     setFocusedStream: (index) => calls.push(["setFocusedStream", index]),
     clearFocusedStream: () => calls.push(["clearFocusedStream"]),
     setImmersive: (on) => calls.push(["setImmersive", on]),
@@ -187,7 +186,6 @@ function loadPage() {
   gesture,
   focusStream,
   toggleRecord,
-  toggleRecordAll,
   applyGestureValue,
   onTouchEnd,
   setRefs(refs) {
@@ -196,10 +194,6 @@ function loadPage() {
     statusText = refs.statusText;
     indicator = null;
     qualityButtons = [];
-    recAllBtn = null;
-    recAllGlyph = null;
-    recAllLabel = null;
-    recAllCount = null;
     recBadge = null;
     recCount = null;
     recTime = null;
@@ -270,14 +264,6 @@ function recordingStartsWhenTheKeysAreGood() {
   const started = page.calls.filter((c) => c[0] === "startRecording");
   check("one recording starts", 1, started.length);
   check("the right camera", 0, started.length ? started[0][1] : -1);
-}
-
-function recordAllIsRefusedWhenTheKeysRotated() {
-  const page = loadPage();
-  page.state.keysStale = true;
-  page.toggleRecordAll();
-  const all = page.calls.filter((c) => c[0] === "recordAll");
-  check("record all is refused with stale keys", 0, all.length);
 }
 
 function sliderLevelIsSavedOnce() {
@@ -364,7 +350,6 @@ const tests = [
   pipLeavesTheGridWhenItCloses,
   recordingIsRefusedWhenTheKeysRotated,
   recordingStartsWhenTheKeysAreGood,
-  recordAllIsRefusedWhenTheKeysRotated,
   sliderLevelIsSavedOnce,
   bridgeContract,
 ];

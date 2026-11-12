@@ -187,7 +187,7 @@ ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
 - cargo clippy --all-targets -- -D warnings
 - cargo test
 - node --check android/assets/app.js
-- the page checks in android/test/app.test.mjs (stubbed DOM and Pbb bridge, no dependencies): picture-in-picture focus, the record button with rotated keys, record all, and the slider levels
+- the page checks in android/test/app.test.mjs (stubbed DOM and Pbb bridge, no dependencies): picture-in-picture focus, the record button with rotated keys, and the slider levels
 - these two run in CI on every push and inside build.sh, so a broken page fails the build
 - python3 -m json.tool keys/keys.json
 - three-feed layout measured in headless Chromium at phone portrait, phone landscape, tablet and desktop viewports (before the multi-camera redesign; no browser binary was available for a new pass)
