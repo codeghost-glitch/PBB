@@ -843,33 +843,22 @@ body.fullscreen-mode .video-wrap video {
   backdrop-filter: blur(8px);
 }
 
-/* A tiny on-air strip: which camera is on the program bus, and that it is
-   live. Centred in the keypad header instead of pinned to an edge. */
+/* A tiny on-air strip, centred in the keypad header. The camera number is
+   already in the channel bug, so it is not repeated here. */
 .fs-head {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-2);
   padding: 0 0 var(--sp-1);
   border-bottom: 1.5px solid var(--fs-muted);
   color: var(--fs-text);
-}
-
-.fs-num {
-  padding: 1px 5px;
-  background: var(--yellow);
-  color: #14110C;
-  border: 1.5px solid var(--fs-line);
-  border-radius: 4px;
-  font-size: var(--t-xs);
-  font-weight: var(--w-bold);
-  font-variant-numeric: tabular-nums;
 }
 
 .fs-air {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  white-space: nowrap;
   color: var(--fs-muted);
   font-size: var(--t-xs);
   font-weight: var(--w-reg);

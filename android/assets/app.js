@@ -843,10 +843,6 @@ function updateDeckControls() {
   setDeckIcon(document.getElementById("fsSwitch"), "next", "next live feed");
   setDeckIcon(document.getElementById("fsExit"), "exit", "exit fullscreen");
 
-  const fsNum = document.getElementById("fsFeedNum");
-  if (fsNum) {
-    fsNum.textContent = state.focused >= 0 ? String(state.focused + 1).padStart(2, "0") : "--";
-  }
 }
 
 // m:ss, or h:mm:ss once a recording passes the hour. Tabular figures in the
