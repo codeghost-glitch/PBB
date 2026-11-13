@@ -843,12 +843,13 @@ body.fullscreen-mode .video-wrap video {
   backdrop-filter: blur(8px);
 }
 
-/* A tiny on-air strip: which camera is on the program bus, and that it is live. */
+/* A tiny on-air strip: which camera is on the program bus, and that it is
+   live. Centred in the keypad header instead of pinned to an edge. */
 .fs-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-1);
+  justify-content: center;
+  gap: var(--sp-2);
   padding: 0 0 var(--sp-1);
   border-bottom: 1.5px solid var(--fs-muted);
   color: var(--fs-text);
@@ -978,20 +979,9 @@ body.locked .fs-key:not(.lock-btn) { display: none; }
 body.locked .fs-keys { grid-template-columns: var(--tap); }
 body.locked .lock-btn { background: var(--yellow); color: #14110C; border-color: var(--yellow); }
 
-.fs-lock-note { display: none; }
-body.locked .fs-lock-note {
-  display: block;
-  color: var(--fs-muted);
-  font-size: var(--t-xs);
-  font-weight: var(--w-reg);
-  text-transform: lowercase;
-  text-align: center;
-}
-
 @media (max-height: 320px) {
   .fs-key { min-height: 38px; }
   .fs-head { display: none; }
-  body.locked .fs-lock-note { display: none; }
 }
 
 /* In-app mini tile: the same small floating monitor as before, now in the
