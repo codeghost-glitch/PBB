@@ -98,6 +98,8 @@ function setStatusText(message) {
   const bar = document.getElementById("statusBar");
   if (bar) {
     bar.classList.remove("hidden");
+    // A saved recording is the end of the job: give the LED one quiet flash.
+    bar.classList.toggle("success", /^saved/i.test(message || ""));
   }
   // Fullscreen hides the footer, so mirror the message on the indicator or a
   // control like the refresh icon looks like it did nothing.
@@ -112,6 +114,12 @@ function setStreamStatus(entry, message, bad) {
   // The steady "live" pill is noise; keep the pill only while connecting or on error.
   const hidden = !bad && message === "live";
   entry.statusEl.classList.toggle("hidden", hidden);
+  // The picture carries the state too: a scan while the signal comes up, a dim
+  // wash when it drops. Both clear the moment the feed is live.
+  if (entry.card) {
+    entry.card.classList.toggle("connecting", !hidden && !bad);
+    entry.card.classList.toggle("offline", !hidden && Boolean(bad));
+  }
 }
 
 // A message that clears itself, so an informational refresh result does not
@@ -528,6 +536,7 @@ function makeIconButton(className, role) {
 function createCard(stream, index) {
   const card = el("article", "cam-card", null, null);
   card.setAttribute("data-index", String(index));
+  card.classList.add("connecting");
 
   const videoWrap = el("div", "video-wrap", null, null);
   const video = el("video", null, "video", null);
@@ -608,7 +617,7 @@ function scheduleRecover(entry, index) {
   }
   entry.retries = (entry.retries || 0) + 1;
   const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(entry.retries - 1, 5)));
-  setStreamStatus(entry, `reconnecting ${Math.round(delay / 1000)}s`, true);
+  setStreamStatus(entry, `retrying in ${Math.round(delay / 1000)}s`, true);
   entry.retryTimer = setTimeout(async () => {
     entry.retryTimer = null;
     try {
@@ -666,7 +675,7 @@ async function initPlayer(entry, index) {
     const message = detail.message || detail.code || detail;
     if (Number(detail.code) === 4012) {
       state.keysStale = true;
-      setStreamStatus(entry, "keys rotated - open sources", true);
+      setStreamStatus(entry, "keys rotated", true);
       setStatusText("keys rotated - open sources to paste the new key");
       return;
     }

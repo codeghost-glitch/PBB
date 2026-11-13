@@ -45,6 +45,27 @@
   --shadow-3: 6px 6px 0 var(--shade);
 
   --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+
+  /* One type system: four sizes, two weights. A console full of one-off
+     10px labels is hard to read on a phone and impossible to keep coherent. */
+  --t-xs: 0.7rem;
+  --t-sm: 0.82rem;
+  --t-md: 0.95rem;
+  --t-lg: 1.18rem;
+  --w-reg: 700;
+  --w-bold: 900;
+
+  /* 8-point grid, plus the smallest comfortable finger target. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 16px;
+  --tap: 44px;
+
+  /* Active keys wear a wash of the one accent, not a second bright colour.
+     Lavender stays only on the keyboard focus ring, where contrast is the job. */
+  --accent-wash: #FBE4DF;
+  --accent-line: rgba(232, 99, 90, 0.32);
+  --inner-light: rgba(255, 255, 255, 0.38);
 }
 
 /* The gallery after hours: the room drops to warm charcoal so the monitors
@@ -66,6 +87,9 @@ html[data-theme="dark"] {
   --shade: #060503;
   --raise: #2E271E;
   --dot: rgba(242, 231, 204, 0.07);
+  --accent-wash: #40241F;
+  --accent-line: rgba(255, 110, 97, 0.38);
+  --inner-light: rgba(255, 255, 255, 0.16);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -84,7 +108,7 @@ body {
   background-size: 17px 17px;
   color: var(--ink);
   font-family: var(--font);
-  font-size: 0.95rem;
+  font-size: var(--t-md);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -108,7 +132,7 @@ body.keyboard-focus :focus-visible {
   flex-direction: column;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 6px;
+  padding: var(--sp-2);
   height: 100%;
   overflow: hidden;
 }
@@ -125,7 +149,7 @@ body.keyboard-focus :focus-visible {
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
-  padding: 6px 8px;
+  padding: var(--sp-2);
   background: var(--surface);
   border: 0;
   border-bottom: var(--console-rule);
@@ -157,8 +181,8 @@ body.keyboard-focus :focus-visible {
 .brand-copy { min-width: 0; }
 
 h1 {
-  font-size: 1.12rem;
-  font-weight: 900;
+  font-size: var(--t-lg);
+  font-weight: var(--w-bold);
   line-height: 1;
   letter-spacing: -0.05em;
 }
@@ -168,7 +192,7 @@ h1 {
 .desk-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-2);
   margin-left: auto;
 }
 
@@ -181,13 +205,13 @@ h1 {
   color: var(--on-bright);
   border: var(--border-thin);
   border-radius: var(--r-pill);
-  font-weight: 800;
+  font-weight: var(--w-reg);
   line-height: 1.35;
   flex: 0 0 auto;
 }
 
-.live-tag { padding: 3px 9px 3px 7px; font-size: 0.64rem; box-shadow: var(--shadow-1); }
-.live-badge { padding: 1px 7px 1px 5px; font-size: 0.58rem; }
+.live-tag { padding: 3px 9px 3px 7px; font-size: var(--t-xs); box-shadow: var(--shadow-1); }
+.live-badge { padding: 1px 7px 1px 5px; font-size: var(--t-xs); }
 
 .live-pip {
   width: 6px;
@@ -212,46 +236,50 @@ h1 {
 .seg-label { display: none; }
 
 .seg-btn {
-  min-width: 34px;
-  min-height: 28px;
-  padding: 5px 7px;
+  min-width: 40px;
+  min-height: var(--tap);
+  padding: var(--sp-1) var(--sp-2);
   background: transparent;
   border: 0;
   border-right: var(--border-thin);
   color: var(--ink);
   font-family: inherit;
-  font-size: 0.66rem;
-  font-weight: 800;
+  font-size: var(--t-xs);
+  font-weight: var(--w-reg);
   line-height: 1.3;
   cursor: pointer;
   transition: background 0.12s ease;
 }
 
 .seg-btn:last-child { border-right: 0; }
-.seg-btn.active { background: var(--lavender); color: var(--on-bright); }
+.seg-btn.active {
+  background: var(--accent-wash);
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 var(--coral);
+}
 
 /* The backlight switch: one key that puts the gallery into the night. */
 .desk-key {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: var(--tap);
+  height: var(--tap);
   flex: 0 0 auto;
   padding: 0;
   background: var(--surface);
   color: var(--ink);
   border: var(--border);
   border-radius: 8px;
-  box-shadow: 2px 2px 0 var(--shade);
+  box-shadow: 2px 2px 0 var(--shade), inset 0 1px 0 var(--inner-light);
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
 }
 
-.desk-key svg { width: 17px; height: 17px; display: block; }
-.desk-key:active { transform: translate(2px, 2px); box-shadow: none; }
+.desk-key svg { width: 20px; height: 20px; display: block; }
+.desk-key:active { transform: translate(2px, 2px); box-shadow: inset 0 1px 0 var(--inner-light); }
 
 @media (hover: hover) and (pointer: fine) {
-  .desk-key:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shade); }
+  .desk-key:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shade), inset 0 1px 0 var(--inner-light); }
 }
 
 /* ----------------------------------------------------------------- stage */
@@ -260,7 +288,7 @@ h1 {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 6px;
+  margin-top: var(--sp-2);
 }
 
 /* Monitor wall: one full-width program frame over two equal preview frames.
@@ -269,14 +297,14 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 6px;
+  gap: var(--sp-2);
   height: 100%;
 }
 
 .grid .cam-card:first-child { grid-column: 1 / -1; }
 
 @media (min-width: 700px) {
-  .grid { gap: 10px; }
+  .grid { gap: var(--sp-3); }
 }
 
 /* ----------------------------------------------------------------- cards */
@@ -310,15 +338,27 @@ h1 {
   background: var(--rec-wash);
   border-color: var(--rec);
   box-shadow: 5px 5px 0 var(--rec);
+  animation: tally-on 0.45s ease-out;
+}
+
+@keyframes tally-on {
+  0%   { box-shadow: 0 0 0 0 rgba(233, 59, 47, 0.55), 5px 5px 0 var(--rec); }
+  45%  { box-shadow: 0 0 0 8px rgba(233, 59, 47, 0.18), 5px 5px 0 var(--rec); }
+  100% { box-shadow: 0 0 0 0 rgba(233, 59, 47, 0), 5px 5px 0 var(--rec); }
+}
+
+@keyframes tally-pop {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }
 
 .cam-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
   flex: 0 0 auto;
-  min-height: 26px;
-  padding: 2px 6px;
+  min-height: 28px;
+  padding: var(--sp-1) var(--sp-2);
   background: var(--paper);
   border-bottom: var(--border);
 }
@@ -331,8 +371,8 @@ h1 {
   color: var(--on-bright);
   border: var(--border-thin);
   border-radius: 4px;
-  font-size: 0.58rem;
-  font-weight: 900;
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
   line-height: 1.4;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -344,8 +384,8 @@ h1 {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: var(--t-sm);
+  font-weight: var(--w-reg);
   line-height: 1.25;
   letter-spacing: -0.01em;
   text-transform: lowercase;
@@ -362,13 +402,13 @@ h1 {
   color: #FFFFFF;
   border: var(--border-thin);
   border-radius: 4px;
-  font-size: 0.58rem;
-  font-weight: 800;
+  font-size: var(--t-xs);
+  font-weight: var(--w-reg);
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
 
-.cam-card.rec .tally { display: inline-flex; }
+.cam-card.rec .tally { display: inline-flex; animation: tally-pop 0.35s ease-out; }
 
 .tally-dot {
   width: 6px;
@@ -404,30 +444,79 @@ h1 {
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 3;
-  max-width: calc(100% - 12px);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: calc(100% - var(--sp-3));
   overflow: hidden;
-  padding: 2px 9px;
+  padding: var(--sp-1) var(--sp-3);
   background: var(--surface);
   border: var(--border-thin);
   border-radius: var(--r-pill);
   box-shadow: var(--shadow-1);
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: var(--t-sm);
+  font-weight: var(--w-reg);
+  line-height: 1.4;
   white-space: nowrap;
   text-overflow: ellipsis;
   pointer-events: none;
 }
 
-.stream-status.bad { background: var(--rec); color: #FFFFFF; }
+/* A breathing lamp says "still working" without shouting. The red lamp on an
+   error is steady - an error should read as a fact, not an alarm. */
+.stream-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: signal 1.8s ease-out infinite;
+}
+
+@keyframes signal {
+  0%   { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(78, 205, 196, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0); }
+}
+
+.stream-status.bad { background: var(--rec); color: #FFFFFF; border-color: var(--rec); }
+.stream-status.bad::before { background: #FFFFFF; animation: none; box-shadow: none; }
+
+/* The frame carries the state too: a slow scan while the signal comes up, a
+   dim edge wash when it drops. Both clear the moment the feed is live. */
+.cam-card.connecting .video-wrap::after,
+.cam-card.offline .video-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cam-card.connecting .video-wrap::after {
+  background: linear-gradient(180deg, transparent 0%, rgba(78, 205, 196, 0.1) 48%, transparent 52%);
+  background-size: 100% 220%;
+  animation: scan 2.8s linear infinite;
+}
+
+.cam-card.offline .video-wrap::after {
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(233, 59, 47, 0.16) 100%);
+}
+
+@keyframes scan {
+  from { background-position: 0 -120%; }
+  to   { background-position: 0 120%; }
+}
 
 .cam-actions {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  gap: 4px;
+  gap: var(--sp-1);
   flex: 0 0 auto;
   min-height: calc(var(--key) + 8px);
-  padding: 3px 5px;
+  padding: var(--sp-1) var(--sp-2);
   background: var(--surface);
   border-top: var(--border);
 }
@@ -438,16 +527,17 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
   background: var(--coral);
   color: #FFFFFF;
   border: var(--border);
   border-radius: var(--r-sm);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-2), inset 0 1px 0 var(--inner-light);
   font-family: var(--font);
-  font-weight: 800;
-  font-size: 0.82rem;
+  font-weight: var(--w-reg);
+  font-size: var(--t-md);
   line-height: 1.3;
   cursor: pointer;
   user-select: none;
@@ -457,30 +547,31 @@ h1 {
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
-.btn:active { transform: translate(3px, 3px); box-shadow: none; }
+.btn:active { transform: translate(3px, 3px); box-shadow: inset 0 1px 0 var(--inner-light); }
 .btn-ghost { background: var(--surface); color: var(--ink); }
 
 /* Hover only for real pointers: on touch the hover state latches after a tap
    and leaves the button stuck on its hover colour. */
 @media (hover: hover) and (pointer: fine) {
-  .btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shade); }
+  .btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shade), inset 0 1px 0 var(--inner-light); }
   .btn-ghost:hover { background: var(--paper); }
   .seg-btn:hover { background: var(--paper); }
-  .seg-btn.active:hover { background: var(--lavender); }
+  .seg-btn.active:hover { background: var(--accent-wash); }
 }
 
 .btn-icon {
-  width: 34px;
-  height: 34px;
+  width: var(--tap);
+  height: var(--tap);
   padding: 0;
   border-radius: 8px;
   flex: 0 0 auto;
 }
 
-.btn-icon svg { width: 18px; height: 18px; display: block; }
+.btn-icon svg { width: 20px; height: 20px; display: block; }
 [disabled] { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .cam-actions .btn-icon {
+  position: relative;
   width: var(--key);
   height: var(--key);
   padding: 0;
@@ -493,7 +584,20 @@ h1 {
 
 .cam-actions .btn-icon svg { width: 18px; height: 18px; }
 
-.cam-actions .btn-icon.active { background: var(--lavender); color: var(--on-bright); }
+/* Invisible 44px target: the console keeps its dense keys, the finger gets a
+   comfortable one. */
+.cam-actions .btn-icon::after {
+  content: "";
+  position: absolute;
+  inset: -7px -5px;
+}
+
+.cam-actions .btn-icon.active {
+  background: var(--accent-wash);
+  color: var(--ink);
+  border-color: var(--accent-line);
+  box-shadow: inset 0 -3px 0 var(--coral);
+}
 
 .cam-actions .record-btn { color: var(--coral-ink); }
 .cam-actions .record-btn svg circle,
@@ -512,10 +616,10 @@ h1 {
 .status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   flex: 0 0 auto;
-  margin-top: 6px;
-  padding: 5px 6px 5px 8px;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2);
   background: var(--surface);
   border: 0;
   border-top: var(--console-rule);
@@ -534,14 +638,21 @@ h1 {
 
 .recording .status-led { background: var(--rec); }
 
+.status.success .status-led { animation: led-done 0.9s ease-out; }
+
+@keyframes led-done {
+  from { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.7); }
+  to   { box-shadow: 0 0 0 12px rgba(78, 205, 196, 0); }
+}
+
 #statusText {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: var(--t-sm);
+  font-weight: var(--w-reg);
   color: var(--ink);
 }
 
@@ -555,8 +666,8 @@ h1 {
   color: #FFFFFF;
   border: var(--border-thin);
   border-radius: var(--r-pill);
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: var(--t-xs);
+  font-weight: var(--w-reg);
   font-variant-numeric: tabular-nums;
 }
 
@@ -568,18 +679,18 @@ h1 {
   background: #FFFFFF;
 }
 
-.rec-badge-label { font-weight: 600; opacity: 0.85; }
+.rec-badge-label { font-weight: var(--w-reg); opacity: 0.85; }
 
 .status .btn-icon {
-  width: 28px;
-  height: 28px;
+  width: var(--tap);
+  height: var(--tap);
   background: var(--paper);
   border: var(--border-thin);
   border-radius: 6px;
   box-shadow: 2px 2px 0 var(--shade);
 }
 
-.status .btn-icon svg { width: 15px; height: 15px; }
+.status .btn-icon svg { width: 18px; height: 18px; }
 
 .hidden { display: none !important; }
 
@@ -696,9 +807,9 @@ body.fullscreen-mode .video-wrap video {
 .fs-deck {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-2);
   width: max-content;
-  padding: 8px;
+  padding: var(--sp-2);
   background: var(--surface);
   border: var(--border);
   border-radius: var(--r-md);
@@ -709,14 +820,14 @@ body.fullscreen-mode .video-wrap video {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 0 2px 6px;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-1) var(--sp-1);
   border-bottom: var(--border);
 }
 
 .fs-num {
-  font-size: 0.62rem;
-  font-weight: 900;
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -726,7 +837,7 @@ body.fullscreen-mode .video-wrap video {
 .fs-keys {
   display: grid;
   grid-template-columns: repeat(2, 52px);
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .fs-key {
@@ -734,28 +845,33 @@ body.fullscreen-mode .video-wrap video {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: var(--sp-1);
   width: 52px;
-  min-height: 44px;
-  padding: 4px 2px;
+  min-height: var(--tap);
+  padding: var(--sp-1) var(--sp-1);
   background: var(--paper);
   color: var(--ink);
   border: var(--border);
   border-radius: 9px;
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-1), inset 0 1px 0 var(--inner-light);
   font-family: inherit;
-  font-size: 0.58rem;
-  font-weight: 800;
+  font-size: var(--t-xs);
+  font-weight: var(--w-reg);
   line-height: 1;
   cursor: pointer;
   transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.12s ease;
 }
 
 .fs-glyph { display: flex; }
-.fs-glyph svg { width: 17px; height: 17px; }
+.fs-glyph svg { width: 20px; height: 20px; }
 
-.fs-key:active { transform: translate(2px, 2px); box-shadow: none; }
-.fs-key.active { background: var(--lavender); color: var(--on-bright); }
+.fs-key:active { transform: translate(2px, 2px); box-shadow: inset 0 1px 0 var(--inner-light); }
+.fs-key.active {
+  background: var(--accent-wash);
+  color: var(--ink);
+  border-color: var(--accent-line);
+  box-shadow: inset 0 -3px 0 var(--coral);
+}
 .fs-key:disabled { opacity: 0.45; cursor: default; }
 .fs-exit {
   grid-column: 1 / -1;
@@ -861,8 +977,8 @@ body.fullscreen-mode .cam-card.mini .video-wrap {
   border: var(--border);
   border-radius: var(--r-pill);
   box-shadow: var(--shadow-2);
-  font-weight: 800;
-  font-size: 0.84rem;
+  font-weight: var(--w-reg);
+  font-size: var(--t-md);
   text-align: center;
   overflow-wrap: anywhere;
   text-transform: lowercase;
@@ -876,36 +992,68 @@ body.fullscreen-mode .cam-card.mini .video-wrap {
   inset: 0;
   z-index: 92;
   display: grid;
-  place-items: center;
-  padding: 16px;
+  place-items: end center;
+  padding: 0;
   background: rgba(20, 17, 12, 0.45);
+  animation: shade-in 0.18s ease-out;
+}
+
+@keyframes shade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
 
 .sheet-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-2);
   width: min(520px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: min(88vh, calc(100vh - var(--sp-3)));
   overflow-y: auto;
-  padding: 14px;
+  padding: var(--sp-3);
+  padding-bottom: max(var(--sp-3), env(safe-area-inset-bottom));
   background: var(--surface);
   border: var(--border);
-  border-radius: var(--r-md);
+  border-bottom: 0;
+  border-radius: var(--r-md) var(--r-md) 0 0;
   box-shadow: var(--shadow-3);
+  animation: sheet-up 0.22s ease-out;
+}
+
+/* A grab handle tells the hand this sheet came up from the bottom. */
+.sheet-panel::before {
+  content: "";
+  align-self: center;
+  width: 40px;
+  height: 4px;
+  margin-bottom: var(--sp-1);
+  border-radius: var(--r-pill);
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+@media (min-width: 600px) {
+  .sheet { place-items: center; padding: var(--sp-3); }
+  .sheet-panel {
+    border-bottom: var(--border);
+    border-radius: var(--r-md);
+    padding-bottom: var(--sp-3);
+  }
+  .sheet-panel::before { display: none; }
 }
 
 .sheet-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-2);
 }
 
 .sheet-head h2 {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: var(--t-md);
+  font-weight: var(--w-reg);
   letter-spacing: 0.06em;
   text-transform: lowercase;
 }
@@ -913,51 +1061,59 @@ body.fullscreen-mode .cam-card.mini .video-wrap {
 .sheet-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .chip {
-  padding: 6px 11px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
   background: var(--paper);
   color: var(--ink);
   border: var(--border-thin);
   border-radius: var(--r-pill);
   font-family: inherit;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: var(--t-sm);
+  font-weight: var(--w-reg);
   text-transform: lowercase;
   cursor: pointer;
   touch-action: manipulation;
 }
 
 .chip.active {
-  background: var(--lavender);
-  color: var(--on-bright);
+  background: var(--accent-wash);
+  color: var(--ink);
+  border-color: var(--accent-line);
+  box-shadow: inset 0 -3px 0 var(--coral);
 }
 
 .sheet-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-1);
 }
 
 .sheet-field span {
   color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: var(--t-xs);
+  font-weight: var(--w-reg);
   letter-spacing: 0.05em;
   text-transform: lowercase;
 }
 
 .sheet-input {
   width: 100%;
-  padding: 9px 10px;
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
   background: var(--paper);
   color: var(--ink);
   border: var(--border-thin);
   border-radius: var(--r-sm);
-  font-family: var(--font);
-  font-size: 0.8rem;
+  /* Machine-readable fields get the monospace face: a 32-char key is read
+     character by character, not as prose. */
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: var(--t-sm);
 }
 
 .sheet-input:focus {
@@ -968,59 +1124,60 @@ body.fullscreen-mode .cam-card.mini .video-wrap {
 .sheet-note {
   margin: 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--t-sm);
   line-height: 1.35;
 }
 
 .sheet-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
   justify-content: flex-end;
 }
+
+/* The primary action gets the wider, easier-to-reach half of the row. */
+.sheet-actions .btn:last-child { flex: 1 1 auto; }
 
 /* --------------------------------------------------------- tight layouts */
 
 /* One-row desk on phones: mark, live count, quality, backlight. */
 @media (max-width: 559px) {
-  .nav { padding: 5px 6px; gap: 6px; }
-  .brand { gap: 6px; }
+  .nav { padding: var(--sp-1) var(--sp-2); gap: var(--sp-1); }
+  .brand { gap: var(--sp-2); }
   .brand-mark { width: 30px; height: 30px; }
-  h1 { font-size: 1rem; }
-  .desk-actions { gap: 5px; }
-  .seg-btn { min-width: 30px; padding: 5px 6px; font-size: 0.62rem; }
-  .desk-key { width: 30px; height: 30px; }
+  .desk-actions { gap: var(--sp-1); }
+  .seg-btn { min-width: 34px; padding: var(--sp-1) var(--sp-2); }
 }
 
 @media (max-width: 359px) {
   .live-tag { display: none; }
-  .seg-btn { min-width: 28px; padding: 5px 4px; }
+  .seg-btn { min-width: 30px; padding: var(--sp-1); }
 }
 
 /* Phone-sized cards keep their rack strips; only the chrome gets thinner.
    Kept last so it also wins over the focus-mode rules above. */
 @media (max-width: 520px), (max-height: 520px) {
-  .page { padding: 5px; }
-  .stage { margin-top: 5px; }
-  .status { margin-top: 5px; padding: 4px 5px 4px 7px; }
-
   .cam-card { --key: 30px; }
   .cam-card:first-child { --key: 34px; }
-  .cam-top { min-height: 22px; padding: 1px 5px; gap: 4px; }
-  .cam-num { min-width: 20px; font-size: 0.54rem; }
-  .cam-title { font-size: 0.66rem; }
+  .cam-top { min-height: 24px; padding: var(--sp-1) var(--sp-2); gap: var(--sp-1); }
+  .cam-num { min-width: 20px; }
   .live-badge { display: none; }
-  .tally { padding: 1px 5px; font-size: 0.54rem; }
+  .tally { padding: var(--sp-1) var(--sp-2); }
   .tally-label { display: none; }
 
-  .cam-actions { min-height: calc(var(--key) + 6px); padding: 2px 4px; gap: 0; }
+  .cam-actions { min-height: calc(var(--key) + 8px); padding: var(--sp-1) var(--sp-2); gap: 0; }
   .cam-actions .btn-icon {
     border: 0;
     border-radius: 5px;
     background: transparent;
     box-shadow: none;
   }
-  .cam-actions .btn-icon svg { width: 16px; height: 16px; }
-  .cam-actions .btn-icon.active { background: var(--lavender); color: var(--on-bright); }
+  .cam-actions .btn-icon svg { width: 18px; height: 18px; }
+  .cam-actions .btn-icon.active {
+    background: var(--accent-wash);
+    color: var(--ink);
+    border-color: var(--accent-line);
+    box-shadow: inset 0 -3px 0 var(--coral);
+  }
   .cam-actions .record-btn.recording { background: var(--rec); }
 
   .focus-mode .grid { align-items: stretch; }
@@ -1034,10 +1191,10 @@ body.fullscreen-mode .cam-card.mini .video-wrap {
   }
 }
 
-/* Four 36 px keys do not fit the half-width cards below 360 px, so their
-   shelf and keys step down once; the featured card keeps its larger keys. */
+/* On the narrowest cards the expanded targets would touch, so step the
+   horizontal edge back rather than let a tap land on the wrong key. */
 @media (max-width: 359px) {
-  .cam-card:not(:first-child) { --key: 31px; }
+  .cam-actions .btn-icon::after { inset: -7px -3px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
