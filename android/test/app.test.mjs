@@ -452,6 +452,7 @@ function sourceApplyStoresTheChannel() {
 }
 
 function fullscreenKeepsThePictureWhole() {
+  const app = fs.readFileSync(APP, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
   check("the keypad sits in the top-right corner", true,
     /\.fs-controls \{[^}]*top: max\(10px, env\(safe-area-inset-top\)\)/s.test(css));
@@ -461,6 +462,22 @@ function fullscreenKeepsThePictureWhole() {
     /pip-mode \.video-wrap,\s*body\.fullscreen-mode \.video-wrap \{[^}]*top: 0;[^}]*bottom: 0;/s.test(css));
   check("no dock or reserved lane is left behind", false,
     css.includes("--fs-rail") || css.includes("--fs-dock") || css.includes(".fs-dock"));
+  // The fullscreen redesign: glass chrome, a reachable collapsed control, and
+  // states that still speak when the picture is the whole screen.
+  check("the deck is glass over the picture", true,
+    /\.fs-deck \{[^}]*backdrop-filter: blur/s.test(css));
+  check("a collapsed control sits in the thumb zone", true,
+    /\.fs-launcher \{[^}]*bottom: max\(10px, env\(safe-area-inset-bottom\)\)/s.test(css));
+  check("the collapsed control is wired", true,
+    app.includes('getElementById("fsLauncher")'));
+  check("fullscreen still shows connection states", true,
+    /body\.fullscreen-mode \.cam-card\.focused \.stream-status \{/s.test(css));
+  check("the old blanket status hide is gone", false,
+    css.includes("body.fullscreen-mode .stream-status { display: none"));
+  check("the mini monitor carries its camera number", true,
+    /body\.fullscreen-mode \.cam-card\.mini::after \{[^}]*content: attr\(data-cam\)/s.test(css));
+  check("the feed name is a corner channel bug", true,
+    /body\.fullscreen-mode \.indicator \{[^}]*top: max\(10px, env\(safe-area-inset-top\)\)/s.test(css));
 }
 
 function controlRoomStructure() {

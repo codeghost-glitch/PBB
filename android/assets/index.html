@@ -102,7 +102,7 @@
     <div class="fs-deck">
       <div class="fs-head">
         <span class="fs-num" id="fsFeedNum">01</span>
-        <span class="fs-live" aria-hidden="true"><span class="live-pip"></span></span>
+        <span class="fs-air" aria-hidden="true"><span class="live-pip"></span>on air</span>
       </div>
       <div class="fs-keys">
         <button id="fsZoom" class="fs-key" type="button" aria-label="zoom">
@@ -126,8 +126,15 @@
           <span class="fs-label">exit</span>
         </button>
       </div>
+      <span class="fs-lock-note">controls locked</span>
     </div>
   </div>
+  <!-- Collapsed control: one reachable key in the thumb zone while the deck
+       is away, so the picture never sits behind a permanent dock. -->
+  <button id="fsLauncher" class="fs-launcher" type="button" aria-label="show fullscreen controls">
+    <span class="fs-launcher-glyph" aria-hidden="true"></span>
+    <span>controls</span>
+  </button>
   <script src="app.js"></script>
 </body>
 </html>

@@ -536,6 +536,7 @@ function makeIconButton(className, role) {
 function createCard(stream, index) {
   const card = el("article", "cam-card", null, null);
   card.setAttribute("data-index", String(index));
+  card.setAttribute("data-cam", String(index + 1).padStart(2, "0"));
   card.classList.add("connecting");
 
   const videoWrap = el("div", "video-wrap", null, null);
@@ -1720,6 +1721,11 @@ function boot() {
         showControls();
       }
     });
+  }
+  const fsLauncher = document.getElementById("fsLauncher");
+  if (fsLauncher) {
+    mountIcon(fsLauncher.querySelector(".fs-launcher-glyph"), "sliders");
+    fsLauncher.addEventListener("click", showControls);
   }
   restoreRecordingState();
   if (Pbb.isInPip()) {
