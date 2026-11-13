@@ -67,17 +67,20 @@
   --accent-line: rgba(232, 99, 90, 0.32);
   --inner-light: rgba(255, 255, 255, 0.38);
 
-  /* Fullscreen is a dark room, whichever palette the desk is wearing: the
-     chrome is smoked glass over the picture with cream silkscreen lines. */
-  --fs-glass: rgba(18, 15, 12, 0.82);
-  --fs-key: rgba(242, 231, 204, 0.09);
-  --fs-key-hi: rgba(242, 231, 204, 0.18);
-  --fs-line: #F2E7CC;
-  --fs-text: #F2E7CC;
-  --fs-muted: rgba(242, 231, 204, 0.62);
-  --fs-shade: rgba(0, 0, 0, 0.55);
-  --fs-accent: #FF6E61;
-  --fs-accent-wash: rgba(255, 110, 97, 0.22);
+  /* Fullscreen chrome follows the desk theme: cream paper in the light,
+     charcoal with cream silkscreen after hours. Both are translucent so the
+     picture still reads behind them. */
+  --fs-glass: rgba(255, 253, 245, 0.88);
+  --fs-key: rgba(251, 247, 222, 0.92);
+  --fs-key-hi: rgba(255, 255, 255, 0.95);
+  --fs-line: #14110C;
+  --fs-text: #14110C;
+  --fs-muted: rgba(20, 17, 12, 0.55);
+  --fs-shade: rgba(20, 17, 12, 0.3);
+  --fs-accent: #E8635A;
+  --fs-accent-wash: #FBE4DF;
+  /* The monitor bezel is hardware on black glass: cream in either palette. */
+  --fs-frame: #F2E7CC;
 }
 
 /* The gallery after hours: the room drops to warm charcoal so the monitors
@@ -102,6 +105,15 @@ html[data-theme="dark"] {
   --accent-wash: #40241F;
   --accent-line: rgba(255, 110, 97, 0.38);
   --inner-light: rgba(255, 255, 255, 0.16);
+  --fs-glass: rgba(36, 30, 23, 0.88);
+  --fs-key: rgba(242, 231, 204, 0.09);
+  --fs-key-hi: rgba(242, 231, 204, 0.18);
+  --fs-line: #F2E7CC;
+  --fs-text: #F2E7CC;
+  --fs-muted: rgba(242, 231, 204, 0.62);
+  --fs-shade: rgba(0, 0, 0, 0.55);
+  --fs-accent: #FF6E61;
+  --fs-accent-wash: rgba(255, 110, 97, 0.22);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -820,15 +832,15 @@ body.fullscreen-mode .video-wrap video {
 .fs-deck {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   width: max-content;
-  padding: var(--sp-2);
+  padding: var(--sp-1);
   background: var(--fs-glass);
   border: 2px solid var(--fs-line);
   border-radius: var(--r-md);
   box-shadow: 0 8px 28px var(--fs-shade);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 /* A tiny on-air strip: which camera is on the program bus, and that it is live. */
@@ -836,17 +848,21 @@ body.fullscreen-mode .video-wrap video {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-1) var(--sp-1);
+  gap: var(--sp-1);
+  padding: 0 0 var(--sp-1);
   border-bottom: 1.5px solid var(--fs-muted);
   color: var(--fs-text);
 }
 
 .fs-num {
+  padding: 1px 5px;
+  background: var(--yellow);
+  color: #14110C;
+  border: 1.5px solid var(--fs-line);
+  border-radius: 4px;
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
   font-variant-numeric: tabular-nums;
-  color: var(--yellow);
 }
 
 .fs-air {
@@ -864,8 +880,8 @@ body.fullscreen-mode .video-wrap video {
 
 .fs-keys {
   display: grid;
-  grid-template-columns: repeat(2, 56px);
-  gap: var(--sp-2);
+  grid-template-columns: repeat(2, var(--tap));
+  gap: var(--sp-1);
 }
 
 .fs-key {
@@ -873,15 +889,15 @@ body.fullscreen-mode .video-wrap video {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-1);
-  width: 56px;
+  gap: 2px;
+  width: var(--tap);
   min-height: var(--tap);
   padding: var(--sp-1);
   background: var(--fs-key);
   color: var(--fs-text);
   border: 1.5px solid var(--fs-muted);
   border-radius: 9px;
-  box-shadow: inset 0 1px 0 rgba(242, 231, 204, 0.14);
+  box-shadow: inset 0 1px 0 var(--inner-light);
   font-family: inherit;
   font-size: var(--t-xs);
   font-weight: var(--w-reg);
@@ -891,7 +907,7 @@ body.fullscreen-mode .video-wrap video {
 }
 
 .fs-glyph { display: flex; }
-.fs-glyph svg { width: 22px; height: 22px; }
+.fs-glyph svg { width: 18px; height: 18px; }
 
 .fs-key:active { transform: translate(2px, 2px); box-shadow: none; }
 .fs-key.active {
@@ -932,44 +948,6 @@ body.fullscreen-mode.controls-visible .fs-controls {
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
 
-/* Collapsed control in the thumb zone: the one thing still reachable while
-   the deck is away. It disappears the moment the full keys are up. */
-.fs-launcher {
-  position: fixed;
-  bottom: 10px;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  left: 10px;
-  left: max(10px, env(safe-area-inset-left));
-  z-index: 91;
-  display: none;
-  align-items: center;
-  gap: var(--sp-2);
-  min-height: var(--tap);
-  padding: 0 var(--sp-3);
-  background: var(--fs-glass);
-  color: var(--fs-text);
-  border: 1.5px solid var(--fs-muted);
-  border-radius: var(--r-pill);
-  box-shadow: 0 6px 20px var(--fs-shade);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  font-family: inherit;
-  font-size: var(--t-xs);
-  font-weight: var(--w-reg);
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.72;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-}
-
-.fs-launcher:hover { opacity: 1; }
-.fs-launcher:active { transform: translateY(2px); }
-.fs-launcher-glyph { display: flex; }
-.fs-launcher-glyph svg { width: 18px; height: 18px; }
-
-body.fullscreen-mode:not(.controls-visible):not(.locked) .fs-launcher { display: inline-flex; }
-.pip-mode .fs-launcher { display: none !important; }
-
 /* A dropped or still-connecting feed must still speak when the picture is the
    whole screen. The mini tile stays a clean monitor with no status of its own. */
 body.fullscreen-mode .cam-card.focused .stream-status {
@@ -997,7 +975,7 @@ body.fullscreen-mode .tally { display: none; }
 
 body.locked .fs-head,
 body.locked .fs-key:not(.lock-btn) { display: none; }
-body.locked .fs-keys { grid-template-columns: 56px; }
+body.locked .fs-keys { grid-template-columns: var(--tap); }
 body.locked .lock-btn { background: var(--yellow); color: #14110C; border-color: var(--yellow); }
 
 .fs-lock-note { display: none; }
@@ -1018,7 +996,7 @@ body.locked .fs-lock-note {
 
 /* In-app mini tile: the same small floating monitor as before, now in the
    bottom-right corner. The keypad is above it in the top-right corner. No
-   dock, no labels, no status: the card is just its picture. */
+   dock, no number, no status: the card is just its picture. */
 body.fullscreen-mode .cam-card.mini {
   display: block !important;
   position: fixed;
@@ -1039,29 +1017,11 @@ body.fullscreen-mode .cam-card.mini {
   min-height: 0;
   margin: 0;
   padding: 0;
-  border: 2px solid var(--fs-line);
+  border: 2px solid var(--fs-frame);
   border-radius: var(--r-sm);
   box-shadow: 0 8px 24px var(--fs-shade);
   background: #000000;
   overflow: hidden;
-}
-
-body.fullscreen-mode .cam-card.mini::after {
-  content: attr(data-cam);
-  position: absolute;
-  top: var(--sp-1);
-  left: var(--sp-1);
-  z-index: 2;
-  padding: 2px 6px;
-  background: var(--fs-glass);
-  color: var(--fs-text);
-  border: 1.5px solid var(--fs-line);
-  border-radius: 4px;
-  font-size: var(--t-xs);
-  font-weight: var(--w-bold);
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
 }
 
 /* The fullscreen rules above hide the top strip, key strip and stream
