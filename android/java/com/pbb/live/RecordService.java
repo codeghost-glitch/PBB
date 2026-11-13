@@ -111,6 +111,9 @@ public class RecordService extends Service {
     /** How long a single segment pull may take before it counts as a miss. */
     private static final long FETCH_TIMEOUT_SECONDS = 45;
 
+    /** Consecutive empty parts allowed before a stalled stream is given up on. */
+    static final int MAX_EMPTY_RETRIES = 3;
+
     /**
      * The live edge of every manifest this app has pulled, so the next
      * recording starts from there instead of walking the whole archive again.
@@ -328,6 +331,7 @@ public class RecordService extends Service {
         boolean failed = false;
         boolean keepSegments = false;
         int totalSegments = 0;
+        int emptyRetries = 0;
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             if (!isArm64()) {
@@ -338,10 +342,8 @@ public class RecordService extends Service {
             // One part per uninterrupted run. A gap in the archive ends a part and
             // a second file continues, so no file ever splices across a hole.
             String name = session.displayName;
-            for (int part = 1; session.running; part++) {
-                if (part > 1) {
-                    name = partName(session.displayName, part);
-                }
+            int part = 1;
+            while (session.running) {
                 delete(videoTmp);
                 delete(audioTmp);
                 delete(outTmp);
@@ -392,12 +394,21 @@ public class RecordService extends Service {
                 }
 
                 if (segmentsThisPart == 0) {
-                    // A gap part can be abandoned before its first segment; do not
-                    // replace the file the previous part already published.
+                    // Thirty misses before the first segment means the live edge
+                    // moved past the numbers we were waiting on while the archive
+                    // was being probed. Those numbers never come back: forget the
+                    // stale edge, re-plan from the start and try again.
+                    if (retryEmptyPart(gap, session.running, emptyRetries)) {
+                        emptyRetries++;
+                        forgetEdge(session.mpdUrl);
+                        continue;
+                    }
+                    // Do not replace the file a previous part already published.
                     result = savedMessage != null ? savedMessage
                         : gap ? "nothing recorded before the stream gap" : "nothing recorded";
                     break;
                 }
+                emptyRetries = 0;
                 totalSegments += segmentsThisPart;
                 // libavformat keeps process-wide state; two remuxes at once would
                 // interleave their muxers. Pull in parallel, mux one at a time.
@@ -420,6 +431,9 @@ public class RecordService extends Service {
                 if (!gap) {
                     break;
                 }
+                // A hole ends this part; the next one starts at the fresh edge.
+                part++;
+                name = partName(session.displayName, part);
             }
         } catch (Throwable t) {
             Log.e(TAG, "recording failed for camera " + index, t);
@@ -670,6 +684,22 @@ public class RecordService extends Service {
             LAST_EDGE.put(mpdUrl, Long.valueOf(good));
         }
         return Math.max(0L, good - 1);
+    }
+
+    /**
+     * A long stall before the first segment is a stale live edge, not a hole in
+     * the recording. Re-anchor and retry, but never spin forever on a stream
+     * that is genuinely down. Kept pure so the host tests can check the rule.
+     */
+    static boolean retryEmptyPart(boolean gap, boolean running, int emptyRetries) {
+        return gap && running && emptyRetries < MAX_EMPTY_RETRIES;
+    }
+
+    /** Force the next live-edge scan to start from the beginning of the archive. */
+    private static void forgetEdge(String mpdUrl) {
+        synchronized (LAST_EDGE) {
+            LAST_EDGE.remove(mpdUrl);
+        }
     }
 
     private static long rememberedEdge(String mpdUrl) {

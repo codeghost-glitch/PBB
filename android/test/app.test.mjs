@@ -480,6 +480,8 @@ function fullscreenKeepsThePictureWhole() {
     css.includes("body.fullscreen-mode .stream-status { display: none"));
   check("the feed name is a corner channel bug", true,
     /body\.fullscreen-mode \.indicator \{[^}]*top: max\(10px, env\(safe-area-inset-top\)\)/s.test(css));
+  check("fullscreen does not open the keypad on entry", false,
+    /if \(state\.fullscreen && players\[state\.focused\]\) \{[^}]*showControls\(\)/s.test(app));
 }
 
 function controlRoomStructure() {

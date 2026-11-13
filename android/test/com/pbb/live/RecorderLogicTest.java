@@ -18,6 +18,7 @@ public final class RecorderLogicTest {
         pickVideoFollowsThePageRules();
         pickAudioFollowsTheLiveEdge();
         partNameKeepsTheExtension();
+        emptyGapPartRetriesButIsBounded();
         if (failures > 0) {
             System.err.println(failures + " check(s) failed");
             System.exit(1);
@@ -89,6 +90,17 @@ public final class RecorderLogicTest {
             RecordService.pickAudio(tracks, 9).media);
         check("audio falls back", "a-old-$Number$.m4s",
             RecordService.pickAudio(tracks, 99).media);
+    }
+
+    private static void emptyGapPartRetriesButIsBounded() {
+        check("an empty gap part re-anchors", true,
+            RecordService.retryEmptyPart(true, true, 0));
+        check("retries stay bounded", false,
+            RecordService.retryEmptyPart(true, true, RecordService.MAX_EMPTY_RETRIES));
+        check("a clean stop never retries", false,
+            RecordService.retryEmptyPart(false, true, 0));
+        check("a stopped session never retries", false,
+            RecordService.retryEmptyPart(true, false, 0));
     }
 
     private static void partNameKeepsTheExtension() {

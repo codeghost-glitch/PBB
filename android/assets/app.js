@@ -1126,10 +1126,9 @@ function toggleFullscreen(keepFocus) {
     Pbb.setImmersive(state.fullscreen);
   }
   if (state.fullscreen && players[state.focused]) {
-    // The keypad does not carry the name, so a short chip names the feed as
-    // it opens, and the keys are up in their corner from the first frame.
+    // A short chip names the feed as it opens. The keypad stays away until the
+    // viewer taps the picture, so fullscreen starts as nothing but the feed.
     showIndicator(feedLabel(state.focused), 1200);
-    showControls();
   }
   playOnly(state.focused);
   updateControls();
