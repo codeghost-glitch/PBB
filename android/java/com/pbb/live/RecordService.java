@@ -115,6 +115,7 @@ public class RecordService extends Service {
 
     /** Consecutive empty parts allowed before a stalled stream is given up on. */
     static final int MAX_EMPTY_RETRIES = 3;
+    private static final int MAX_PROBE_RETRIES = 20;
 
     /**
      * The live edge of every manifest this app has pulled, so the next
@@ -335,6 +336,7 @@ public class RecordService extends Service {
         boolean keepSegments = false;
         int totalSegments = 0;
         int emptyRetries = 0;
+        int probeRetries = 0;
         ExecutorService pool = Executors.newFixedThreadPool(2,
             backgroundThreads("pbb-pull-fetch-" + index));
         try {
@@ -373,12 +375,20 @@ public class RecordService extends Service {
                         }
                         offset = fallback;
                     } else {
-                        if (emptyRetries < MAX_EMPTY_RETRIES) {
-                            emptyRetries++;
-                            forgetEdge(session.mpdUrl);
-                            continue;
+                        // A CDN hiccup, a rolled DVR window or a slow range
+                        // probe is not the end of a live broadcast. Re-read the
+                        // manifest and probe again; the user decides when to stop.
+                        probeRetries++;
+                        forgetEdge(session.mpdUrl);
+                        if (probeRetries > MAX_PROBE_RETRIES) {
+                            throw e;
                         }
-                        throw e;
+                        try {
+                            Thread.sleep(3000);
+                        } catch (InterruptedException ie) {
+                            break;
+                        }
+                        continue;
                     }
                 }
                 if (offset < 0) {
@@ -393,11 +403,17 @@ public class RecordService extends Service {
                 int misses = 0;
                 int segmentsThisPart = 0;
                 boolean gap = false;
-                // Consume the stop interrupt so the final fetch can complete.
-                // Pull at least one segment even after a stop: a stop that
-                // landed during the edge probe still produces a valid file.
-                Thread.interrupted();
+                int stopFetches = 0;
                 while (session.running || segmentsThisPart == 0) {
+                    if (!session.running) {
+                        // stopSession() interrupts the worker to end the pull.
+                        // pulled() re-sets that flag, which would poison the
+                        // final fetch and leave us with "nothing recorded".
+                        Thread.interrupted();
+                        if (++stopFetches > 3) {
+                            break;
+                        }
+                    }
                     String vUrl = plan.baseUrl
                         + segmentUrl(plan.video.media, plan.video.startNumber + offset);
                     String aUrl = plan.baseUrl
@@ -415,10 +431,12 @@ public class RecordService extends Service {
                             gap = true;
                             break;
                         }
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            break;
+                        if (session.running) {
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                                break;
+                            }
                         }
                         continue;
                     }
@@ -446,6 +464,7 @@ public class RecordService extends Service {
                     break;
                 }
                 emptyRetries = 0;
+                probeRetries = 0;
                 totalSegments += segmentsThisPart;
                 // libavformat keeps process-wide state; two remuxes at once would
                 // interleave their muxers. Pull in parallel, mux one at a time.
@@ -703,9 +722,6 @@ public class RecordService extends Service {
      */
     private static long findLiveOffset(String mpdUrl, Plan plan, Session session)
             throws IOException {
-        if (!session.running) {
-            return -1L;
-        }
         long known = rememberedEdge(mpdUrl);
         try {
             return scanEdge(mpdUrl, plan, known >= 0 ? known : 0, session);
@@ -738,7 +754,12 @@ public class RecordService extends Service {
         long bad = best + 2049L;
         while (bad - good > 1) {
             if (!session.running) {
-                return -1L;
+                // Keep the best hit found so far so the final fetch can still
+                // land on a real segment instead of reporting nothing recorded.
+                synchronized (LAST_EDGE) {
+                    LAST_EDGE.put(mpdUrl, Long.valueOf(good));
+                }
+                return Math.max(0L, good - 1);
             }
             long mid = good + (bad - good) / 2;
             if (exists(plan, mid)) {
@@ -762,7 +783,7 @@ public class RecordService extends Service {
         for (long off = start; off <= start + 65536L && probes < maxProbes; off += step) {
             probes++;
             if (!session.running) {
-                return -1L;
+                break;
             }
             if (exists(plan, off)) {
                 best = off;
@@ -801,7 +822,7 @@ public class RecordService extends Service {
             + segmentUrl(plan.video.media, plan.video.startNumber + offset);
         HttpURLConnection conn = null;
         try {
-            conn = Http.open(url, 2000, 3000);
+            conn = Http.open(url, 4000, 6000);
             conn.setRequestProperty("Range", "bytes=0-0");
             int code = conn.getResponseCode();
             return code == 200 || code == 206;

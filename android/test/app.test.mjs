@@ -565,8 +565,13 @@ function playbackAndRecorderFixes() {
   check("a stop during the edge probe still saves a file", true,
     /nothing recorded - stopped before the first segment/s.test(java) &&
     /while \(session\.running \|\| segmentsThisPart == 0\)/s.test(java));
-  check("the live-edge probe uses short timeouts", true,
-    /Http\.open\(url, 2000, 3000\)/s.test(java));
+  check("the live-edge probe keeps real network slack", true,
+    /Http\.open\(url, 4000, 6000\)/s.test(java));
+  check("a transient probe failure retries instead of ending the recording", true,
+    /probeRetries > MAX_PROBE_RETRIES/s.test(java) &&
+    /Thread\.sleep\(3000\)/s.test(java));
+  check("the stop interrupt is cleared on every post-stop fetch", true,
+    /if \(!session\.running\) \{[\s\S]{0,500}Thread\.interrupted\(\)[\s\S]{0,150}stopFetches/s.test(java));
 }
 
 function controlRoomStructure() {
