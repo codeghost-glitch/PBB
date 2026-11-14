@@ -31,6 +31,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -193,6 +194,7 @@ public class RecordService extends Service {
         String baseUrl;
         Track video;
         Track audio;
+        long suggestedOffset = -1;
     }
 
     private static class Template {
@@ -643,6 +645,7 @@ public class RecordService extends Service {
         for (Track t : audios) maxStart = Math.max(maxStart, t.startNumber);
 
         Plan plan = new Plan();
+        plan.suggestedOffset = liveOffsetFromMpd(new String(body, StandardCharsets.UTF_8));
         plan.baseUrl = mpdUrl.substring(0, mpdUrl.lastIndexOf('/') + 1);
         plan.video = pickVideo(videos, quality, maxStart);
         plan.audio = pickAudio(audios, maxStart);
@@ -712,6 +715,40 @@ public class RecordService extends Service {
     }
 
     /**
+     * Where the live edge is, straight from the MPD: the number of whole
+     * segments between availabilityStartTime and publishTime. Scanning forward
+     * from zero cannot work forever on a stream that has been up for days -
+     * the edge moves ~21,600 segments (4s each) per day. Two segments back
+     * keeps us inside the short DVR window. Pure so host tests can check it.
+     */
+    static long liveOffsetFromMpd(String xml) {
+        try {
+            String astText = mpdAttribute(xml, "availabilityStartTime");
+            String pubText = mpdAttribute(xml, "publishTime");
+            String scaleText = mpdAttribute(xml, "timescale");
+            String durText = mpdAttribute(xml, "duration");
+            if (astText == null || pubText == null || scaleText == null || durText == null) {
+                return -1L;
+            }
+            long ast = Instant.parse(astText).toEpochMilli();
+            long pub = Instant.parse(pubText).toEpochMilli();
+            double segmentSeconds = Double.parseDouble(durText) / Double.parseDouble(scaleText);
+            if (ast <= 0 || pub <= ast || segmentSeconds <= 0) {
+                return -1L;
+            }
+            long offset = (long) (((pub - ast) / 1000.0) / segmentSeconds) - 2;
+            return offset < 0 ? 0L : offset;
+        } catch (Exception e) {
+            return -1L;
+        }
+    }
+
+    private static String mpdAttribute(String xml, String name) {
+        Matcher m = Pattern.compile(name + "=\"([^\"]+)\"").matcher(xml);
+        return m.find() ? m.group(1) : null;
+    }
+
+    /**
      * The broadcaster's segment numbering does not follow availabilityStartTime,
      * and some representations have holes in their archive, so discover the live
      * edge by probing one-byte range requests: coarse scan for the highest
@@ -722,16 +759,17 @@ public class RecordService extends Service {
      */
     private static long findLiveOffset(String mpdUrl, Plan plan, Session session)
             throws IOException {
-        long known = rememberedEdge(mpdUrl);
+        long start = plan.suggestedOffset >= 0
+            ? plan.suggestedOffset : Math.max(0L, rememberedEdge(mpdUrl));
         try {
-            return scanEdge(mpdUrl, plan, known >= 0 ? known : 0, session);
+            return scanEdge(mpdUrl, plan, start, session);
         } catch (IOException e) {
-            if (known <= 0) {
+            long known = rememberedEdge(mpdUrl);
+            if (known < 0 || Math.abs(known - start) <= 8) {
                 throw e;
             }
-            // The remembered edge is gone, the archive rolled past it. Walk
-            // the whole archive again.
-            return scanEdge(mpdUrl, plan, 0, session);
+            // The computed edge is stale; try the last edge we actually played.
+            return scanEdge(mpdUrl, plan, known, session);
         }
     }
 
@@ -746,6 +784,19 @@ public class RecordService extends Service {
             // before deciding the stream has gone away; a full 64-step scan of
             // the whole archive would take hundreds of requests.
             best = coarseScan(plan, start, 64L, 128, session);
+        }
+        if (best < 0 && session.running) {
+            // The computed edge can sit a little ahead of what the CDN has
+            // published. Step backwards inside the DVR window before giving up.
+            for (long back = 4; back <= 64 && best < 0; back *= 2) {
+                if (!session.running) {
+                    break;
+                }
+                long candidate = Math.max(0L, start - back);
+                if (exists(plan, candidate)) {
+                    best = candidate;
+                }
+            }
         }
         if (best < 0) {
             throw new IOException("no live segments available");

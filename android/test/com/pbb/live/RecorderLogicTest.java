@@ -17,6 +17,7 @@ public final class RecorderLogicTest {
         segmentUrlHandlesBareNumber();
         pickVideoFollowsThePageRules();
         pickAudioFollowsTheLiveEdge();
+        liveOffsetFollowsMpdTiming();
         partNameKeepsTheExtension();
         emptyGapPartRetriesButIsBounded();
         if (failures > 0) {
@@ -24,6 +25,18 @@ public final class RecorderLogicTest {
             System.exit(1);
         }
         System.out.println("recorder logic checks passed");
+    }
+
+    private static void liveOffsetFollowsMpdTiming() {
+        String mpd = "<MPD type=\"dynamic\" "
+            + "availabilityStartTime=\"2026-11-10T02:59:29.905Z\" "
+            + "publishTime=\"2026-11-14T11:56:31.364Z\">"
+            + "<Period><SegmentTemplate timescale=\"90000\" duration=\"360360\" "
+            + "startNumber=\"1794279564\"/></Period></MPD>";
+        check("the live edge comes from the MPD's own timing", 94359L,
+            RecordService.liveOffsetFromMpd(mpd));
+        check("a manifest without timing falls back to scanning", -1L,
+            RecordService.liveOffsetFromMpd("<MPD type=\"dynamic\"></MPD>"));
     }
 
     private static void check(String what, Object expected, Object actual) {
