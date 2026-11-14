@@ -1,0 +1,36 @@
+name: artifact cleanup
+
+# Build artifacts are reproducible; the GitHub Release is the deliverable.
+# Keep at most one day of artifacts so the private-account storage quota can
+# never fill up and fail a build again.
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: delete stale artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          KEEP_DAYS: ${{ vars.ARTIFACT_KEEP_DAYS || '1' }}
+        run: |
+          set -u
+          cutoff="$(date -u -d "-${KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Deleting artifacts older than ${KEEP_DAYS} day(s) in ${REPO}"
+          gh api --paginate "repos/${REPO}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id, .created_at] | @tsv' |
+          while IFS="$(printf '\t')" read -r id created; do
+            [ -z "${id}" ] && continue
+            if [[ "${created}" < "${cutoff}" ]]; then
+              gh api --method DELETE "repos/${REPO}/actions/artifacts/${id}" >/dev/null 2>&1 \
+                || echo "could not delete artifact ${id}"
+            fi
+          done
