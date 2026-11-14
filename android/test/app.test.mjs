@@ -484,6 +484,46 @@ function fullscreenKeepsThePictureWhole() {
     /if \(state\.fullscreen && players\[state\.focused\]\) \{[^}]*showControls\(\)/s.test(app));
 }
 
+function stopNoticeClearsTheTallyButKeepsTheKey() {
+  const page = loadPage();
+  page.state.recording.add(0);
+  page.state.recordStarted.set(0, Date.now() - 5000);
+  page.state.stopping.add(0);
+  // "notice" is the immediate stop acknowledgement, sent before the remux and
+  // the MediaStore copy finish. Keep the key disabled until "done" lands.
+  page.window.onRecordingState({
+    active: false, index: 0, kind: "notice", message: "", elapsed: 5,
+  });
+  check("the tally clears on the stop notice", false, page.state.recording.has(0));
+  check("the key stays disabled until done", true, page.state.stopping.has(0));
+  page.window.onRecordingState({
+    active: false, index: 0, kind: "done", message: "", elapsed: 5,
+  });
+  check("done re-enables the key", false, page.state.stopping.has(0));
+}
+
+function refreshResyncsAllStreams() {
+  const app = fs.readFileSync(APP, "utf8");
+  check("refresh still asks for fresh keys", true,
+    /function refreshKeysFromUi\(\) \{[\s\S]{0,220}Pbb\.refreshKeys\(\)/s.test(app));
+  check("a manual refresh rebuilds the players", true,
+    /manualKeyRefresh[\s\S]{0,320}await resyncStreams\(\)/s.test(app));
+  check("all players reload in the same tick", true,
+    /for \(const \[i\] of players\.entries\(\)\) \{[\s\S]{0,120}initPlayer\(players\[i\], i\)/s.test(app));
+  check("feeds are pulled to the live edge", true,
+    /goToLive\(\)/s.test(app));
+}
+
+function channelSourceContract() {
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  check("the pages.dev config is an alternative source", true,
+    java.includes("https://pbb-v2.pages.dev/secrets.json"));
+  check("the servers shape is normalised", true,
+    /servers[\s\S]{0,500}mpdUrl/s.test(java));
+  check("the web-player channels keep their names", true,
+    java.includes("CHANNEL_NAMES"));
+}
+
 function controlRoomStructure() {
   const app = fs.readFileSync(APP, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
@@ -516,6 +556,9 @@ const tests = [
   sourceApplyStoresTheChannel,
   fullscreenKeepsThePictureWhole,
   controlRoomStructure,
+  stopNoticeClearsTheTallyButKeepsTheKey,
+  refreshResyncsAllStreams,
+  channelSourceContract,
 ];
 
 for (const test of tests) {

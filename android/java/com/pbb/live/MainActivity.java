@@ -43,10 +43,16 @@ public class MainActivity extends Activity {
     // name, manifest URL and clear key of every channel. It sits outside the
     // app, so a rotated feed is a file edit and not a new build. The first
     // address that answers with a valid list wins: a gist the operator
-    // edits from the phone, and the static file of the Lovable project.
+    // edits from the phone, the static file of the Lovable project, and the
+    // secrets.json served by the PBB3.0 web player (a different JSON shape,
+    // normalised in fetchKeys).
     private static final String[] CHANNEL_LIST_URLS = {
         "https://gist.githubusercontent.com/codeghost-glitch/8ebdedbe5aedff46245b00e5bde6726a/raw/pbb-channels.json",
-        "https://pbbliveaccess.lovable.app/channels.json"
+        "https://pbbliveaccess.lovable.app/channels.json",
+        "https://pbb-v2.pages.dev/secrets.json"
+    };
+    private static final String[] CHANNEL_NAMES = {
+        "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
@@ -376,9 +382,10 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Reads the channel list: one JSON file with the same shape as the
-     * built-in config, a "streams" array of name, url, kid and key. The KID
-     * may be written with or without dashes.
+     * Reads the channel list: either a "streams" array of name, url, kid and
+     * key (the built-in shape), or the PBB3.0 web player's "servers" map with
+     * mpdUrl / keyId / key. Both come back in the built-in shape. The KID may
+     * be written with or without dashes.
      */
     private static String fetchKeys(String url) {
         String raw;
@@ -391,7 +398,23 @@ public class MainActivity extends Activity {
             return null;
         }
         try {
-            JSONArray listed = new JSONObject(raw).getJSONArray("streams");
+            JSONObject doc = new JSONObject(raw);
+            JSONArray listed;
+            if (doc.has("streams")) {
+                listed = doc.getJSONArray("streams");
+            } else {
+                JSONObject servers = doc.getJSONObject("servers");
+                listed = new JSONArray();
+                for (int n = 1; n <= CHANNEL_COUNT; n++) {
+                    JSONObject server = servers.getJSONObject(Integer.toString(n));
+                    JSONObject entry = new JSONObject();
+                    entry.put("name", CHANNEL_NAMES[n - 1]);
+                    entry.put("url", server.getString("mpdUrl"));
+                    entry.put("kid", server.getString("keyId"));
+                    entry.put("key", server.getString("key"));
+                    listed.put(entry);
+                }
+            }
             JSONArray streams = new JSONArray();
             for (int i = 0; i < listed.length(); i++) {
                 JSONObject entry = listed.getJSONObject(i);

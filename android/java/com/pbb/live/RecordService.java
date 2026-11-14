@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
+import android.os.Process;
 import android.provider.MediaStore;
 import android.system.Os;
 import android.util.Base64;
@@ -42,6 +43,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
@@ -299,12 +301,13 @@ public class RecordService extends Service {
         notifySession(session);
         status(true, index, "", KIND_START);
 
-        Thread worker = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                record(session);
-            }
-        }, "pbb-pull-record-" + index);
+        Thread worker = backgroundThreads("pbb-pull-record-" + index).newThread(
+            new Runnable() {
+                @Override
+                public void run() {
+                    record(session);
+                }
+            });
         session.worker = worker;
         worker.start();
         return START_NOT_STICKY;
@@ -332,7 +335,8 @@ public class RecordService extends Service {
         boolean keepSegments = false;
         int totalSegments = 0;
         int emptyRetries = 0;
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2,
+            backgroundThreads("pbb-pull-fetch-" + index));
         try {
             if (!isArm64()) {
                 throw new IOException("recorder plugin is arm64 only on this build");
@@ -357,7 +361,27 @@ public class RecordService extends Service {
                 write(videoTmp, videoInit);
                 write(audioTmp, audioInit);
 
-                long offset = findLiveOffset(session.mpdUrl, plan);
+                long offset;
+                try {
+                    offset = findLiveOffset(session.mpdUrl, plan, session);
+                } catch (IOException e) {
+                    if (!session.running) {
+                        result = savedMessage != null ? savedMessage : "recording stopped";
+                        break;
+                    }
+                    if (emptyRetries < MAX_EMPTY_RETRIES) {
+                        emptyRetries++;
+                        forgetEdge(session.mpdUrl);
+                        continue;
+                    }
+                    throw e;
+                }
+                if (offset < 0) {
+                    // Stopped while probing the archive: nothing was pulled in
+                    // this part, so go straight to the normal save path.
+                    result = savedMessage != null ? savedMessage : "recording stopped";
+                    break;
+                }
                 int misses = 0;
                 int segmentsThisPart = 0;
                 boolean gap = false;
@@ -481,6 +505,26 @@ public class RecordService extends Service {
         String base = dot > 0 ? displayName.substring(0, dot) : displayName;
         String ext = dot > 0 ? displayName.substring(dot) : ".mp4";
         return base + "_" + part + ext;
+    }
+
+    /**
+     * The pull, the FFmpeg remux and the MediaStore copy are heavy. Running
+     * them at the UI thread's priority makes the page stutter while recording
+     * and especially while a long recording is being saved on stop.
+     */
+    private static ThreadFactory backgroundThreads(final String name) {
+        return new ThreadFactory() {
+            @Override
+            public Thread newThread(final Runnable task) {
+                return new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+                        task.run();
+                    }
+                }, name);
+            }
+        };
     }
 
     private static boolean isArm64() {
@@ -641,31 +685,34 @@ public class RecordService extends Service {
      * The last edge found for a manifest is remembered, because the scan from
      * the start of the archive costs about fifty requests every time.
      */
-    private static long findLiveOffset(String mpdUrl, Plan plan) throws IOException {
+    private static long findLiveOffset(String mpdUrl, Plan plan, Session session)
+            throws IOException {
+        if (!session.running) {
+            return -1L;
+        }
         long known = rememberedEdge(mpdUrl);
         try {
-            return scanEdge(mpdUrl, plan, known >= 0 ? known : 0);
+            return scanEdge(mpdUrl, plan, known >= 0 ? known : 0, session);
         } catch (IOException e) {
             if (known <= 0) {
                 throw e;
             }
             // The remembered edge is gone, the archive rolled past it. Walk
             // the whole archive again.
-            return scanEdge(mpdUrl, plan, 0);
+            return scanEdge(mpdUrl, plan, 0, session);
         }
     }
 
-    /** Scans forward from start for the last segment the server still serves. */
-    private static long scanEdge(String mpdUrl, Plan plan, long start) throws IOException {
-        long best = -1;
-        // 1 KiB steps keep the coarse scan under ~65 requests; the binary search
-        // below then nails the edge to within one step.
-        for (long off = start; off <= start + 65536L; off += 1024L) {
-            if (exists(plan, off)) {
-                best = off;
-            } else if (best >= 0 && off - best > 2048L) {
-                break;
-            }
+    /** Scans forward from start for the last segment the server still serves.
+     *  Returns -1 when the session was stopped mid-probe. */
+    private static long scanEdge(String mpdUrl, Plan plan, long start, Session session)
+            throws IOException {
+        long best = coarseScan(plan, start, 1024L, session);
+        if (best < 0 && session.running) {
+            // A short DVR window, or a hole at every 1 KiB sample, can hide the
+            // entire archive from the coarse pass. Walk the range again finely
+            // before deciding the stream has gone away.
+            best = coarseScan(plan, start, 64L, session);
         }
         if (best < 0) {
             throw new IOException("no live segments available");
@@ -673,6 +720,9 @@ public class RecordService extends Service {
         long good = best;
         long bad = best + 2049L;
         while (bad - good > 1) {
+            if (!session.running) {
+                return -1L;
+            }
             long mid = good + (bad - good) / 2;
             if (exists(plan, mid)) {
                 good = mid;
@@ -684,6 +734,23 @@ public class RecordService extends Service {
             LAST_EDGE.put(mpdUrl, Long.valueOf(good));
         }
         return Math.max(0L, good - 1);
+    }
+
+    /** Highest sampled offset that still exists, or -1 when none did (or the
+     *  session was stopped). Two misses past the last hit end the pass. */
+    private static long coarseScan(Plan plan, long start, long step, Session session) {
+        long best = -1;
+        for (long off = start; off <= start + 65536L; off += step) {
+            if (!session.running) {
+                return -1L;
+            }
+            if (exists(plan, off)) {
+                best = off;
+            } else if (best >= 0 && off - best > 2L * step) {
+                break;
+            }
+        }
+        return best;
     }
 
     /**
@@ -1002,6 +1069,9 @@ public class RecordService extends Service {
         if (session.worker != null) {
             session.worker.interrupt();
         }
+        // The remux and the MediaStore copy of a long recording take a while.
+        // Clear the tally and the stop button now; "saved to ..." lands later.
+        status(false, index, "saving " + session.streamName, KIND_NOTICE);
     }
 
     private void stopAll() {
@@ -1018,6 +1088,7 @@ public class RecordService extends Service {
             if (session.worker != null) {
                 session.worker.interrupt();
             }
+            status(false, session.index, "saving " + session.streamName, KIND_NOTICE);
         }
     }
 

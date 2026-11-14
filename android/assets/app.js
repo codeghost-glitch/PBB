@@ -23,7 +23,7 @@ function refreshKeysFromUi() {
     return;
   }
   manualKeyRefresh = true;
-  setStatusText("refreshing streams...");
+  setStatusText("syncing all three streams...");
   Pbb.refreshKeys();
 }
 
@@ -1220,7 +1220,10 @@ function toggleRecord(index) {
   }
   if (state.recording.has(index)) {
     markStopping(index);
-    setStatusText(`stopping ${entry.stream.name}`);
+    // The tally clears at once; the service answers again when the file is
+    // actually saved, which for a long recording takes a while.
+    state.recording.delete(index);
+    setStatusText(`saving ${entry.stream.name}`);
     Pbb.stopRecording(index);
   } else if (state.keysStale) {
     // The keys already rotated, so a recording now would be remuxed with the
@@ -1254,7 +1257,9 @@ window.onRecordingState = (payload) => {
     } else {
       state.recording.delete(index);
       state.recordStarted.delete(index);
-      state.stopping.delete(index);
+      if (kind !== "notice") {
+        state.stopping.delete(index);
+      }
     }
   }
 
@@ -1327,6 +1332,52 @@ window.handleBack = () => {
   return false;
 };
 
+let alignTimer = null;
+
+// Best effort: a feed that connected a moment later is a few seconds behind.
+// Pull every loaded player to its live edge in the same tick. Missing APIs or
+// a feed still loading are harmless - the next refresh tries again.
+function alignToLiveEdge() {
+  alignTimer = null;
+  for (const entry of players) {
+    const player = entry.player;
+    if (!player) {
+      continue;
+    }
+    try {
+      if (typeof player.goToLive === "function") {
+        player.goToLive();
+      } else {
+        const range = player.seekRange();
+        if (range && range.end > range.start) {
+          entry.video.currentTime = range.end;
+        }
+      }
+    } catch (e) {
+      // A feed that is still connecting keeps its current position.
+    }
+  }
+}
+
+async function resyncStreams() {
+  const olds = players.map((p) => p.player);
+  for (const entry of players) {
+    entry.player = null;
+    if (entry.retryTimer) {
+      clearTimeout(entry.retryTimer);
+      entry.retryTimer = null;
+    }
+    entry.retries = 0;
+    setStreamStatus(entry, "connecting...", false);
+  }
+  await Promise.all(olds.map((p) => (p ? p.destroy().catch(() => {}) : Promise.resolve())));
+  for (const [i] of players.entries()) {
+    initPlayer(players[i], i);
+  }
+  clearTimeout(alignTimer);
+  alignTimer = setTimeout(alignToLiveEdge, 1500);
+}
+
 // Pushed by Java after the live stream config is fetched. Rebuild the Shaka
 // players so both playback and the recorder use the current clear keys.
 window.onStreamConfig = async (raw) => {
@@ -1354,27 +1405,20 @@ window.onStreamConfig = async (raw) => {
   }
   if (!changed) {
     if (manualKeyRefresh) {
+      // A manual refresh is also a re-sync: the keys did not change, but the
+      // three feeds may have connected at different times. Rebuild them all.
       manualKeyRefresh = false;
-      setTransientStatus("streams already up to date");
+      await resyncStreams();
+      setTransientStatus("streams re-synced");
     }
     return;
   }
   manualKeyRefresh = false;
   state.keysStale = false;
-  const olds = players.map((p) => p.player);
   for (const [i, s] of streams.entries()) {
     players[i].stream = s;
-    players[i].player = null;
-    if (players[i].retryTimer) {
-      clearTimeout(players[i].retryTimer);
-      players[i].retryTimer = null;
-    }
-    players[i].retries = 0;
   }
-  await Promise.all(olds.map((p) => (p ? p.destroy().catch(() => {}) : Promise.resolve())));
-  for (const [i] of players.entries()) {
-    initPlayer(players[i], i);
-  }
+  await resyncStreams();
   setStatusText("keys refreshed - reconnecting streams");
 };
 
@@ -1675,7 +1719,7 @@ function boot() {
   backBtn.addEventListener("click", backToGrid);
   const refreshBtn = document.getElementById("refreshBtn");
   if (refreshBtn) {
-    setIcon(refreshBtn, "refresh", "refresh stream keys");
+    setIcon(refreshBtn, "refresh", "sync all three streams");
     refreshBtn.addEventListener("click", refreshKeysFromUi);
   }
   const sourceBtn = document.getElementById("sourceBtn");
