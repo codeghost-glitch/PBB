@@ -13,6 +13,7 @@ const state = {
   brightness: 0.5,
   keysStale: false,
   mini: -1,
+  server: 0,
 };
 
 let manualKeyRefresh = false;
@@ -465,6 +466,11 @@ const ICONS = {
   moon: [
     ["path", { d: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" }],
   ],
+  // Two stacked monitors: the stitched Main-over-Dining recording.
+  stitch: [
+    ["rect", { x: 3, y: 3, width: 18, height: 8, rx: 1 }],
+    ["rect", { x: 3, y: 13, width: 18, height: 8, rx: 1 }],
+  ],
 };
 
 const SVG_ATTRS = {
@@ -627,6 +633,7 @@ function scheduleRecover(entry, index) {
       return;
     }
     entry.retries = 0;
+    alignPlayer(entry);
     applyAudio();
     if (state.focused >= 0 && state.focused !== index) {
       entry.video.pause();
@@ -696,6 +703,7 @@ async function initPlayer(entry, index) {
     scheduleRecover(entry, index);
     return;
   }
+  alignPlayer(entry);
 
   try {
     await entry.video.play();
@@ -1337,26 +1345,40 @@ let alignTimer = null;
 // Best effort: a feed that connected a moment later is a few seconds behind.
 // Pull every loaded player to its live edge in the same tick. Missing APIs or
 // a feed still loading are harmless - the next refresh tries again.
+function alignPlayer(entry) {
+  const player = entry.player;
+  if (!player) {
+    return;
+  }
+  try {
+    if (typeof player.goToLive === "function") {
+      player.goToLive();
+    } else {
+      const range = player.seekRange();
+      if (range && range.end > range.start) {
+        entry.video.currentTime = range.end;
+      }
+    }
+  } catch (e) {
+    // A feed that is still connecting keeps its current position.
+  }
+}
+
 function alignToLiveEdge() {
   alignTimer = null;
   for (const entry of players) {
-    const player = entry.player;
-    if (!player) {
-      continue;
-    }
-    try {
-      if (typeof player.goToLive === "function") {
-        player.goToLive();
-      } else {
-        const range = player.seekRange();
-        if (range && range.end > range.start) {
-          entry.video.currentTime = range.end;
-        }
-      }
-    } catch (e) {
-      // A feed that is still connecting keeps its current position.
-    }
+    alignPlayer(entry);
   }
+}
+
+// A manual refresh with unchanged keys must not rebuild the players: a full
+// reload is slow and the late feeds land seconds behind the early ones. Just
+// pull the already-playing feeds to the live edge in the same tick, then once
+// more in case one was still connecting.
+function syncLiveEdges() {
+  alignToLiveEdge();
+  clearTimeout(alignTimer);
+  alignTimer = setTimeout(alignToLiveEdge, 2500);
 }
 
 async function resyncStreams() {
@@ -1408,7 +1430,7 @@ window.onStreamConfig = async (raw) => {
       // A manual refresh is also a re-sync: the keys did not change, but the
       // three feeds may have connected at different times. Rebuild them all.
       manualKeyRefresh = false;
-      await resyncStreams();
+      syncLiveEdges();
       setTransientStatus("streams re-synced");
     }
     return;
@@ -1635,6 +1657,174 @@ function applySource() {
   setTransientStatus("source updated - reconnecting");
 }
 
+const stitch = {
+  active: false,
+  recorder: null,
+  stream: null,
+  chunks: [],
+  raf: 0,
+};
+
+function releaseStitchStream() {
+  if (stitch.stream) {
+    for (const track of stitch.stream.getTracks()) {
+      track.stop();
+    }
+    stitch.stream = null;
+  }
+}
+
+function stitchMime() {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+  for (const type of ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"]) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return "";
+}
+
+function updateStitchButton() {
+  const btn = document.getElementById("stitchBtn");
+  if (!btn) {
+    return;
+  }
+  btn.classList.toggle("stitch-active", stitch.active);
+  setIcon(btn, stitch.active ? "stop" : "stitch",
+    stitch.active ? "stop the stitched recording" : "record main and dining together");
+}
+
+function saveStitch(blob, mime) {
+  const name = `PBB_stitch_${Date.now()}.${mime.includes("mp4") ? "mp4" : "webm"}`;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const url = String(reader.result || "");
+    const comma = url.indexOf(",");
+    if (comma < 0 || !window.Pbb) {
+      setTransientStatus("stitched video could not be saved");
+      return;
+    }
+    setTransientStatus(Pbb.saveStitched(url.slice(comma + 1), name));
+  };
+  reader.onerror = () => setTransientStatus("stitched video could not be read");
+  reader.readAsDataURL(blob);
+}
+
+function stopStitch() {
+  if (stitch.raf) {
+    cancelAnimationFrame(stitch.raf);
+    stitch.raf = 0;
+  }
+  const recorder = stitch.recorder;
+  stitch.active = false;
+  stitch.recorder = null;
+  if (recorder && recorder.state !== "inactive") {
+    recorder.stop();
+  } else {
+    releaseStitchStream();
+  }
+  updateStitchButton();
+}
+
+function startStitch() {
+  if (!window.Pbb || players.length < 2) {
+    return;
+  }
+  const mime = stitchMime();
+  const canvas = document.createElement("canvas");
+  if (!mime || typeof canvas.captureStream !== "function") {
+    setTransientStatus("stitched recording is not supported on this device");
+    return;
+  }
+  // Main Access on top, Dining Area below: two 16:9 frames in one tall canvas.
+  canvas.width = 640;
+  canvas.height = 720;
+  const ctx = canvas.getContext("2d");
+  const draw = () => {
+    const half = canvas.height / 2;
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < 2; i++) {
+      const video = players[i] && players[i].video;
+      if (video && video.readyState >= 2) {
+        ctx.drawImage(video, 0, i * half, canvas.width, half);
+      }
+    }
+    stitch.raf = requestAnimationFrame(draw);
+  };
+  draw();
+  let recorder;
+  try {
+    stitch.stream = canvas.captureStream(30);
+    recorder = new MediaRecorder(stitch.stream,
+      { mimeType: mime, videoBitsPerSecond: 1200000 });
+    recorder.start(1000);
+  } catch (e) {
+    cancelAnimationFrame(stitch.raf);
+    releaseStitchStream();
+    setTransientStatus("stitched recording could not start");
+    return;
+  }
+  stitch.chunks = [];
+  recorder.ondataavailable = (event) => {
+    if (event.data && event.data.size) {
+      stitch.chunks.push(event.data);
+    }
+  };
+  recorder.onerror = () => {
+    setTransientStatus("stitched recording failed");
+    stopStitch();
+  };
+  recorder.onstop = () => {
+    if (stitch.raf) {
+      cancelAnimationFrame(stitch.raf);
+      stitch.raf = 0;
+    }
+    releaseStitchStream();
+    setStatusText("saving stitched video...");
+    saveStitch(new Blob(stitch.chunks, { type: mime }), mime);
+  };
+  stitch.active = true;
+  stitch.recorder = recorder;
+  setStatusText("recording main + dining as one video");
+  updateStitchButton();
+}
+
+function toggleStitch() {
+  if (stitch.active) {
+    stopStitch();
+  } else {
+    startStitch();
+  }
+}
+
+function storedServer() {
+  try {
+    const value = Number(localStorage.getItem("pbb-server"));
+    return Number.isInteger(value) && value >= 0 && value <= 3 ? value : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function selectServer(index) {
+  const picked = Math.max(0, Math.min(3, Number(index) || 0));
+  state.server = picked;
+  try {
+    localStorage.setItem("pbb-server", String(picked));
+  } catch (e) {
+    // Private browsing: the choice still lasts for this page load.
+  }
+  for (const chip of document.querySelectorAll("#serverChips .chip")) {
+    chip.classList.toggle("active", Number(chip.dataset.source) === picked);
+  }
+  if (window.Pbb && typeof Pbb.setChannelSource === "function") {
+    Pbb.setChannelSource(picked);
+  }
+}
+
 function wireSourceSheet() {
   const sheet = sourceField("sourceSheet");
   if (!sheet) {
@@ -1658,6 +1848,18 @@ function wireSourceSheet() {
   const apply = sourceField("sourceApply");
   if (apply) {
     apply.addEventListener("click", applySource);
+  }
+  const serverChips = sourceField("serverChips");
+  if (serverChips) {
+    serverChips.addEventListener("click", (event) => {
+      const chip = event.target && event.target.closest
+        ? event.target.closest(".chip") : null;
+      if (!chip) {
+        return;
+      }
+      selectServer(chip.dataset.source);
+      refreshKeysFromUi();
+    });
   }
 }
 
@@ -1727,6 +1929,12 @@ function boot() {
     setIcon(sourceBtn, "sliders", "edit stream source");
     sourceBtn.addEventListener("click", () => openSourceSheet(sourceSheet.index));
   }
+  const stitchBtn = document.getElementById("stitchBtn");
+  if (stitchBtn) {
+    stitchBtn.addEventListener("click", toggleStitch);
+  }
+  selectServer(storedServer());
+  updateStitchButton();
   wireSourceSheet();
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");

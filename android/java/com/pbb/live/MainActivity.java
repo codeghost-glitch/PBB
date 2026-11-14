@@ -4,14 +4,19 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.BroadcastReceiver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.util.Rational;
 import android.view.View;
 import android.view.WindowInsets;
@@ -32,6 +37,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -54,6 +60,9 @@ public class MainActivity extends Activity {
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
+    // 0 = auto (first valid source wins), 1..3 = that source first, then the
+    // others as fallbacks. Chosen by the sources sheet and remembered.
+    private static volatile int channelSource = 0;
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
@@ -111,6 +120,8 @@ public class MainActivity extends Activity {
         appVolumeLevel = appVolume(filesDir);
         appBrightnessLevel = appBrightness(filesDir);
         streamConfigJson = streamConfig();
+        channelSource = getSharedPreferences("pbb", MODE_PRIVATE)
+            .getInt("channelSource", 0);
         loadCachedKeys();
         setupWebView();
         applyOrientation();
@@ -300,6 +311,55 @@ public class MainActivity extends Activity {
         return "";
     }
 
+    private String writeStitched(byte[] data, String name) throws IOException {
+        String mime = name.endsWith(".mp4") ? "video/mp4" : "video/webm";
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Video.Media.DISPLAY_NAME, name);
+            values.put(MediaStore.Video.Media.MIME_TYPE, mime);
+            values.put(MediaStore.Video.Media.RELATIVE_PATH,
+                Environment.DIRECTORY_MOVIES + "/PBB");
+            values.put(MediaStore.Video.Media.IS_PENDING, 1);
+            Uri uri = getContentResolver().insert(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) {
+                return "could not create the stitched video";
+            }
+            try {
+                OutputStream out = getContentResolver().openOutputStream(uri);
+                if (out == null) {
+                    getContentResolver().delete(uri, null, null);
+                    return "could not open the stitched video";
+                }
+                try {
+                    out.write(data);
+                } finally {
+                    out.close();
+                }
+                ContentValues done = new ContentValues();
+                done.put(MediaStore.Video.Media.IS_PENDING, 0);
+                getContentResolver().update(uri, done, null, null);
+                return "saved to Movies/PBB/" + name;
+            } catch (IOException e) {
+                getContentResolver().delete(uri, null, null);
+                throw e;
+            }
+        }
+        File dir = new File(Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_MOVIES), "PBB");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("cannot create Movies/PBB");
+        }
+        File dest = new File(dir, name);
+        FileOutputStream out = new FileOutputStream(dest, false);
+        try {
+            out.write(data);
+        } finally {
+            out.close();
+        }
+        return "saved to " + dest.getAbsolutePath();
+    }
+
     private void reportKeys(final String message) {
         runOnUiThread(new Runnable() {
             @Override
@@ -370,10 +430,12 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** The first published list that answers with a valid one. */
+    /** The chosen source first, then the others as fallbacks. */
     private static String publishedConfig() {
-        for (String url : CHANNEL_LIST_URLS) {
-            String candidate = fetchKeys(url);
+        int start = channelSource > 0 ? channelSource - 1 : 0;
+        for (int i = 0; i < CHANNEL_LIST_URLS.length; i++) {
+            int pos = (start + i) % CHANNEL_LIST_URLS.length;
+            String candidate = fetchKeys(CHANNEL_LIST_URLS[pos]);
             if (candidate != null && validKeys(candidate) != null) {
                 return candidate;
             }
@@ -914,6 +976,30 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void refreshKeys() {
             MainActivity.this.refreshKeys();
+        }
+
+        /** Pick which published channel list to try first. */
+        @JavascriptInterface
+        public void setChannelSource(int index) {
+            channelSource = Math.max(0, Math.min(CHANNEL_LIST_URLS.length, index));
+            getSharedPreferences("pbb", MODE_PRIVATE).edit()
+                .putInt("channelSource", channelSource).apply();
+        }
+
+        /**
+         * Saves the stitched WebView composite. The page hands over the whole
+         * clip as base64; these are short, foreground-only recordings.
+         */
+        @JavascriptInterface
+        public String saveStitched(String encoded, String name) {
+            if (encoded == null || name == null || !name.matches("[A-Za-z0-9._-]+")) {
+                return "bad stitched video";
+            }
+            try {
+                return writeStitched(Base64.decode(encoded, Base64.DEFAULT), name);
+            } catch (Exception e) {
+                return "could not save the stitched video";
+            }
         }
 
         /** Returns an empty string when the source was stored. */

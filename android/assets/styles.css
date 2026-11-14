@@ -705,6 +705,14 @@ h1 {
 
 .rec-badge-label { font-weight: var(--w-reg); opacity: 0.85; }
 
+/* The stitched clip is a recording too, so its key goes tally red while it
+   runs. */
+#stitchBtn.stitch-active {
+  background: var(--rec);
+  color: #FFFFFF;
+  border-color: var(--ink);
+}
+
 .status .btn-icon {
   width: var(--tap);
   height: var(--tap);

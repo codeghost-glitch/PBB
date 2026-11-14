@@ -67,6 +67,7 @@
         <span id="recTime">0:00</span>
       </span>
       <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="edit stream source"></button>
+      <button id="stitchBtn" class="btn btn-ghost btn-icon" type="button" aria-label="record main and dining together"></button>
       <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
       <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
     </footer>
@@ -78,6 +79,15 @@
         <button id="sourceClose" class="btn btn-ghost btn-icon" type="button" aria-label="close sources"></button>
       </div>
       <div class="sheet-chips" id="sourceChips" role="group" aria-label="channel"></div>
+      <div class="sheet-field">
+        <span>channel list server</span>
+        <div class="sheet-chips" id="serverChips" role="group" aria-label="channel list server">
+          <button class="chip" type="button" data-source="0">auto</button>
+          <button class="chip" type="button" data-source="1">gist</button>
+          <button class="chip" type="button" data-source="2">lovable</button>
+          <button class="chip" type="button" data-source="3">pages.dev</button>
+        </div>
+      </div>
       <label class="sheet-field">
         <span>manifest (.mpd)</span>
         <input id="sourceUrl" class="sheet-input" type="text" inputmode="url" autocomplete="off" spellcheck="false">

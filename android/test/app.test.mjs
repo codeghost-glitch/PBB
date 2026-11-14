@@ -524,6 +524,20 @@ function channelSourceContract() {
     java.includes("CHANNEL_NAMES"));
 }
 
+function stitchAndServerContract() {
+  const app = fs.readFileSync(APP, "utf8");
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  check("stitch stacks two feeds vertically", true,
+    /canvas\.height = 720/s.test(app) && /i \* half/s.test(app));
+  check("stitch saves one clip", true, /Pbb\.saveStitched\(/s.test(app));
+  check("the sources sheet offers a server switch", true,
+    /serverChips/s.test(app) && /data-source="3"/s.test(fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8")));
+  check("the chosen channel list is tried first", true,
+    /channelSource > 0 \? channelSource - 1 : 0/s.test(java));
+  check("the pages.dev server is in the list", true,
+    java.includes("https://pbb-v2.pages.dev/secrets.json"));
+}
+
 function controlRoomStructure() {
   const app = fs.readFileSync(APP, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
@@ -559,6 +573,7 @@ const tests = [
   stopNoticeClearsTheTallyButKeepsTheKey,
   refreshResyncsAllStreams,
   channelSourceContract,
+  stitchAndServerContract,
 ];
 
 for (const test of tests) {
