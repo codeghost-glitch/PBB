@@ -395,7 +395,7 @@ public class RecordService extends Service {
                     byte[][] both = fetchBoth(pool, vUrl, aUrl, index);
                     byte[] v = both[0];
                     byte[] a = both[1];
-                    if (v == null || a == null) {
+                    if (v == null || a == null || v.length < 128 || a.length < 128) {
                         misses++;
                         if (misses > 30) {
                             // Long stall: the live edge moved past what the archive
@@ -417,6 +417,7 @@ public class RecordService extends Service {
                     offset++;
                 }
 
+                Thread.interrupted();
                 if (segmentsThisPart == 0) {
                     // Thirty misses before the first segment means the live edge
                     // moved past the numbers we were waiting on while the archive
@@ -440,6 +441,9 @@ public class RecordService extends Service {
                     synchronized (REMUX_LOCK) {
                         nativeRemux(videoTmp.getAbsolutePath(), audioTmp.getAbsolutePath(),
                             outTmp.getAbsolutePath(), session.key);
+                    }
+                    if (outTmp.length() < 4096) {
+                        throw new IOException("remux produced no media");
                     }
                     result = "saved to " + publish(outTmp, name);
                     savedMessage = result;
@@ -707,12 +711,13 @@ public class RecordService extends Service {
      *  Returns -1 when the session was stopped mid-probe. */
     private static long scanEdge(String mpdUrl, Plan plan, long start, Session session)
             throws IOException {
-        long best = coarseScan(plan, start, 1024L, session);
+        long best = coarseScan(plan, start, 1024L, 65, session);
         if (best < 0 && session.running) {
             // A short DVR window, or a hole at every 1 KiB sample, can hide the
-            // entire archive from the coarse pass. Walk the range again finely
-            // before deciding the stream has gone away.
-            best = coarseScan(plan, start, 64L, session);
+            // entire archive from the coarse pass. Walk a bounded fine range
+            // before deciding the stream has gone away; a full 64-step scan of
+            // the whole archive would take hundreds of requests.
+            best = coarseScan(plan, start, 64L, 128, session);
         }
         if (best < 0) {
             throw new IOException("no live segments available");
@@ -738,9 +743,12 @@ public class RecordService extends Service {
 
     /** Highest sampled offset that still exists, or -1 when none did (or the
      *  session was stopped). Two misses past the last hit end the pass. */
-    private static long coarseScan(Plan plan, long start, long step, Session session) {
+    private static long coarseScan(Plan plan, long start, long step, int maxProbes,
+            Session session) {
         long best = -1;
-        for (long off = start; off <= start + 65536L; off += step) {
+        int probes = 0;
+        for (long off = start; off <= start + 65536L && probes < maxProbes; off += step) {
+            probes++;
             if (!session.running) {
                 return -1L;
             }
@@ -781,7 +789,7 @@ public class RecordService extends Service {
             + segmentUrl(plan.video.media, plan.video.startNumber + offset);
         HttpURLConnection conn = null;
         try {
-            conn = Http.open(url, 15000, 20000);
+            conn = Http.open(url, 5000, 8000);
             conn.setRequestProperty("Range", "bytes=0-0");
             int code = conn.getResponseCode();
             return code == 200 || code == 206;
@@ -1001,12 +1009,12 @@ public class RecordService extends Service {
             Uri uri = getContentResolver().insert(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
             if (uri == null) {
-                throw new IOException("MediaStore insert failed");
+                return publishFallback(src, displayName);
             }
             ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "w");
             if (pfd == null) {
                 getContentResolver().delete(uri, null, null);
-                throw new IOException("MediaStore open failed");
+                return publishFallback(src, displayName);
             }
             try {
                 copy(src, pfd);
@@ -1016,13 +1024,41 @@ public class RecordService extends Service {
             }
             ContentValues publishValues = new ContentValues();
             publishValues.put(MediaStore.Video.Media.IS_PENDING, 0);
-            getContentResolver().update(uri, publishValues, null, null);
+            if (getContentResolver().update(uri, publishValues, null, null) < 1) {
+                // An entry left IS_PENDING is invisible in the gallery; keep a
+                // real copy rather than reporting a save that cannot be found.
+                getContentResolver().delete(uri, null, null);
+                return publishFallback(src, displayName);
+            }
             return "Movies/PBB/" + displayName;
         }
         File dir = new File(Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_MOVIES), "PBB");
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("cannot create Movies/PBB");
+        }
+        File dest = new File(dir, displayName);
+        FileInputStream in = new FileInputStream(src);
+        FileOutputStream out = new FileOutputStream(dest, false);
+        try {
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                out.write(buf, 0, n);
+            }
+        } finally {
+            in.close();
+            out.close();
+        }
+        return dest.getAbsolutePath();
+    }
+
+    /** Last-resort copy when MediaStore will not take the file. App-private,
+     *  but the recording is not lost; the status text carries the real path. */
+    private String publishFallback(File src, String displayName) throws IOException {
+        File dir = new File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "PBB");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("cannot create the fallback PBB folder");
         }
         File dest = new File(dir, displayName);
         FileInputStream in = new FileInputStream(src);

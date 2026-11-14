@@ -510,8 +510,8 @@ function refreshResyncsAllStreams() {
     /manualKeyRefresh[\s\S]{0,320}await resyncStreams\(\)/s.test(app));
   check("all players reload in the same tick", true,
     /for \(const \[i\] of players\.entries\(\)\) \{[\s\S]{0,120}initPlayer\(players\[i\], i\)/s.test(app));
-  check("feeds are pulled to the live edge", true,
-    /goToLive\(\)/s.test(app));
+  check("feeds align inside the buffered region, not at the raw edge", true,
+    /range\.end - 1/s.test(app) && !/goToLive\(\)/s.test(app));
 }
 
 function channelSourceContract() {
@@ -536,6 +536,31 @@ function stitchAndServerContract() {
     /channelSource > 0 \? channelSource - 1 : 0/s.test(java));
   check("the pages.dev server is in the list", true,
     java.includes("https://pbb-v2.pages.dev/secrets.json"));
+}
+
+function playbackAndRecorderFixes() {
+  const app = fs.readFileSync(APP, "utf8");
+  const java = fs.readFileSync(
+    path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
+  check("all players use one shared presentation delay", true,
+    /defaultPresentationDelay: 8/s.test(app) && /ignoreSuggestedPresentationDelay: true/s.test(app));
+  check("live low-latency mode is off", true, /lowLatencyMode: false/s.test(app));
+  check("buffering has real headroom", true,
+    /bufferingGoal: 30/s.test(app) && /rebufferingGoal: 8/s.test(app));
+  check("startup waits for all three loads", true,
+    /setTimeout\(startGridTogether, 5000\)/s.test(app));
+  check("no per-load live-edge seek", false,
+    /await player\.load[\s\S]{0,220}alignPlayer/s.test(app));
+  check("the stop interrupt is cleared before saving", true,
+    /Thread\.interrupted\(\)/s.test(java));
+  check("empty segment bodies count as misses", true,
+    /v\.length < 128/s.test(java));
+  check("a header-only remux is never published", true,
+    /outTmp\.length\(\) < 4096/s.test(java));
+  check("a MediaStore failure still saves a copy", true,
+    /publishFallback/s.test(java) && /IS_PENDING, 0\)/s.test(java));
+  check("a header-only stitch is never saved", true,
+    /blob\.size < 8192/s.test(app));
 }
 
 function controlRoomStructure() {
@@ -574,6 +599,7 @@ const tests = [
   refreshResyncsAllStreams,
   channelSourceContract,
   stitchAndServerContract,
+  playbackAndRecorderFixes,
 ];
 
 for (const test of tests) {

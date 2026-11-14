@@ -609,7 +609,7 @@ function createCard(stream, index) {
   recordBtn.addEventListener("click", () => toggleRecord(index));
 
   grid.appendChild(card);
-  players.push({ video, player: null, stream, statusEl, card, tally, tallyTime });
+  players.push({ video, player: null, stream, statusEl, card, tally, tallyTime, loaded: false });
 }
 
 // 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT are transient on live
@@ -633,7 +633,6 @@ function scheduleRecover(entry, index) {
       return;
     }
     entry.retries = 0;
-    alignPlayer(entry);
     applyAudio();
     if (state.focused >= 0 && state.focused !== index) {
       entry.video.pause();
@@ -642,6 +641,43 @@ function scheduleRecover(entry, index) {
     }
     setStreamStatus(entry, "live", false);
   }, delay);
+}
+
+let gridGateOpen = false;
+let gridStartTimer = null;
+
+function playEntry(entry) {
+  entry.video.play().catch(() => {
+    entry.video.muted = true;
+    if (state.sound === players.indexOf(entry)) {
+      state.sound = -1;
+      updateControls();
+    }
+    entry.video.play().catch(() => {});
+  });
+}
+
+function startGridTogether() {
+  if (gridGateOpen) {
+    return;
+  }
+  gridGateOpen = true;
+  if (gridStartTimer) {
+    clearTimeout(gridStartTimer);
+    gridStartTimer = null;
+  }
+  for (const entry of players) {
+    if (entry.loaded) {
+      playEntry(entry);
+    }
+  }
+  applyAudio();
+}
+
+function onPlayerReady() {
+  if (players.length && players.every((entry) => entry.loaded)) {
+    startGridTogether();
+  }
 }
 
 async function initPlayer(entry, index) {
@@ -653,11 +689,13 @@ async function initPlayer(entry, index) {
   clearKeys[uuidKid(entry.stream.kid)] = entry.stream.key;
 
   const retry = () => ({
-    maxAttempts: 8,
+    maxAttempts: 6,
     baseDelay: 400,
     backoffFactor: 2,
     fuzzFactor: 0.5,
     timeout: 20000,
+    stallTimeout: 8000,
+    connectionTimeout: 10000,
   });
 
   player.configure({
@@ -666,12 +704,19 @@ async function initPlayer(entry, index) {
       clearKeys,
     },
     streaming: {
-      bufferingGoal: 15,
-      rebufferingGoal: 2,
-      bufferBehind: 25,
+      // Live streams need real headroom. The defaults are conservative and
+      // with three players on one radio they rebuffer constantly.
+      lowLatencyMode: false,
+      bufferingGoal: 30,
+      rebufferingGoal: 8,
+      bufferBehind: 30,
       retryParameters: retry(),
     },
     manifest: {
+      // Same delay for every feed: that is what makes three independent
+      // players line up, rather than each chasing its own live edge.
+      defaultPresentationDelay: 8,
+      dash: { ignoreSuggestedPresentationDelay: true },
       retryParameters: retry(),
     },
     abr: { enabled: state.quality === "auto" },
@@ -703,24 +748,16 @@ async function initPlayer(entry, index) {
     scheduleRecover(entry, index);
     return;
   }
-  alignPlayer(entry);
-
-  try {
-    await entry.video.play();
-  } catch {
-    entry.video.muted = true;
-    if (state.sound === index) {
-      state.sound = -1;
-      updateControls();
-    }
-    entry.video.play().catch(() => {});
-  }
-
+  entry.loaded = true;
   applyAudio();
+  setStreamStatus(entry, "live", false);
   if (state.focused >= 0 && state.focused !== index) {
     entry.video.pause();
+  } else if (gridGateOpen) {
+    playEntry(entry);
+  } else {
+    onPlayerReady();
   }
-  setStreamStatus(entry, "live", false);
   if (state.focused < 0) {
     setStatusText("all three feeds ready");
   }
@@ -1347,16 +1384,17 @@ let alignTimer = null;
 // a feed still loading are harmless - the next refresh tries again.
 function alignPlayer(entry) {
   const player = entry.player;
-  if (!player) {
+  if (!player || typeof player.seekRange !== "function") {
     return;
   }
   try {
-    if (typeof player.goToLive === "function") {
-      player.goToLive();
-    } else {
-      const range = player.seekRange();
-      if (range && range.end > range.start) {
-        entry.video.currentTime = range.end;
+    const range = player.seekRange();
+    if (range && range.end > range.start) {
+      // Stay a second inside the buffered region; jumping to the exact edge
+      // leaves the player with nothing to decode.
+      const target = Math.max(range.start, range.end - 1);
+      if (Math.abs(entry.video.currentTime - target) > 1) {
+        entry.video.currentTime = target;
       }
     }
   } catch (e) {
@@ -1661,6 +1699,8 @@ const stitch = {
   active: false,
   recorder: null,
   stream: null,
+  track: null,
+  canvas: null,
   chunks: [],
   raf: 0,
 };
@@ -1672,13 +1712,25 @@ function releaseStitchStream() {
     }
     stitch.stream = null;
   }
+  stitch.track = null;
+  if (stitch.canvas && stitch.canvas.parentNode) {
+    stitch.canvas.parentNode.removeChild(stitch.canvas);
+  }
+  stitch.canvas = null;
 }
 
 function stitchMime() {
   if (typeof MediaRecorder === "undefined") {
     return "";
   }
-  for (const type of ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"]) {
+  // Android WebView usually has an H.264 hardware encoder but no VP8/VP9
+  // software encoder, even though isTypeSupported() claims it does. Picking a
+  // VP9 stream there yields a header-only file. Try MP4 first on Android.
+  const android = /Android/i.test(navigator.userAgent || "");
+  const types = android
+    ? ["video/mp4", "video/webm;codecs=vp8", "video/webm", "video/webm;codecs=vp9"]
+    : ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+  for (const type of types) {
     if (MediaRecorder.isTypeSupported(type)) {
       return type;
     }
@@ -1697,6 +1749,12 @@ function updateStitchButton() {
 }
 
 function saveStitch(blob, mime) {
+  // A header-only WebM/MP4 is a failed capture, not a video. Never write one
+  // to Movies/PBB; tell the operator instead.
+  if (blob.size < 8192) {
+    setTransientStatus("no frames were captured - stitched recording is not supported on this device");
+    return;
+  }
   const name = `PBB_stitch_${Date.now()}.${mime.includes("mp4") ? "mp4" : "webm"}`;
   const reader = new FileReader();
   reader.onload = () => {
@@ -1721,6 +1779,11 @@ function stopStitch() {
   stitch.active = false;
   stitch.recorder = null;
   if (recorder && recorder.state !== "inactive") {
+    try {
+      recorder.requestData();
+    } catch (e) {
+      // Some WebViews do not implement requestData; stop() still flushes.
+    }
     recorder.stop();
   } else {
     releaseStitchStream();
@@ -1741,6 +1804,9 @@ function startStitch() {
   // Main Access on top, Dining Area below: two 16:9 frames in one tall canvas.
   canvas.width = 640;
   canvas.height = 720;
+  // A detached canvas is not always composited, so captureStream() can deliver
+  // no frames at all. Keep it in the layout, effectively invisible.
+  canvas.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
   const ctx = canvas.getContext("2d");
   const draw = () => {
     const half = canvas.height / 2;
@@ -1752,12 +1818,23 @@ function startStitch() {
         ctx.drawImage(video, 0, i * half, canvas.width, half);
       }
     }
+    // Commit one frame per draw; some WebViews never produce automatic frames.
+    if (stitch.track && typeof stitch.track.requestFrame === "function") {
+      stitch.track.requestFrame();
+    }
     stitch.raf = requestAnimationFrame(draw);
   };
-  draw();
   let recorder;
   try {
-    stitch.stream = canvas.captureStream(30);
+    document.body.appendChild(canvas);
+    stitch.canvas = canvas;
+    stitch.stream = canvas.captureStream(0);
+    stitch.track = stitch.stream.getVideoTracks()[0] || null;
+    if (!stitch.track || typeof stitch.track.requestFrame !== "function") {
+      // Older WebViews: fall back to automatic frame capture.
+      stitch.stream = canvas.captureStream(30);
+      stitch.track = null;
+    }
     recorder = new MediaRecorder(stitch.stream,
       { mimeType: mime, videoBitsPerSecond: 1200000 });
     recorder.start(1000);
@@ -1767,6 +1844,7 @@ function startStitch() {
     setTransientStatus("stitched recording could not start");
     return;
   }
+  draw();
   stitch.chunks = [];
   recorder.ondataavailable = (event) => {
     if (event.data && event.data.size) {
@@ -1911,9 +1989,11 @@ function boot() {
   }
   updateQualityButtons();
 
+  gridGateOpen = false;
   for (const [index, entry] of players.entries()) {
     initPlayer(entry, index);
   }
+  gridStartTimer = setTimeout(startGridTogether, 5000);
 
   for (const btn of qualityButtons) {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
