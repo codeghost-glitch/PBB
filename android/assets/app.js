@@ -1314,6 +1314,10 @@ window.onRecordingState = (payload) => {
     }
   }
 
+  if (stitch.active && STITCH_FEEDS.every((i) => !state.recording.has(i))) {
+    stitch.active = false;
+    updateStitchButton();
+  }
   updateTimers();
   updateControls();
   // The footer copy belongs to the recording count unless a transient message
@@ -1695,48 +1699,11 @@ function applySource() {
   setTransientStatus("source updated - reconnecting");
 }
 
-const stitch = {
-  active: false,
-  recorder: null,
-  stream: null,
-  track: null,
-  canvas: null,
-  chunks: [],
-  raf: 0,
-};
-
-function releaseStitchStream() {
-  if (stitch.stream) {
-    for (const track of stitch.stream.getTracks()) {
-      track.stop();
-    }
-    stitch.stream = null;
-  }
-  stitch.track = null;
-  if (stitch.canvas && stitch.canvas.parentNode) {
-    stitch.canvas.parentNode.removeChild(stitch.canvas);
-  }
-  stitch.canvas = null;
-}
-
-function stitchMime() {
-  if (typeof MediaRecorder === "undefined") {
-    return "";
-  }
-  // Android WebView usually has an H.264 hardware encoder but no VP8/VP9
-  // software encoder, even though isTypeSupported() claims it does. Picking a
-  // VP9 stream there yields a header-only file. Try MP4 first on Android.
-  const android = /Android/i.test(navigator.userAgent || "");
-  const types = android
-    ? ["video/mp4", "video/webm;codecs=vp8", "video/webm", "video/webm;codecs=vp9"]
-    : ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
-  for (const type of types) {
-    if (MediaRecorder.isTypeSupported(type)) {
-      return type;
-    }
-  }
-  return "";
-}
+// A WebView cannot copy DRM-protected video frames into a canvas: every
+// captured frame comes back black. Record both feeds with the native service
+// instead; the two tallies and stop buttons are the recording indicators.
+const STITCH_FEEDS = [0, 1];
+const stitch = { active: false };
 
 function updateStitchButton() {
   const btn = document.getElementById("stitchBtn");
@@ -1745,137 +1712,29 @@ function updateStitchButton() {
   }
   btn.classList.toggle("stitch-active", stitch.active);
   setIcon(btn, stitch.active ? "stop" : "stitch",
-    stitch.active ? "stop the stitched recording" : "record main and dining together");
-}
-
-function saveStitch(blob, mime) {
-  // A header-only WebM/MP4 is a failed capture, not a video. Never write one
-  // to Movies/PBB; tell the operator instead.
-  if (blob.size < 8192) {
-    setTransientStatus("no frames were captured - stitched recording is not supported on this device");
-    return;
-  }
-  const name = `PBB_stitch_${Date.now()}.${mime.includes("mp4") ? "mp4" : "webm"}`;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const url = String(reader.result || "");
-    const comma = url.indexOf(",");
-    if (comma < 0 || !window.Pbb) {
-      setTransientStatus("stitched video could not be saved");
-      return;
-    }
-    setTransientStatus(Pbb.saveStitched(url.slice(comma + 1), name));
-  };
-  reader.onerror = () => setTransientStatus("stitched video could not be read");
-  reader.readAsDataURL(blob);
-}
-
-function stopStitch() {
-  if (stitch.raf) {
-    cancelAnimationFrame(stitch.raf);
-    stitch.raf = 0;
-  }
-  const recorder = stitch.recorder;
-  stitch.active = false;
-  stitch.recorder = null;
-  if (recorder && recorder.state !== "inactive") {
-    try {
-      recorder.requestData();
-    } catch (e) {
-      // Some WebViews do not implement requestData; stop() still flushes.
-    }
-    recorder.stop();
-  } else {
-    releaseStitchStream();
-  }
-  updateStitchButton();
-}
-
-function startStitch() {
-  if (!window.Pbb || players.length < 2) {
-    return;
-  }
-  const mime = stitchMime();
-  const canvas = document.createElement("canvas");
-  if (!mime || typeof canvas.captureStream !== "function") {
-    setTransientStatus("stitched recording is not supported on this device");
-    return;
-  }
-  // Main Access on top, Dining Area below: two 16:9 frames in one tall canvas.
-  canvas.width = 640;
-  canvas.height = 720;
-  // A detached canvas is not always composited, so captureStream() can deliver
-  // no frames at all. Keep it in the layout, effectively invisible.
-  canvas.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
-  const ctx = canvas.getContext("2d");
-  const draw = () => {
-    const half = canvas.height / 2;
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < 2; i++) {
-      const video = players[i] && players[i].video;
-      if (video && video.readyState >= 2) {
-        ctx.drawImage(video, 0, i * half, canvas.width, half);
-      }
-    }
-    // Commit one frame per draw; some WebViews never produce automatic frames.
-    if (stitch.track && typeof stitch.track.requestFrame === "function") {
-      stitch.track.requestFrame();
-    }
-    stitch.raf = requestAnimationFrame(draw);
-  };
-  let recorder;
-  try {
-    document.body.appendChild(canvas);
-    stitch.canvas = canvas;
-    stitch.stream = canvas.captureStream(0);
-    stitch.track = stitch.stream.getVideoTracks()[0] || null;
-    if (!stitch.track || typeof stitch.track.requestFrame !== "function") {
-      // Older WebViews: fall back to automatic frame capture.
-      stitch.stream = canvas.captureStream(30);
-      stitch.track = null;
-    }
-    recorder = new MediaRecorder(stitch.stream,
-      { mimeType: mime, videoBitsPerSecond: 1200000 });
-    recorder.start(1000);
-  } catch (e) {
-    cancelAnimationFrame(stitch.raf);
-    releaseStitchStream();
-    setTransientStatus("stitched recording could not start");
-    return;
-  }
-  draw();
-  stitch.chunks = [];
-  recorder.ondataavailable = (event) => {
-    if (event.data && event.data.size) {
-      stitch.chunks.push(event.data);
-    }
-  };
-  recorder.onerror = () => {
-    setTransientStatus("stitched recording failed");
-    stopStitch();
-  };
-  recorder.onstop = () => {
-    if (stitch.raf) {
-      cancelAnimationFrame(stitch.raf);
-      stitch.raf = 0;
-    }
-    releaseStitchStream();
-    setStatusText("saving stitched video...");
-    saveStitch(new Blob(stitch.chunks, { type: mime }), mime);
-  };
-  stitch.active = true;
-  stitch.recorder = recorder;
-  setStatusText("recording main + dining as one video");
-  updateStitchButton();
+    stitch.active ? "stop both recordings" : "record main and dining together");
 }
 
 function toggleStitch() {
-  if (stitch.active) {
-    stopStitch();
-  } else {
-    startStitch();
+  if (!window.Pbb) {
+    return;
   }
+  if (stitch.active) {
+    stitch.active = false;
+    for (const index of STITCH_FEEDS) {
+      Pbb.stopRecording(index);
+    }
+    setTransientStatus("saving main + dining");
+  } else if (state.keysStale) {
+    setTransientStatus("keys rotated - open sources before recording");
+  } else {
+    stitch.active = true;
+    for (const index of STITCH_FEEDS) {
+      Pbb.startRecording(index, players[index].stream.name);
+    }
+    setTransientStatus("recording main + dining");
+  }
+  updateStitchButton();
 }
 
 function storedServer() {

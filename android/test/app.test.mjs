@@ -527,9 +527,12 @@ function channelSourceContract() {
 function stitchAndServerContract() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  check("stitch stacks two feeds vertically", true,
-    /canvas\.height = 720/s.test(app) && /i \* half/s.test(app));
-  check("stitch saves one clip", true, /Pbb\.saveStitched\(/s.test(app));
+  check("the double record uses the native recorder, not a WebView canvas", true,
+    !/captureStream|MediaRecorder/s.test(app) &&
+    /STITCH_FEEDS = \[0, 1\]/s.test(app) &&
+    /Pbb\.startRecording\(index, players\[index\]\.stream\.name\)/s.test(app));
+  check("the double record has a visible tally state", true,
+    /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   check("the sources sheet offers a server switch", true,
     /serverChips/s.test(app) && /data-source="3"/s.test(fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8")));
   check("the chosen channel list is tried first", true,
@@ -559,8 +562,11 @@ function playbackAndRecorderFixes() {
     /outTmp\.length\(\) < 4096/s.test(java));
   check("a MediaStore failure still saves a copy", true,
     /publishFallback/s.test(java) && /IS_PENDING, 0\)/s.test(java));
-  check("a header-only stitch is never saved", true,
-    /blob\.size < 8192/s.test(app));
+  check("a stop during the edge probe still saves a file", true,
+    /nothing recorded - stopped before the first segment/s.test(java) &&
+    /while \(session\.running \|\| segmentsThisPart == 0\)/s.test(java));
+  check("the live-edge probe uses short timeouts", true,
+    /Http\.open\(url, 2000, 3000\)/s.test(java));
 }
 
 function controlRoomStructure() {

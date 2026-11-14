@@ -16,7 +16,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.util.Base64;
 import android.util.Rational;
 import android.view.View;
 import android.view.WindowInsets;
@@ -37,7 +36,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -309,55 +307,6 @@ public class MainActivity extends Activity {
             }
         });
         return "";
-    }
-
-    private String writeStitched(byte[] data, String name) throws IOException {
-        String mime = name.endsWith(".mp4") ? "video/mp4" : "video/webm";
-        if (Build.VERSION.SDK_INT >= 29) {
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Video.Media.DISPLAY_NAME, name);
-            values.put(MediaStore.Video.Media.MIME_TYPE, mime);
-            values.put(MediaStore.Video.Media.RELATIVE_PATH,
-                Environment.DIRECTORY_MOVIES + "/PBB");
-            values.put(MediaStore.Video.Media.IS_PENDING, 1);
-            Uri uri = getContentResolver().insert(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-            if (uri == null) {
-                return "could not create the stitched video";
-            }
-            try {
-                OutputStream out = getContentResolver().openOutputStream(uri);
-                if (out == null) {
-                    getContentResolver().delete(uri, null, null);
-                    return "could not open the stitched video";
-                }
-                try {
-                    out.write(data);
-                } finally {
-                    out.close();
-                }
-                ContentValues done = new ContentValues();
-                done.put(MediaStore.Video.Media.IS_PENDING, 0);
-                getContentResolver().update(uri, done, null, null);
-                return "saved to Movies/PBB/" + name;
-            } catch (IOException e) {
-                getContentResolver().delete(uri, null, null);
-                throw e;
-            }
-        }
-        File dir = new File(Environment.getExternalStoragePublicDirectory(
-            Environment.DIRECTORY_MOVIES), "PBB");
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new IOException("cannot create Movies/PBB");
-        }
-        File dest = new File(dir, name);
-        FileOutputStream out = new FileOutputStream(dest, false);
-        try {
-            out.write(data);
-        } finally {
-            out.close();
-        }
-        return "saved to " + dest.getAbsolutePath();
     }
 
     private void reportKeys(final String message) {
@@ -984,22 +933,6 @@ public class MainActivity extends Activity {
             channelSource = Math.max(0, Math.min(CHANNEL_LIST_URLS.length, index));
             getSharedPreferences("pbb", MODE_PRIVATE).edit()
                 .putInt("channelSource", channelSource).apply();
-        }
-
-        /**
-         * Saves the stitched WebView composite. The page hands over the whole
-         * clip as base64; these are short, foreground-only recordings.
-         */
-        @JavascriptInterface
-        public String saveStitched(String encoded, String name) {
-            if (encoded == null || name == null || !name.matches("[A-Za-z0-9._-]+")) {
-                return "bad stitched video";
-            }
-            try {
-                return writeStitched(Base64.decode(encoded, Base64.DEFAULT), name);
-            } catch (Exception e) {
-                return "could not save the stitched video";
-            }
         }
 
         /** Returns an empty string when the source was stored. */

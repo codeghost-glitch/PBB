@@ -329,7 +329,7 @@ public class RecordService extends Service {
         File videoTmp = new File(getFilesDir(), "pull_video_" + index + ".mp4");
         File audioTmp = new File(getFilesDir(), "pull_audio_" + index + ".mp4");
         File outTmp = new File(getFilesDir(), "pull_out_" + index + ".mp4");
-        String result = "recording stopped";
+        String result = "nothing recorded - stopped before the first segment";
         String savedMessage = null;
         boolean failed = false;
         boolean keepSegments = false;
@@ -366,26 +366,38 @@ public class RecordService extends Service {
                     offset = findLiveOffset(session.mpdUrl, plan, session);
                 } catch (IOException e) {
                     if (!session.running) {
-                        result = savedMessage != null ? savedMessage : "recording stopped";
-                        break;
+                        long fallback = rememberedEdge(session.mpdUrl);
+                        if (savedMessage != null || fallback < 0) {
+                            result = savedMessage != null ? savedMessage : result;
+                            break;
+                        }
+                        offset = fallback;
+                    } else {
+                        if (emptyRetries < MAX_EMPTY_RETRIES) {
+                            emptyRetries++;
+                            forgetEdge(session.mpdUrl);
+                            continue;
+                        }
+                        throw e;
                     }
-                    if (emptyRetries < MAX_EMPTY_RETRIES) {
-                        emptyRetries++;
-                        forgetEdge(session.mpdUrl);
-                        continue;
-                    }
-                    throw e;
                 }
                 if (offset < 0) {
-                    // Stopped while probing the archive: nothing was pulled in
-                    // this part, so go straight to the normal save path.
-                    result = savedMessage != null ? savedMessage : "recording stopped";
-                    break;
+                    long fallback = rememberedEdge(session.mpdUrl);
+                    if (savedMessage == null && fallback >= 0) {
+                        offset = fallback;
+                    } else {
+                        result = savedMessage != null ? savedMessage : result;
+                        break;
+                    }
                 }
                 int misses = 0;
                 int segmentsThisPart = 0;
                 boolean gap = false;
-                while (session.running) {
+                // Consume the stop interrupt so the final fetch can complete.
+                // Pull at least one segment even after a stop: a stop that
+                // landed during the edge probe still produces a valid file.
+                Thread.interrupted();
+                while (session.running || segmentsThisPart == 0) {
                     String vUrl = plan.baseUrl
                         + segmentUrl(plan.video.media, plan.video.startNumber + offset);
                     String aUrl = plan.baseUrl
@@ -789,7 +801,7 @@ public class RecordService extends Service {
             + segmentUrl(plan.video.media, plan.video.startNumber + offset);
         HttpURLConnection conn = null;
         try {
-            conn = Http.open(url, 5000, 8000);
+            conn = Http.open(url, 2000, 3000);
             conn.setRequestProperty("Range", "bytes=0-0");
             int code = conn.getResponseCode();
             return code == 200 || code == 206;
