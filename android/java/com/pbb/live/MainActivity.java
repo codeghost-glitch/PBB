@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -407,16 +408,28 @@ public class MainActivity extends Activity {
             return null;
         }
         try {
-            JSONArray streams = null;
+            List<ChannelList.Entry> listed = null;
             if (raw.trim().startsWith("#EXTM3U")) {
-                streams = ChannelList.fromM3u(raw, CHANNEL_NAMES);
+                listed = ChannelList.fromM3u(raw, CHANNEL_NAMES);
             } else if (depth < 2) {
                 String linked = linkedListUrl(raw);
                 if (linked != null && !linked.equals(url)) {
                     return fetchKeys(linked, depth + 1);
                 }
             }
-            return streams == null ? null : new JSONObject().put("streams", streams).toString();
+            if (listed == null) {
+                return null;
+            }
+            JSONArray streams = new JSONArray();
+            for (ChannelList.Entry entry : listed) {
+                JSONObject stream = new JSONObject();
+                stream.put("name", entry.name);
+                stream.put("url", entry.url);
+                stream.put("kid", entry.kid);
+                stream.put("key", entry.key);
+                streams.put(stream);
+            }
+            return new JSONObject().put("streams", streams).toString();
         } catch (Exception e) {
             return null;
         }

@@ -1,8 +1,7 @@
 package com.pbb.live;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Reads the PBB rows out of the operator's M3U channel list. */
 final class ChannelList {
@@ -14,8 +13,22 @@ final class ChannelList {
     private ChannelList() {
     }
 
-    static JSONArray fromM3u(String raw, String[] names) throws JSONException {
-        JSONObject[] found = new JSONObject[names.length];
+    static final class Entry {
+        final String name;
+        final String url;
+        final String kid;
+        final String key;
+
+        Entry(String name, String url, String kid, String key) {
+            this.name = name;
+            this.url = url;
+            this.kid = kid;
+            this.key = key;
+        }
+    }
+
+    static List<Entry> fromM3u(String raw, String[] names) {
+        Entry[] found = new Entry[names.length];
         String name = null;
         String license = null;
         for (String line : raw.split("\\r?\\n")) {
@@ -29,23 +42,20 @@ final class ChannelList {
                 int index = indexOf(names, name);
                 int colon = license.indexOf(':');
                 if (index >= 0 && colon > 0) {
-                    JSONObject entry = new JSONObject();
-                    entry.put("name", name);
-                    entry.put("url", line.replace(OLD_CDN, LIVE_CDN));
-                    entry.put("kid", license.substring(0, colon).replace("-", ""));
-                    entry.put("key", license.substring(colon + 1).replace("-", ""));
-                    found[index] = entry;
+                    found[index] = new Entry(name, line.replace(OLD_CDN, LIVE_CDN),
+                        license.substring(0, colon).replace("-", ""),
+                        license.substring(colon + 1).replace("-", ""));
                 }
                 name = null;
                 license = null;
             }
         }
-        JSONArray streams = new JSONArray();
-        for (JSONObject entry : found) {
+        List<Entry> streams = new ArrayList<Entry>();
+        for (Entry entry : found) {
             if (entry == null) {
                 return null;
             }
-            streams.put(entry);
+            streams.add(entry);
         }
         return streams;
     }
