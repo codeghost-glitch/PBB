@@ -59,7 +59,7 @@
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 16px;
-  --tap: 44px;
+  --tap: 48px;
 
   /* Active keys wear a wash of the one accent, not a second bright colour.
      Lavender stays only on the keyboard focus ring, where contrast is the job. */
@@ -260,7 +260,7 @@ h1 {
 .seg-label { display: none; }
 
 .seg-btn {
-  min-width: 40px;
+  min-width: var(--tap);
   min-height: var(--tap);
   padding: var(--sp-1) var(--sp-2);
   background: transparent;

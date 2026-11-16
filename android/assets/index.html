@@ -57,9 +57,9 @@
       <div id="grid" class="grid" aria-label="live camera feeds"></div>
     </main>
 
-    <footer class="status" id="statusBar" aria-live="polite">
+    <footer class="status" id="statusBar">
       <span class="status-led" aria-hidden="true"></span>
-      <span id="statusText">connecting three feeds...</span>
+      <span id="statusText" role="status" aria-atomic="true">connecting three feeds...</span>
       <span class="rec-badge hidden" id="recBadge" aria-hidden="true">
         <span class="rec-badge-dot" aria-hidden="true"></span>
         <span id="recCount">0</span>
