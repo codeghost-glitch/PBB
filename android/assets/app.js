@@ -1375,48 +1375,6 @@ window.handleBack = () => {
   return false;
 };
 
-let alignTimer = null;
-
-// Best effort: a feed that connected a moment later is a few seconds behind.
-// Pull every loaded player to its live edge in the same tick. Missing APIs or
-// a feed still loading are harmless - the next refresh tries again.
-function alignPlayer(entry) {
-  const player = entry.player;
-  if (!player || typeof player.seekRange !== "function") {
-    return;
-  }
-  try {
-    const range = player.seekRange();
-    if (range && range.end > range.start) {
-      // Stay a second inside the buffered region; jumping to the exact edge
-      // leaves the player with nothing to decode.
-      const target = Math.max(range.start, range.end - 1);
-      if (Math.abs(entry.video.currentTime - target) > 1) {
-        entry.video.currentTime = target;
-      }
-    }
-  } catch (e) {
-    // A feed that is still connecting keeps its current position.
-  }
-}
-
-function alignToLiveEdge() {
-  alignTimer = null;
-  for (const entry of players) {
-    alignPlayer(entry);
-  }
-}
-
-// A manual refresh with unchanged keys must not rebuild the players: a full
-// reload is slow and the late feeds land seconds behind the early ones. Just
-// pull the already-playing feeds to the live edge in the same tick, then once
-// more in case one was still connecting.
-function syncLiveEdges() {
-  alignToLiveEdge();
-  clearTimeout(alignTimer);
-  alignTimer = setTimeout(alignToLiveEdge, 2500);
-}
-
 async function resyncStreams() {
   const olds = players.map((p) => p.player);
   for (const entry of players) {
@@ -1432,8 +1390,6 @@ async function resyncStreams() {
   for (const [i] of players.entries()) {
     initPlayer(players[i], i);
   }
-  clearTimeout(alignTimer);
-  alignTimer = setTimeout(alignToLiveEdge, 1500);
 }
 
 // Pushed by Java after the live stream config is fetched. Rebuild the Shaka
@@ -1463,11 +1419,11 @@ window.onStreamConfig = async (raw) => {
   }
   if (!changed) {
     if (manualKeyRefresh) {
-      // A manual refresh is also a re-sync: the keys did not change, but the
-      // three feeds may have connected at different times. Rebuild them all.
+      // Keys are current. Seeking every feed to the live edge here froze all
+      // three tiles for a couple of seconds; the startup gate and shared
+      // presentation delay already keep them together, so leave playback be.
       manualKeyRefresh = false;
-      syncLiveEdges();
-      setTransientStatus("streams re-synced");
+      setTransientStatus("streams already in sync");
     }
     return;
   }

@@ -511,8 +511,9 @@ function refreshResyncsAllStreams() {
     /manualKeyRefresh[\s\S]{0,320}await resyncStreams\(\)/s.test(app));
   check("all players reload in the same tick", true,
     /for \(const \[i\] of players\.entries\(\)\) \{[\s\S]{0,120}initPlayer\(players\[i\], i\)/s.test(app));
-  check("feeds align inside the buffered region, not at the raw edge", true,
-    /range\.end - 1/s.test(app) && !/goToLive\(\)/s.test(app));
+  check("an unchanged-key refresh never seeks the live feeds", true,
+    !/\.currentTime = /s.test(app) && !/goToLive\(\)/s.test(app) &&
+    /setTransientStatus\("streams already in sync"\)/s.test(app));
 }
 
 function channelSourceContract() {
