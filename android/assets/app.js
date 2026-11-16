@@ -1683,17 +1683,17 @@ function toggleStitch() {
 function storedServer() {
   try {
     const value = Number(localStorage.getItem("pbb-server"));
-    return Number.isInteger(value) && value >= 0 && value <= 3 ? value : 0;
-  } catch (e) {
+    return Number.isInteger(value) && value >= 0 && value <= 5 ? value : 0;
+  } catch {
     return 0;
   }
 }
 
 function selectServer(index) {
-  const picked = Math.max(0, Math.min(3, Number(index) || 0));
+  const picked = Math.max(0, Math.min(5, Number(index) || 0));
   try {
     localStorage.setItem("pbb-server", String(picked));
-  } catch (e) {
+  } catch {
     // Private browsing: the choice still lasts for this page load.
   }
   for (const chip of document.querySelectorAll("#serverChips .chip")) {

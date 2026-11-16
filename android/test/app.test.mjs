@@ -15,6 +15,15 @@ const APP = path.join(HERE, "..", "assets", "app.js");
 const CSS = path.join(HERE, "..", "assets", "styles.css");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
+const CHANNEL_LIST = path.join(HERE, "..", "java", "com", "pbb", "live", "ChannelList.java");
+const APK_SERVERS = [
+  "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u",
+  "https://pastebin.com/raw/3eAThca1",
+  "https://pastebin.com/raw/F3jDEQ6V",
+  "https://abslive.akamaized.net/dash/live/2099522/",
+  "https://wyiupinnbxcxomabkuof.supabase.co",
+];
+const LIVE_LIST = APK_SERVERS[0];
 
 let failures = 0;
 
@@ -380,10 +389,11 @@ function channelListContract() {
     return;
   }
   const urls = block[1].match(/https?:\/\/[^"]+/g) || [];
-  check("the app has at least one channel list address", true, urls.length > 0);
-  for (const url of urls) {
-    check(`the channel list address ${url.slice(0, 40)} is https`, true, url.startsWith("https://"));
-  }
+  check("the app carries every APK server", true,
+    urls.length === APK_SERVERS.length && APK_SERVERS.every((url, i) => urls[i] === url));
+  check("the M3U rows are parsed", true, java.includes("ChannelList.fromM3u"));
+  check("the old channel list servers are gone", false,
+    /gist\.githubusercontent\.com\/codeghost-glitch|pbbliveaccess\.lovable\.app|pbb-v2\.pages\.dev/.test(java));
 
   const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
   const streams = snapshot.streams;
@@ -394,7 +404,8 @@ function channelListContract() {
   const count = /CHANNEL_COUNT\s*=\s*(\d+)/.exec(java);
   check("the app and the snapshot agree on the channel count", streams.length, Number(count[1]));
   for (const stream of streams) {
-    check(`manifest URL of ${stream.name} is https`, true, stream.url.startsWith("https://"));
+    check(`manifest URL of ${stream.name} uses the live CDN`, true,
+      stream.url.startsWith("https://abslive.akamaized.net/dash/live/2099522/"));
     check(`KID of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.kid));
     check(`key of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.key));
   }
@@ -519,12 +530,16 @@ function refreshResyncsAllStreams() {
 
 function channelSourceContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  check("the pages.dev config is an alternative source", true,
-    java.includes("https://pbb-v2.pages.dev/secrets.json"));
-  check("the servers shape is normalised", true,
-    /servers[\s\S]{0,500}mpdUrl/s.test(java));
+  const list = fs.readFileSync(CHANNEL_LIST, "utf8");
+  check("the APK M3U server is the channel list source", true, java.includes(LIVE_LIST));
+  check("the M3U rows are parsed by name", true,
+    /ChannelList\.fromM3u\(raw, CHANNEL_NAMES\)/s.test(java));
+  check("a list link in APK text is followed", true, /linkedListUrl\(raw\)/.test(java));
+  check("the dead CDN host is rewritten to the APK host", true,
+    /replace\(OLD_CDN, LIVE_CDN\)/.test(list));
   check("the web-player channels keep their names", true,
     java.includes("CHANNEL_NAMES"));
+  check("the old JSON shapes are gone", false, /mpdUrl|servers\.getJSONObject/.test(java));
 }
 
 function stitchAndServerContract() {
@@ -540,12 +555,18 @@ function stitchAndServerContract() {
     /Pbb\.markStackPair\(-1, -1\)/s.test(app));
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
-  check("the sources sheet offers a server switch", true,
-    /serverChips/s.test(app) && /data-source="3"/s.test(fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8")));
+  const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
+  check("the sources sheet offers every APK server", true,
+    /serverChips/s.test(app) && ["m3u", "announce", "update", "cdn", "chat"]
+      .every((label) => html.includes(">" + label + "</button>")));
+  check("auto plus five APK servers are shown", 6,
+    (html.match(/data-source="/g) || []).length);
+  check("the page clamps the server choice to the APK set", true,
+    /Math\.min\(5, Number\(index\)/.test(app));
   check("the chosen channel list is tried first", true,
     /channelSource > 0 \? channelSource - 1 : 0/s.test(java));
-  check("the pages.dev server is in the list", true,
-    java.includes("https://pbb-v2.pages.dev/secrets.json"));
+  check("every APK server is in the list", true,
+    APK_SERVERS.every((url) => java.includes(url)));
 }
 
 function playbackAndRecorderFixes() {

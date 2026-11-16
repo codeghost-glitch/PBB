@@ -14,7 +14,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Opening fullscreen or PiP turns that feed's sound on automatically.
 - Fullscreen button on every card: hides system bars, letterboxes the feed on black, and keeps the picture at its full size - nothing reserves a lane and the video never shrinks when the controls come up. The two-column keypad with five keys - zoom, next, mini, lock, exit - sits in the top-right corner as a small translucent panel that follows the desk theme - cream paper with ink lines in light mode, charcoal with cream silkscreen lines in dark - with a centred on-air strip (the camera number stays in the channel bug), 44px keys with a word under every glyph and the coral exit key across the bottom; locking leaves only the yellow unlock key. It does not open automatically when fullscreen starts, and fades a few seconds after it is shown; there is no separate controls button, because a tap anywhere on the picture brings the deck back. A channel bug in the top-left corner names the feed when fullscreen opens or the feed is switched. A connecting feed shows a breathing lamp over a slow scan, and a dropped feed a steady red retry chip over a dim wash, so the picture is never silent about its state. The recording clock of a camera that is recording is hidden in fullscreen. The mini feed is the same small floating monitor as before, now in the bottom-right corner with a cream frame: no dock, no number, no status, just its picture. Tapping it swaps it with the big feed. The mini tile keeps hd and its own sound, so both feeds are audible at once; the feed hidden behind fullscreen is the only one that drops to sd. A swap clears the zoom - the feed arriving in the big slot starts unzoomed and the zoom key loses its highlight. It is the same card element moved by CSS, so no video is re-attached and both feeds keep playing. The card-level PiP button is still there for watching while you leave the app. Exiting fullscreen drops the focus and lands on the three-feed grid.
 - Global default quality: auto, hd, or sd. Rust validates and persists the choice in app-private storage. hd is the tallest variant the feed publishes; while one feed is focused the other two drop to sd, so the phone is not decoding three 1080p streams at once.
-- The three feeds come from a channel list file on the web: a gist the operator can edit from the phone, https://pbbliveaccess.lovable.app/channels.json, and https://pbb-v2.pages.dev/secrets.json from the PBB3.0 web player. The app reads the first valid list at startup and on refresh, so a rotated manifest URL or ClearKey is a file edit and not a new build. The config in src/lib.rs is the offline fallback.
+- The three feeds come from the PBB-All-Live-Access v2.0 server set: an M3U channel list at <https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u>, two pastebin announce/update pages, the working Akamai CDN at <https://abslive.akamaized.net/dash/live/2099522/>, and the APK's Supabase host. The app tries them in order, rewrites old manifest hosts to the live CDN, and applies the first valid list it finds. The config in src/lib.rs is the offline fallback.
 - A sources key in the footer opens a sheet where a new manifest, kid and key can be pasted in and applied, so a rotated feed is handled in the app: no build, no release, no asking anyone for a new APK.
 - PBB All Access is the default sound stream on launch.
 - Record any camera on its own: the record button on a card starts that camera, or stops it, while the other cameras keep recording. All three can run at once. Every tap is confirmed by the service, and a recording card gets a red tally on the picture with its running time. There is no master record button in the header: each camera is started on its own card, and the footer strip shows how many are running and for how long.
@@ -129,19 +129,22 @@ Purging the file from the history is optional and does not replace the rotation:
 
 The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; an in-flight recording would also produce garbage files because it uses the same key.
 
-The app reads its three channels from one JSON file on the web, with the same shape as the built-in config:
+The app reads its three channels from one M3U file on the web, the list shipped in PBB-All-Live-Access v2.0:
 
-~~~json
-{"streams":[{"name":"PBB All Access","url":"https://absp-live.akamaized.net/.../manifest.mpd","kid":"<32 hex>","key":"<32 hex>"}]}
+~~~m3u
+#EXTINF:-1 tvg-id="", PBB All Access
+#KODIPROP:inputstream.adaptive.license_key=<32 hex kid>:<32 hex key>
+https://absp-live.akamaized.net/.../manifest.mpd
 ~~~
 
-It looks at three places and takes the first one that answers with a valid list:
+MainActivity keeps all five servers shipped in the APK:
 
-- https://gist.githubusercontent.com/codeghost-glitch/8ebdedbe5aedff46245b00e5bde6726a/raw/pbb-channels.json - a gist the operator owns and edits from the phone. A gist is unlisted but public, so the keys in it are readable by anyone with the link; they are throwaway keys for a public broadcast and they rotate every few days.
-- https://pbbliveaccess.lovable.app/channels.json - the static file of the PBB Live Access Lovable project, for whoever can publish one there.
-- https://pbb-v2.pages.dev/secrets.json - the config the PBB3.0 web player itself loads. Its `servers` map (`mpdUrl`, `keyId`, `key` for channels 1-3) is normalised into the app's `{name,url,kid,key}` shape, so the site doubles as a fallback channel list.
+- `m3u`: <https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u> - the only one that carries the three channels.
+- `announce`: <https://pastebin.com/raw/3eAThca1> and `update`: <https://pastebin.com/raw/F3jDEQ6V> - APK text pages; a list link inside one is followed, otherwise they are skipped.
+- `cdn`: <https://abslive.akamaized.net/dash/live/2099522/> - the working stream host. Manifest URLs naming `absp-live.akamaized.net` are rewritten to this host.
+- `chat`: <https://wyiupinnbxcxomabkuof.supabase.co> - the APK's viewer/chat backend, kept as the last alternative.
 
-MainActivity fetches the list at startup and on manual refresh and turns it into the app's `{name,url,kid,key}` config.
+At startup and on manual refresh the app walks that order, takes the three rows named `PBB All Access`, `PBB Dining Area` and `PBB External Den` from an M3U response, and turns each `kid:key` pair and manifest link into the app's `{name,url,kid,key}` config.
 
 The list lives outside the app, so a rotated feed is an edit of that file and not a new build: change the url, kid and key of a channel and the next refresh picks it up.
 
@@ -152,7 +155,7 @@ The other way in is the app itself. The footer strip carries a sources key next 
 - A paste into any box fills the boxes it understands. A manifest link goes to the manifest box, a `kid:key` line (with or without dashes, `:` or `=` between them) goes to the kid and the key, and a ClearKey json blob is read as well. This is the same Auto License Tool the web site has.
 - "detect kid" reads the manifest and fills the kid box from `cenc:default_KID`. The Akamai manifests send `Access-Control-Allow-Origin: *`, so the page can read them itself.
 - "apply" hands the three values to Pbb.setSource(). The app checks them (https manifest, 32 hex kid and key), writes them into filesDir/streams.json and pushes the new config to the page, so the players re-init with the new keys and the source survives a restart.
-- The channel list server picker offers auto, gist, lovable and pages.dev. Picking one calls Pbb.setChannelSource(), which remembers the choice and makes that source the first one tried (the others remain fallbacks), then refreshes immediately. So the app can be switched to the PBB3.0 web player's list without a rebuild.
+- The channel list server picker offers `auto` plus all five APK servers (`m3u`, `announce`, `update`, `cdn`, `chat`). Picking one calls Pbb.setChannelSource(), which remembers the choice, tries that server first, then falls through the others, and refreshes immediately.
 - The footer also carries a stitch key: it records Main Access and Dining Area together and saves **one stacked MP4** in Movies/PBB - Main Access on top, Dining Area below. A WebView cannot copy DRM-protected video frames into a canvas (every captured frame comes back black), so the two feeds are recorded by the native service, then their finished local MP4s are decoded and joined by the FFmpeg plugin: both H.264 streams are stacked into a single 1280x1440-style frame with libx264 and the first feed's AAC track carries over. The two originals are deleted once the join succeeds, so only `PBB_stitch_...mp4` remains. The key turns red while both are running and both cards show their recording tallies; a second tap stops both and the joined file lands a moment later. The plugin now includes an H.264 decoder, swscale and libx264 (reproducibly cross-built by `ffmpeg/build-android.sh`) and is pinned by SHA-256 in `RecordService`; the fallback download URL is no longer used because its old hash no longer matches.
 - The refresh icon also works without a published list: it reads the kid out of every manifest and names the cameras that rotated, so the sheet is opened only for a camera that needs it.
 - The sheet is how a rotated feed is handled when no one publishes a list: the forum thread shows the new manifest and key, they are pasted into the sheet, and the app plays on. No build, no release, no new APK.
@@ -172,7 +175,7 @@ To refresh the checked-in fallback snapshot from the same channel list:
 ./keys/update.sh
 ~~~
 
-It writes keys/keys.json and rewrites `STREAM_CONFIG_JSON` in src/lib.rs with the same values, so the built-in fallback can not drift from the snapshot. The runtime app reads neither: it fetches the channel list directly and caches the result in filesDir/streams.json. Commit both files after a rotation, or leave the fallback stale and let the first launch with a network fix it.
+It writes keys/keys.json, which src/lib.rs includes as `STREAM_CONFIG_JSON`, so the built-in fallback can not drift from the snapshot; it applies the same CDN rewrite as the app. The runtime app reads neither: it fetches the APK server list directly and caches the result in filesDir/streams.json. Commit the snapshot after a rotation, or leave the fallback stale and let the first launch with a network fix it.
 
 ## Downloadable recorder plugin
 

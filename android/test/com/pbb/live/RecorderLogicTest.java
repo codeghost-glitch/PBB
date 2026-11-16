@@ -1,5 +1,8 @@
 package com.pbb.live;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,7 +14,8 @@ import java.util.List;
 public final class RecorderLogicTest {
     private static int failures = 0;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        channelListReadsM3u();
         manifestCarriesTheKid();
         segmentUrlPadsTheNumber();
         segmentUrlHandlesBareNumber();
@@ -37,6 +41,36 @@ public final class RecorderLogicTest {
             RecordService.liveOffsetFromMpd(mpd));
         check("a manifest without timing falls back to scanning", -1L,
             RecordService.liveOffsetFromMpd("<MPD type=\"dynamic\"></MPD>"));
+    }
+
+    private static void channelListReadsM3u() throws Exception {
+        String[] names = {"PBB All Access", "PBB Dining Area", "PBB External Den"};
+        String m3u = "#EXTM3U\n"
+            + "#EXTINF:-1, PBB External Den\n"
+            + "#KODIPROP:inputstream.adaptive.license_key="
+            + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
+            + "https://absp-live.akamaized.net/dash/live/2099522/den/manifest.mpd\n"
+            + "#EXTINF:-1, PBB All Access\n"
+            + "##KODIPROP:inputstream.adaptive.license_key=deadbeef:deadbeef\n"
+            + "#KODIPROP:inputstream.adaptive.license_key="
+            + "8150b74d-1632-4bb4-b2ff-62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5\n"
+            + "https://absp-live.akamaized.net/dash/live/2099522/all/manifest.mpd\n"
+            + "#EXTINF:-1, PBB Dining Area\n"
+            + "#KODIPROP:inputstream.adaptive.license_key="
+            + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
+            + "https://absp-live.akamaized.net/dash/live/2099522/dining/manifest.mpd\n";
+        JSONArray streams = ChannelList.fromM3u(m3u, names);
+        check("the M3U yields three streams", 3, streams.length());
+        JSONObject first = streams.getJSONObject(0);
+        check("the first row is All Access", names[0], first.getString("name"));
+        check("the manifest uses the APK's live CDN",
+            "https://abslive.akamaized.net/dash/live/2099522/all/manifest.mpd",
+            first.getString("url"));
+        check("the kid loses its dashes", "8150b74d16324bb4b2ff62e3e202fc7a", first.getString("kid"));
+        check("the key is read", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", first.getString("key"));
+        check("the rows come back in channel order", names[1], streams.getJSONObject(1).getString("name"));
+        check("a missing channel rejects the list", null,
+            ChannelList.fromM3u(m3u.replace("PBB Dining Area", "Gone"), names));
     }
 
     private static void check(String what, Object expected, Object actual) {

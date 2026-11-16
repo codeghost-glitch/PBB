@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Refresh the checked-in fallback snapshot from the live channel list.
-# The runtime app fetches the same file directly; this rewrites both places
-# the last known keys live, so the Rust fallback can not drift from the
-# snapshot.
+# The runtime app fetches the same file directly; the Rust fallback includes
+# this snapshot, so one rewrite keeps them from drifting.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
@@ -14,25 +13,46 @@ if [ -z "$LIST_URL" ]; then
   exit 1
 fi
 
-python3 - "$LIST_URL" "$HERE/keys.json" "$HERE/../src/lib.rs" <<'PY'
+python3 - "$LIST_URL" "$HERE/keys.json" <<'PY'
 import json
 import re
 import sys
 import urllib.request
 from pathlib import Path
 
+NAMES = ["PBB All Access", "PBB Dining Area", "PBB External Den"]
+LICENSE = "#KODIPROP:inputstream.adaptive.license_key="
+OLD_CDN = "absp-live.akamaized.net"
+LIVE_CDN = "abslive.akamaized.net"
+
+def parse_m3u(text):
+    found = {}
+    name = license = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("#EXTINF:"):
+            name = line[line.rfind(",") + 1:].strip()
+            license = None
+        elif line.startswith(LICENSE):
+            license = line[len(LICENSE):].strip()
+        elif line and not line.startswith("#") and name in NAMES and license:
+            kid, key = license.split(":", 1)
+            found[name] = {"name": name, "url": line, "kid": kid, "key": key}
+            name = license = None
+    return [found[n] for n in NAMES if n in found]
+
 url = sys.argv[1]
 request = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "PBB/1.0"})
 with urllib.request.urlopen(request, timeout=20) as response:
-    data = json.load(response)
+    data = response.read().decode("utf-8")
 
-listed = data.get("streams")
-if not isinstance(listed, list) or len(listed) != 3:
+listed = parse_m3u(data)
+if len(listed) != 3:
     raise RuntimeError("the channel list needs 3 channels")
 streams = []
 for entry in listed:
     name = entry.get("name") or "Channel"
-    mpd = entry.get("url", "")
+    mpd = entry.get("url", "").replace(OLD_CDN, LIVE_CDN)
     kid = entry.get("kid", "").replace("-", "")
     key = entry.get("key", "").replace("-", "")
     if not re.fullmatch(r"[0-9a-fA-F]{32}", kid) or not re.fullmatch(r"[0-9a-fA-F]{32}", key):
@@ -44,20 +64,4 @@ for entry in listed:
 out = Path(sys.argv[2])
 out.write_text(json.dumps({"streams": streams}, indent=2) + "\n", encoding="utf-8")
 print(f"wrote {out} ({len(streams)} streams)")
-
-rust = Path(sys.argv[3])
-block = 'const STREAM_CONFIG_JSON: &str = r#"' + json.dumps(
-    {"app": "PBB", "streams": streams}, indent=2) + '"#;'
-source = rust.read_text(encoding="utf-8")
-patched = re.sub(
-    r'const STREAM_CONFIG_JSON: &str = r#".*?"#;',
-    lambda match: block,
-    source,
-    count=1,
-    flags=re.S,
-)
-if patched == source and block not in source:
-    raise RuntimeError("STREAM_CONFIG_JSON block not found in " + str(rust))
-rust.write_text(patched, encoding="utf-8")
-print(f"wrote {rust}")
 PY

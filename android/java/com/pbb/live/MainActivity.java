@@ -40,26 +40,25 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    // Where the live channel list can be published: one JSON file with the
-    // name, manifest URL and clear key of every channel. It sits outside the
-    // app, so a rotated feed is a file edit and not a new build. The first
-    // address that answers with a valid list wins: a gist the operator
-    // edits from the phone, the static file of the Lovable project, and the
-    // secrets.json served by the PBB3.0 web player (a different JSON shape,
-    // normalised in fetchKeys).
+    // Every PBB endpoint shipped in PBB-All-Live-Access v2.0. The M3U carries
+    // the channels; the pastebin pages can point at a list, and the CDN and
+    // chat hosts are kept as the APK's other alternatives.
     private static final String[] CHANNEL_LIST_URLS = {
-        "https://gist.githubusercontent.com/codeghost-glitch/8ebdedbe5aedff46245b00e5bde6726a/raw/pbb-channels.json",
-        "https://pbbliveaccess.lovable.app/channels.json",
-        "https://pbb-v2.pages.dev/secrets.json"
+        "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u",
+        "https://pastebin.com/raw/3eAThca1",
+        "https://pastebin.com/raw/F3jDEQ6V",
+        "https://abslive.akamaized.net/dash/live/2099522/",
+        "https://wyiupinnbxcxomabkuof.supabase.co"
     };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
-    // 0 = auto (first valid source wins), 1..3 = that source first, then the
-    // others as fallbacks. Chosen by the sources sheet and remembered.
+    // 0 = auto, 1..5 = that APK server first, then the others as fallbacks.
     private static volatile int channelSource = 0;
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
@@ -392,13 +391,12 @@ public class MainActivity extends Activity {
         return null;
     }
 
-    /**
-     * Reads the channel list: either a "streams" array of name, url, kid and
-     * key (the built-in shape), or the PBB3.0 web player's "servers" map with
-     * mpdUrl / keyId / key. Both come back in the built-in shape. The KID may
-     * be written with or without dashes.
-     */
+    /** Reads the three PBB rows from the M3U list, or follows a list link in APK text. */
     private static String fetchKeys(String url) {
+        return fetchKeys(url, 0);
+    }
+
+    private static String fetchKeys(String url, int depth) {
         String raw;
         try {
             raw = Http.getText(url, 5000, 8000);
@@ -409,37 +407,30 @@ public class MainActivity extends Activity {
             return null;
         }
         try {
-            JSONObject doc = new JSONObject(raw);
-            JSONArray listed;
-            if (doc.has("streams")) {
-                listed = doc.getJSONArray("streams");
-            } else {
-                JSONObject servers = doc.getJSONObject("servers");
-                listed = new JSONArray();
-                for (int n = 1; n <= CHANNEL_COUNT; n++) {
-                    JSONObject server = servers.getJSONObject(Integer.toString(n));
-                    JSONObject entry = new JSONObject();
-                    entry.put("name", CHANNEL_NAMES[n - 1]);
-                    entry.put("url", server.getString("mpdUrl"));
-                    entry.put("kid", server.getString("keyId"));
-                    entry.put("key", server.getString("key"));
-                    listed.put(entry);
+            JSONArray streams = null;
+            if (raw.trim().startsWith("#EXTM3U")) {
+                streams = ChannelList.fromM3u(raw, CHANNEL_NAMES);
+            } else if (depth < 2) {
+                String linked = linkedListUrl(raw);
+                if (linked != null && !linked.equals(url)) {
+                    return fetchKeys(linked, depth + 1);
                 }
             }
-            JSONArray streams = new JSONArray();
-            for (int i = 0; i < listed.length(); i++) {
-                JSONObject entry = listed.getJSONObject(i);
-                JSONObject stream = new JSONObject();
-                stream.put("name", entry.optString("name", "Channel " + (i + 1)));
-                stream.put("url", entry.getString("url"));
-                stream.put("kid", entry.getString("kid").replace("-", ""));
-                stream.put("key", entry.getString("key").replace("-", ""));
-                streams.put(stream);
-            }
-            return new JSONObject().put("streams", streams).toString();
+            return streams == null ? null : new JSONObject().put("streams", streams).toString();
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String linkedListUrl(String raw) {
+        Matcher links = Pattern.compile("https?://[^\\s\"'<>]+").matcher(raw);
+        while (links.find()) {
+            String found = links.group();
+            if (found.endsWith(".m3u") || found.endsWith(".json") || found.contains("/raw/")) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static JSONArray validKeys(String json) {
