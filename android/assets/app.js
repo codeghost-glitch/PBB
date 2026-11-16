@@ -735,7 +735,7 @@ async function initPlayer(entry, index) {
   });
 
   player.addEventListener("loaded", () => {
-    applyQuality(player, qualityFor(index));
+    applyQuality(player, state.quality);
   });
 
   try {
@@ -757,23 +757,12 @@ async function initPlayer(entry, index) {
   }
 }
 
-// hd is 1080p: only the feed being watched needs that many pixels at once, so
-// the other tiles drop to sd while one feed is focused.
-function qualityFor(index) {
-  if (state.quality !== "hd" || state.focused < 0) {
-    return state.quality;
-  }
-  // The big feed and the mini tile are both watched, so they keep hd; only the
-  // feeds hidden behind fullscreen drop to sd until they are shown again.
-  if (index === state.focused || index === state.mini) {
-    return "hd";
-  }
-  return "sd";
-}
-
+// Every feed uses the chosen quality all the time. Downgrading hidden tiles
+// to sd meant a mini or feed switch played its sd buffer first and only then
+// stepped up to hd - visible as a blurry picture for a second or two.
 function applyAllQualities() {
-  for (const [index, entry] of players.entries()) {
-    applyQuality(entry.player, qualityFor(index));
+  for (const entry of players) {
+    applyQuality(entry.player, state.quality);
   }
 }
 
@@ -791,10 +780,9 @@ function applyQuality(player, quality) {
   }
   tracks.sort((a, b) => a.height - b.height);
   const chosen = quality === "hd" ? tracks[tracks.length - 1] : tracks[0];
-  // Keep the buffer when the variant changes. Opening the mini tile or
-  // switching feeds re-applies quality to every player; clearBuffer = true
-  // threw those buffers away and made each switch reload the stream. With
-  // false the new variant takes effect as the buffered media plays out.
+  // Keep the buffer on the rare case the variant does change (the operator
+  // picks a different default quality); clearBuffer = true threw it away and
+  // stalled the picture.
   if (chosen.active) {
     return;
   }

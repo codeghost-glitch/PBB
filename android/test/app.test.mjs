@@ -563,6 +563,8 @@ function playbackAndRecorderFixes() {
   check("quality switches keep the buffer so mini and feed swaps stay instant", true,
     /selectVariantTrack\(chosen, false\)/s.test(app) &&
     !/selectVariantTrack\(chosen, true\)/s.test(app));
+  check("hidden feeds are never downgraded to sd", true,
+    !/qualityFor/s.test(app) && /applyQuality\(entry\.player, state\.quality\)/s.test(app));
   const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
   check("every feed keeps decoding so mini opens on a live frame", true,
     !/\.pause\(\)/s.test(app) &&
