@@ -777,8 +777,13 @@ function applyQuality(player, quality) {
   if (!tracks.length) {
     return;
   }
-  tracks.sort((a, b) => a.height - b.height);
-  const chosen = quality === "hd" ? tracks[tracks.length - 1] : tracks[0];
+  // Cap hd at 720p: on a 720-line screen a 1080p variant is decoded and then
+  // scaled down, costing more than it shows. Lift sd to 360p so it is watchable.
+  const chosen = quality === "hd"
+    ? tracks.filter((t) => t.height <= 720).sort((a, b) => b.height - a.height)[0]
+      || tracks.sort((a, b) => a.height - b.height)[0]
+    : tracks.filter((t) => t.height >= 360).sort((a, b) => a.height - b.height)[0]
+      || tracks.sort((a, b) => a.height - b.height)[0];
   // Keep the buffer on the rare case the variant does change (the operator
   // picks a different default quality); clearBuffer = true threw it away and
   // stalled the picture.

@@ -213,6 +213,7 @@ function loadPage() {
   focusStream,
   toggleRecord,
   applyGestureValue,
+  applyQuality,
   onTouchEnd,
   setRefs(refs) {
     grid = refs.grid;
@@ -565,6 +566,18 @@ function playbackAndRecorderFixes() {
     !/selectVariantTrack\(chosen, true\)/s.test(app));
   check("hidden feeds are never downgraded to sd", true,
     !/qualityFor/s.test(app) && /applyQuality\(entry\.player, state\.quality\)/s.test(app));
+
+  const page = loadPage();
+  const heights = [180, 360, 720, 1080];
+  const fakePlayer = {
+    configure() {},
+    getVariantTracks: () => heights.map((h) => ({ height: h, active: false })),
+    selectVariantTrack(track) { fakePlayer.picked = track.height; },
+  };
+  page.applyQuality(fakePlayer, "hd");
+  check("hd caps at 720p on a 720-line screen", 720, fakePlayer.picked);
+  page.applyQuality(fakePlayer, "sd");
+  check("sd is watchable at 360p, not 180p", 360, fakePlayer.picked);
   const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
   check("every feed keeps decoding so mini opens on a live frame", true,
     !/\.pause\(\)/s.test(app) &&
