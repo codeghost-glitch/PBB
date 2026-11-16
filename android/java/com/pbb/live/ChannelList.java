@@ -1,6 +1,7 @@
 package com.pbb.live;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /** Reads the PBB rows out of the operator's M3U channel list. */
@@ -13,7 +14,7 @@ final class ChannelList {
     private ChannelList() {
     }
 
-    static JSONArray fromM3u(String raw, String[] names) {
+    static JSONArray fromM3u(String raw, String[] names) throws JSONException {
         JSONObject[] found = new JSONObject[names.length];
         String name = null;
         String license = null;
