@@ -8,6 +8,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="$HERE/out"
 WORK="/tmp/pbb-ffmpeg-build"
 FFMPEG_VERSION="n7.1"
+X264_VERSION="stable"
 SDK="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}"
 NDK="${ANDROID_NDK_HOME:-$SDK/ndk/27.2.12479018}"
 API=26
@@ -27,11 +28,29 @@ done
 
 mkdir -p "$WORK" "$OUT"
 cd "$WORK"
+export PKG_CONFIG_PATH="$WORK/x264prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 if [ ! -f "FFmpeg-${FFMPEG_VERSION}/configure" ]; then
     curl -fsSL -o ffmpeg.tar.gz \
         "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_VERSION}.tar.gz"
     tar xzf ffmpeg.tar.gz
 fi
+if [ ! -f "x264-${X264_VERSION}/configure" ]; then
+    curl -fsSL -o x264.tar.bz2 \
+        "https://code.videolan.org/videolan/x264/-/archive/${X264_VERSION}/x264-${X264_VERSION}.tar.bz2"
+    tar xjf x264.tar.bz2
+fi
+X264_PREFIX="$WORK/x264prefix"
+if [ ! -f "$X264_PREFIX/lib/libx264.a" ]; then
+    mkdir -p "$X264_PREFIX"
+    cd "x264-${X264_VERSION}"
+    CC="$CC" AR="$AR" RANLIB="$RANLIB" ./configure \
+        --host=aarch64-linux-android --enable-static --enable-pic \
+        --disable-cli --disable-asm --prefix="$X264_PREFIX"
+    make -j"$(nproc)"
+    make install
+    cd "$WORK/FFmpeg-${FFMPEG_VERSION}"
+fi
+
 cd "FFmpeg-${FFMPEG_VERSION}"
 
 PREFIX="$WORK/prefix"
@@ -43,14 +62,18 @@ PREFIX="$WORK/prefix"
     --enable-cross-compile \
     --cc="$CC" --ar="$AR" --nm="$NM" --ranlib="$RANLIB" --strip="$STRIP" \
     --sysroot="$SYSROOT" \
-    --extra-cflags="-O2 -fPIC -ffunction-sections -fdata-sections" \
-    --extra-ldflags="-Wl,--gc-sections -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+    --extra-cflags="-O2 -fPIC -ffunction-sections -fdata-sections -I$X264_PREFIX/include" \
+    --extra-ldflags="-Wl,--gc-sections -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -L$X264_PREFIX/lib" \
     --disable-everything \
     --disable-programs --disable-doc --disable-debug --disable-autodetect \
-    --disable-avdevice --disable-avfilter --disable-swscale \
+    --disable-avdevice --disable-avfilter \
     --disable-swresample --disable-postproc --disable-network \
     --disable-iconv --disable-zlib --disable-bzlib --disable-lzma \
     --disable-sdl2 --disable-asm \
+    --enable-gpl --enable-libx264 \
+    --enable-decoder=h264 --enable-decoder=aac \
+    --enable-encoder=libx264 \
+    --enable-swscale \
     --enable-demuxer=mov \
     --enable-muxer=mp4 \
     --enable-parser=h264 --enable-parser=aac \
@@ -67,6 +90,8 @@ make install
     "$PREFIX/lib/libavformat.a" \
     "$PREFIX/lib/libavcodec.a" \
     "$PREFIX/lib/libavutil.a" \
+    "$PREFIX/lib/libswscale.a" \
+    "$X264_PREFIX/lib/libx264.a" \
     -Wl,--end-group \
     -lm -ldl \
     -Wl,--gc-sections -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 \

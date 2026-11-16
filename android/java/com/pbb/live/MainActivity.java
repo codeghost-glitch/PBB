@@ -1033,6 +1033,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void markStackPair(int top, int bottom) {
+            RecordService.markStackPair(top, bottom);
+        }
+
+        @JavascriptInterface
         public void startRecording(int index, String label) {
             final int streamIndex = index;
             final String streamLabel = label;

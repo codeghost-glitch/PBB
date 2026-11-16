@@ -1276,6 +1276,7 @@ function toggleRecord(index) {
     // wrong key and land in Movies/PBB as a file that will not play.
     setStatusText("keys rotated - open sources before recording");
   } else {
+    Pbb.markStackPair(-1, -1);
     setStatusText(`starting ${entry.stream.name}`);
     Pbb.startRecording(index, entry.stream.name);
   }
@@ -1730,10 +1731,11 @@ function toggleStitch() {
     setTransientStatus("keys rotated - open sources before recording");
   } else {
     stitch.active = true;
+    Pbb.markStackPair(STITCH_FEEDS[0], STITCH_FEEDS[1]);
     for (const index of STITCH_FEEDS) {
       Pbb.startRecording(index, players[index].stream.name);
     }
-    setTransientStatus("recording main + dining");
+    setTransientStatus("recording main + dining as one stacked video");
   }
   updateStitchButton();
 }

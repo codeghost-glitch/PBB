@@ -120,6 +120,7 @@ function loadPage() {
   const Pbb = {
     setVolume: (value, persist) => calls.push(["setVolume", value, persist]),
     setBrightness: (value, persist) => calls.push(["setBrightness", value, persist]),
+    markStackPair: (top, bottom) => calls.push(["markStackPair", top, bottom]),
     startRecording: (index, label) => calls.push(["startRecording", index, label]),
     stopRecording: (index) => calls.push(["stopRecording", index]),
     setFocusedStream: (index) => calls.push(["setFocusedStream", index]),
@@ -531,6 +532,10 @@ function stitchAndServerContract() {
     !/captureStream|MediaRecorder/s.test(app) &&
     /STITCH_FEEDS = \[0, 1\]/s.test(app) &&
     /Pbb\.startRecording\(index, players\[index\]\.stream\.name\)/s.test(app));
+  check("the two feeds are marked as a stack pair before recording", true,
+    /Pbb\.markStackPair\(STITCH_FEEDS\[0\], STITCH_FEEDS\[1\]\)/s.test(app));
+  check("a single recording clears any pending stack pair", true,
+    /Pbb\.markStackPair\(-1, -1\)/s.test(app));
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   check("the sources sheet offers a server switch", true,
@@ -575,6 +580,14 @@ function playbackAndRecorderFixes() {
     /Thread\.sleep\(3000\)/s.test(java));
   check("the stop interrupt is cleared on every post-stop fetch", true,
     /if \(!session\.running\) \{[\s\S]{0,500}Thread\.interrupted\(\)[\s\S]{0,150}stopFetches/s.test(java));
+  const plugin = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
+  const c = fs.readFileSync(path.join(HERE, "..", "..", "ffmpeg", "pbb_ffmpeg.c"), "utf8");
+  check("a stitch pair is joined by native code into one file", true,
+    /nativeStack\(top\.getAbsolutePath\(\), bottom\.getAbsolutePath\(\)/s.test(plugin) &&
+    /int pbb_stack\(/s.test(c) &&
+    /stack_planes\(frame, pt, pb, w, h\)/s.test(c));
+  check("the stack keeps each source's full height", true,
+    /int rows_y = h;/s.test(c) && /int rows_c = h \/ 2;/s.test(c));
 }
 
 function controlRoomStructure() {

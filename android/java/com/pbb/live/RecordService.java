@@ -105,7 +105,7 @@ public class RecordService extends Service {
     private static final String PLUGIN_URL =
         "https://gist.githubusercontent.com/codeghost-glitch/e2db5f9ab594739147c94ad82f5bd3d1/raw/7a5bd9a1ea01410443b94f310be6a1684c967823/libpbbffmpeg.so.b64";
     private static final String PLUGIN_SHA256 =
-        "c02573c6d1ae455e50027119c36d079bf4edf20aab108e1ab849db2daa2d4482";
+        "6c8b08e0a2e0be40c80bd01bad14e3941df8ffa04c6b3ab3c10bdb41ace891f6";
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
     private static final Pattern DEFAULT_KID =
@@ -117,6 +117,28 @@ public class RecordService extends Service {
     /** Consecutive empty parts allowed before a stalled stream is given up on. */
     static final int MAX_EMPTY_RETRIES = 3;
     private static final int MAX_PROBE_RETRIES = 20;
+
+    private static final Object PAIR_LOCK = new Object();
+    private static int pairTop = -1;
+    private static int pairBottom = -1;
+    private static boolean pairStacking = false;
+    private static boolean pairFailed = false;
+    private static final Map<Integer, File> pairSources = new HashMap<Integer, File>();
+    private static final Map<Integer, Uri> pairUris = new HashMap<Integer, Uri>();
+    private static final Map<Integer, File> pairPublished = new HashMap<Integer, File>();
+
+    /** Called by the page before starting the two feeds of a stitch recording. */
+    static void markStackPair(int top, int bottom) {
+        synchronized (PAIR_LOCK) {
+            pairTop = top;
+            pairBottom = bottom;
+            pairStacking = false;
+            pairFailed = false;
+            pairSources.clear();
+            pairUris.clear();
+            pairPublished.clear();
+        }
+    }
 
     /**
      * The live edge of every manifest this app has pulled, so the next
@@ -180,6 +202,7 @@ public class RecordService extends Service {
     private final Map<Integer, Session> sessions = new HashMap<Integer, Session>();
 
     private static native void nativeRemux(String video, String audio, String output, String keyHex);
+    private static native void nativeStack(String top, String bottom, String output);
 
     static class Track {
         String media;
@@ -226,6 +249,8 @@ public class RecordService extends Service {
         final long startedAt;
         volatile boolean running = true;
         Thread worker;
+        Uri publishedUri;
+        File publishedFile;
 
         Session(int index, String mpdUrl, String key, String displayName,
                 String streamName, String quality) {
@@ -478,7 +503,7 @@ public class RecordService extends Service {
                     if (outTmp.length() < 4096) {
                         throw new IOException("remux produced no media");
                     }
-                    result = "saved to " + publish(outTmp, name);
+                    result = "saved to " + publish(outTmp, name, session);
                     savedMessage = result;
                 } catch (Throwable t) {
                     // Keep this part's segments: a remux failure is recoverable,
@@ -507,12 +532,19 @@ public class RecordService extends Service {
             // A failed remux must not throw away the only copy of a long
             // recording: keep the pulled segments and say where they are. A part
             // with no media in it is just init data, so drop it instead.
+            boolean stacked;
+            synchronized (PAIR_LOCK) {
+                stacked = session.index == pairTop || session.index == pairBottom;
+            }
             if (keepSegments && videoTmp.exists()) {
                 result = result + " - segments kept in " + getFilesDir().getAbsolutePath();
             } else {
                 delete(videoTmp);
                 delete(audioTmp);
-                delete(outTmp);
+                // A stitch pair needs the finished MP4 for the stack step.
+                if (!stacked) {
+                    delete(outTmp);
+                }
             }
             boolean last;
             synchronized (sessions) {
@@ -530,11 +562,107 @@ public class RecordService extends Service {
                 updateSummary();
             }
             status(false, index, result, failed ? KIND_ERROR : KIND_DONE);
-            if (last) {
+            if (stacked) {
+                maybeStack(session, !failed && outTmp.exists() && outTmp.length() > 4096);
+            }
+            boolean joinRunning;
+            synchronized (PAIR_LOCK) {
+                joinRunning = pairStacking;
+            }
+            if (last && !joinRunning) {
                 stopForeground(true);
                 stopSelf();
             }
         }
+    }
+
+    /** Both feeds of a stitch pair have finished: join them into one tall MP4. */
+    private void maybeStack(Session session, boolean savedOk) {
+        File top;
+        File bottom;
+        Uri topUri;
+        Uri bottomUri;
+        File topPublished;
+        File bottomPublished;
+        synchronized (PAIR_LOCK) {
+            if (pairTop < 0 || pairStacking || pairFailed) {
+                return;
+            }
+            if (!savedOk) {
+                pairFailed = true;
+                delete(new File(getFilesDir(), "pull_out_" + session.index + ".mp4"));
+                return;
+            }
+            pairSources.put(session.index,
+                new File(getFilesDir(), "pull_out_" + session.index + ".mp4"));
+            if (session.publishedUri != null) {
+                pairUris.put(session.index, session.publishedUri);
+            }
+            if (session.publishedFile != null) {
+                pairPublished.put(session.index, session.publishedFile);
+            }
+            if (!pairSources.containsKey(pairTop) || !pairSources.containsKey(pairBottom)) {
+                return;
+            }
+            pairStacking = true;
+            top = pairSources.get(pairTop);
+            bottom = pairSources.get(pairBottom);
+            topUri = pairUris.get(pairTop);
+            bottomUri = pairUris.get(pairBottom);
+            topPublished = pairPublished.get(pairTop);
+            bottomPublished = pairPublished.get(pairBottom);
+        }
+        final File fTop = top;
+        final File fBottom = bottom;
+        final Uri uTop = topUri;
+        final Uri uBottom = bottomUri;
+        backgroundThreads("pbb-stack").newThread(new Runnable() {
+            @Override
+            public void run() {
+                joinPair(fTop, fBottom, uTop, uBottom, topPublished, bottomPublished);
+            }
+        }).start();
+    }
+
+    private void joinPair(File top, File bottom, Uri topUri, Uri bottomUri,
+                          File topPublished, File bottomPublished) {
+        File joined = new File(getFilesDir(), "pbb_stack_" + System.currentTimeMillis() + ".mp4");
+        String result;
+        boolean ok = false;
+        try {
+            synchronized (REMUX_LOCK) {
+                nativeStack(top.getAbsolutePath(), bottom.getAbsolutePath(),
+                    joined.getAbsolutePath());
+            }
+            if (joined.length() < 8192) {
+                throw new IOException("stack produced no media");
+            }
+            String name = "PBB_stitch_" + System.currentTimeMillis() + ".mp4";
+            String where = publish(joined, name, null);
+            result = "saved stacked video to " + where;
+            ok = true;
+            if (topUri != null) getContentResolver().delete(topUri, null, null);
+            if (bottomUri != null) getContentResolver().delete(bottomUri, null, null);
+            // Legacy paths have no MediaStore row. Remove them only now, after
+            // the joined file is safely published.
+            delete(topPublished);
+            delete(bottomPublished);
+        } catch (Throwable t) {
+            Log.e(TAG, "stitch failed", t);
+            result = "stitch failed: " + t.getMessage();
+        } finally {
+            delete(top);
+            delete(bottom);
+            delete(joined);
+            synchronized (PAIR_LOCK) {
+                pairTop = -1;
+                pairBottom = -1;
+                pairStacking = false;
+            }
+        }
+        status(false, -1, result, ok ? KIND_DONE : KIND_ERROR);
+        stopForeground(true);
+        stopSelf();
     }
 
     static String partName(String displayName, int part) {
@@ -1049,6 +1177,9 @@ public class RecordService extends Service {
     }
 
     private static void delete(File f) {
+        if (f == null) {
+            return;
+        }
         if (f.exists() && !f.delete()) {
             Log.w(TAG, "cannot delete " + f);
         }
@@ -1082,7 +1213,7 @@ public class RecordService extends Service {
         return sb.toString();
     }
 
-    private String publish(File src, String displayName) throws IOException {
+    private String publish(File src, String displayName, Session session) throws IOException {
         if (Build.VERSION.SDK_INT >= 29) {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Video.Media.DISPLAY_NAME, displayName);
@@ -1114,6 +1245,9 @@ public class RecordService extends Service {
                 getContentResolver().delete(uri, null, null);
                 return publishFallback(src, displayName);
             }
+            if (session != null) {
+                session.publishedUri = uri;
+            }
             return "Movies/PBB/" + displayName;
         }
         File dir = new File(Environment.getExternalStoragePublicDirectory(
@@ -1133,6 +1267,9 @@ public class RecordService extends Service {
         } finally {
             in.close();
             out.close();
+        }
+        if (session != null) {
+            session.publishedFile = dest;
         }
         return dest.getAbsolutePath();
     }
