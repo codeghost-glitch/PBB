@@ -634,11 +634,7 @@ function scheduleRecover(entry, index) {
     }
     entry.retries = 0;
     applyAudio();
-    if (state.focused >= 0 && state.focused !== index) {
-      entry.video.pause();
-    } else {
-      entry.video.play().catch(() => {});
-    }
+    entry.video.play().catch(() => {});
     setStreamStatus(entry, "live", false);
   }, delay);
 }
@@ -751,9 +747,7 @@ async function initPlayer(entry, index) {
   entry.loaded = true;
   applyAudio();
   setStreamStatus(entry, "live", false);
-  if (state.focused >= 0 && state.focused !== index) {
-    entry.video.pause();
-  } else if (gridGateOpen) {
+  if (gridGateOpen) {
     playEntry(entry);
   } else {
     onPlayerReady();
@@ -1039,15 +1033,13 @@ function setSound(index) {
   ensureSound(index);
 }
 
-// The big feed plays, and so does the mini tile: pausing it here is what froze
-// the tile whenever the focused feed changed.
+// Every feed keeps playing. A paused video stops decoding, so opening the mini
+// tile or switching feeds showed a black frame until it buffered again. The
+// hidden cards are rendered in a 1px offscreen box (see styles.css), which keeps
+// their frames live; audio is still routed by applyAudio().
 function playOnly(index) {
-  for (const [i, entry] of players.entries()) {
-    if (i === index || i === state.mini) {
-      entry.video.play().catch(() => {});
-    } else {
-      entry.video.pause();
-    }
+  for (const entry of players) {
+    entry.video.play().catch(() => {});
   }
 }
 

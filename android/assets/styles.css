@@ -735,7 +735,20 @@ h1 {
 }
 
 .focus-mode .grid .cam-card:first-child { grid-column: auto; }
-.focus-mode .cam-card:not(.focused) { display: none; }
+.focus-mode .cam-card:not(.focused),
+body.fullscreen-mode .cam-card:not(.focused) {
+  /* Stay in the layout at 1px instead of display:none: a hidden video stops
+     decoding, which is why the mini tile came up black for a second. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+  pointer-events: none;
+  z-index: -1;
+}
 .focus-mode .cam-card.focused { box-shadow: var(--shadow-3); }
 
 .focus-mode .video-wrap {
@@ -773,8 +786,7 @@ body.fullscreen-mode .grid {
   gap: 0;
 }
 
-.pip-mode .cam-card:not(.focused),
-body.fullscreen-mode .cam-card:not(.focused) { display: none !important; }
+.pip-mode .cam-card:not(.focused) { display: none !important; }
 
 .pip-mode .cam-card.focused,
 body.fullscreen-mode .cam-card.focused {
@@ -996,6 +1008,8 @@ body.fullscreen-mode .cam-card.mini {
   /* Above the focused card (50), below the controls (90) and indicator (95):
      a lower value paints the tile behind the fullscreen video. */
   z-index: 60;
+  opacity: 1;
+  pointer-events: auto;
   width: 26vw;
   max-width: 180px;
   /* The card's own ratio sizes the tile; the fullscreen .video-wrap fills it. */

@@ -562,6 +562,13 @@ function playbackAndRecorderFixes() {
   check("quality switches keep the buffer so mini and feed swaps stay instant", true,
     /selectVariantTrack\(chosen, false\)/s.test(app) &&
     !/selectVariantTrack\(chosen, true\)/s.test(app));
+  const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
+  check("every feed keeps decoding so mini opens on a live frame", true,
+    !/\.pause\(\)/s.test(app) &&
+    /for \(const entry of players\) \{[\s\S]{0,80}entry\.video\.play\(\)/s.test(app));
+  check("hidden feeds render offscreen instead of display:none", true,
+    !/body\.fullscreen-mode \.cam-card:not\(\.focused\) \{ display: none/s.test(css) &&
+    /opacity: 0\.01/s.test(css) && /body\.fullscreen-mode \.cam-card\.mini \{[\s\S]{0,400}opacity: 1/s.test(css));
   check("the stop interrupt is cleared before saving", true,
     /Thread\.interrupted\(\)/s.test(java));
   check("empty segment bodies count as misses", true,
