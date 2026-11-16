@@ -1532,15 +1532,20 @@ function openSourceSheet(index) {
   }
   const row = sourceField("sourceChips");
   if (row) {
-    row.replaceChildren();
+    if (row.childElementCount !== list.length) {
+      row.replaceChildren();
+      list.forEach((stream, i) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "chip";
+        chip.dataset.index = String(i);
+        chip.textContent = (stream.name || "channel " + (i + 1)).toLowerCase();
+        chip.addEventListener("click", () => selectSourceChannel(i));
+        row.appendChild(chip);
+      });
+    }
     list.forEach((stream, i) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.dataset.index = String(i);
-      chip.textContent = (stream.name || "channel " + (i + 1)).toLowerCase();
-      chip.addEventListener("click", () => selectSourceChannel(i));
-      row.appendChild(chip);
+      row.children[i].textContent = (stream.name || "channel " + (i + 1)).toLowerCase();
     });
   }
   selectSourceChannel(Math.max(0, Math.min(list.length - 1, index)));

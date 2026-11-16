@@ -377,10 +377,12 @@ public class MainActivity extends Activity {
 
     /** Fetch the list once, then try the chosen livestream host and its backup. */
     private static String publishedConfig() {
-        int start = channelSource > 0 ? channelSource - 1 : 0;
-        for (int i = 0; i < STREAM_HOSTS.length; i++) {
-            int pos = (start + i) % STREAM_HOSTS.length;
-            String candidate = fetchKeys(CHANNEL_LIST_URLS[0], STREAM_HOSTS[pos]);
+        if (channelSource > 0) {
+            String pinned = fetchKeys(CHANNEL_LIST_URLS[0], STREAM_HOSTS[channelSource - 1]);
+            return validKeys(pinned) != null ? pinned : null;
+        }
+        for (String host : STREAM_HOSTS) {
+            String candidate = fetchKeys(CHANNEL_LIST_URLS[0], host);
             if (candidate == null || validKeys(candidate) == null) {
                 continue;
             }

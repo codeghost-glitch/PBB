@@ -1099,13 +1099,6 @@ body.fullscreen-mode .indicator {
   place-items: end center;
   padding: 0;
   background: rgba(20, 17, 12, 0.45);
-  animation: shade-in 0.18s ease-out;
-}
-
-@keyframes shade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes sheet-up {
-  from { transform: translateY(24px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
 }
 
 .sheet-panel {
@@ -1122,7 +1115,6 @@ body.fullscreen-mode .indicator {
   border-bottom: 0;
   border-radius: var(--r-md) var(--r-md) 0 0;
   box-shadow: var(--shadow-3);
-  animation: sheet-up 0.22s ease-out;
 }
 
 /* A grab handle tells the hand this sheet came up from the bottom. */

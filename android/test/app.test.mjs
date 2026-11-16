@@ -533,6 +533,10 @@ function channelSourceContract() {
     /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length, index\)\)/.test(java));
   check("host choice is not clamped to the channel list", false,
     /Math\.min\(CHANNEL_LIST_URLS\.length, index\)/.test(java));
+  check("an explicit host is pinned", true,
+    /if \(channelSource > 0\) \{[\s\S]{0,200}STREAM_HOSTS\[channelSource - 1\]/.test(java));
+  check("a pinned host does not fall through", true,
+    /return validKeys\(pinned\) != null \? pinned : null;/.test(java));
   check("the M3U rows are parsed onto the chosen host", true,
     /ChannelList\.fromM3u\(raw, CHANNEL_NAMES, streamHost\)/s.test(java));
   check("the host is swapped in the manifest URL", true, /onHost\(line, streamHost\)/.test(list));
@@ -564,8 +568,6 @@ function stitchAndServerContract() {
     (html.match(/data-source="/g) || []).length);
   check("the page clamps the server choice to the host set", true,
     /Math\.min\(2, Number\(index\)/.test(app));
-  check("the chosen livestream host is tried first", true,
-    /channelSource > 0 \? channelSource - 1 : 0/s.test(java));
   check("both livestream hosts are in the list", true,
     STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
 }
