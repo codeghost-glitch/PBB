@@ -6,9 +6,9 @@ import java.util.List;
 /** Reads the PBB rows out of the operator's M3U channel list. */
 final class ChannelList {
     private static final String LICENSE = "#KODIPROP:inputstream.adaptive.license_key=";
-    // The M3U still names the old host; the APK's working CDN answers on this one.
-    private static final String OLD_CDN = "absp-live.akamaized.net";
-    private static final String LIVE_CDN = "abslive.akamaized.net";
+    private static final String[] M3U_HOSTS = {
+        "absp-live.akamaized.net", "abslive.akamaized.net"
+    };
 
     private ChannelList() {
     }
@@ -27,7 +27,7 @@ final class ChannelList {
         }
     }
 
-    static List<Entry> fromM3u(String raw, String[] names) {
+    static List<Entry> fromM3u(String raw, String[] names, String streamHost) {
         Entry[] found = new Entry[names.length];
         String name = null;
         String license = null;
@@ -42,7 +42,7 @@ final class ChannelList {
                 int index = indexOf(names, name);
                 int colon = license.indexOf(':');
                 if (index >= 0 && colon > 0) {
-                    found[index] = new Entry(name, line.replace(OLD_CDN, LIVE_CDN),
+                    found[index] = new Entry(name, onHost(line, streamHost),
                         license.substring(0, colon).replace("-", ""),
                         license.substring(colon + 1).replace("-", ""));
                 }
@@ -58,6 +58,13 @@ final class ChannelList {
             streams.add(entry);
         }
         return streams;
+    }
+
+    private static String onHost(String url, String host) {
+        for (String old : M3U_HOSTS) {
+            url = url.replace(old, host);
+        }
+        return url;
     }
 
     private static int indexOf(String[] names, String name) {

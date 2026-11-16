@@ -56,18 +56,22 @@ public final class RecorderLogicTest {
             + "#KODIPROP:inputstream.adaptive.license_key="
             + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
             + "https://absp-live.akamaized.net/dash/live/2099522/dining/manifest.mpd\n";
-        List<ChannelList.Entry> streams = ChannelList.fromM3u(m3u, names);
+        List<ChannelList.Entry> streams = ChannelList.fromM3u(m3u, names, "abslive.akamaized.net");
         check("the M3U yields three streams", 3, streams.size());
         ChannelList.Entry first = streams.get(0);
         check("the first row is All Access", names[0], first.name);
-        check("the manifest uses the APK's live CDN",
+        check("the manifest uses the chosen live host",
             "https://abslive.akamaized.net/dash/live/2099522/all/manifest.mpd",
             first.url);
+        check("the backup host is selectable",
+            "https://absp-live.akamaized.net/dash/live/2099522/all/manifest.mpd",
+            ChannelList.fromM3u(m3u, names, "absp-live.akamaized.net").get(0).url);
         check("the kid loses its dashes", "8150b74d16324bb4b2ff62e3e202fc7a", first.kid);
         check("the key is read", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", first.key);
         check("the rows come back in channel order", names[1], streams.get(1).name);
         check("a missing channel rejects the list", null,
-            ChannelList.fromM3u(m3u.replace("PBB Dining Area", "Gone"), names));
+            ChannelList.fromM3u(
+                m3u.replace("PBB Dining Area", "Gone"), names, "abslive.akamaized.net"));
     }
 
     private static void check(String what, Object expected, Object actual) {

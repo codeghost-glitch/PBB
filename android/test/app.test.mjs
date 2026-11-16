@@ -16,14 +16,8 @@ const CSS = path.join(HERE, "..", "assets", "styles.css");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
 const CHANNEL_LIST = path.join(HERE, "..", "java", "com", "pbb", "live", "ChannelList.java");
-const APK_SERVERS = [
-  "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u",
-  "https://pastebin.com/raw/3eAThca1",
-  "https://pastebin.com/raw/F3jDEQ6V",
-  "https://abslive.akamaized.net/dash/live/2099522/",
-  "https://wyiupinnbxcxomabkuof.supabase.co",
-];
-const LIVE_LIST = APK_SERVERS[0];
+const LIVE_LIST = "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u";
+const STREAM_HOSTS = ["abslive.akamaized.net", "absp-live.akamaized.net"];
 
 let failures = 0;
 
@@ -389,9 +383,10 @@ function channelListContract() {
     return;
   }
   const urls = block[1].match(/https?:\/\/[^"]+/g) || [];
-  check("the app carries every APK server", true,
-    urls.length === APK_SERVERS.length && APK_SERVERS.every((url, i) => urls[i] === url));
+  check("the app uses the M3U channel list", true, urls.length === 1 && urls[0] === LIVE_LIST);
   check("the M3U rows are parsed", true, java.includes("ChannelList.fromM3u"));
+  check("metadata endpoints are not channel sources", false,
+    /pastebin\.com|supabase\.co/.test(java));
   check("the old channel list servers are gone", false,
     /gist\.githubusercontent\.com\/codeghost-glitch|pbbliveaccess\.lovable\.app|pbb-v2\.pages\.dev/.test(java));
 
@@ -532,11 +527,13 @@ function channelSourceContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
   const list = fs.readFileSync(CHANNEL_LIST, "utf8");
   check("the APK M3U server is the channel list source", true, java.includes(LIVE_LIST));
-  check("the M3U rows are parsed by name", true,
-    /ChannelList\.fromM3u\(raw, CHANNEL_NAMES\)/s.test(java));
-  check("a list link in APK text is followed", true, /linkedListUrl\(raw\)/.test(java));
-  check("the dead CDN host is rewritten to the APK host", true,
-    /replace\(OLD_CDN, LIVE_CDN\)/.test(list));
+  check("both livestream hosts are configured", true,
+    STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
+  check("the M3U rows are parsed onto the chosen host", true,
+    /ChannelList\.fromM3u\(raw, CHANNEL_NAMES, streamHost\)/s.test(java));
+  check("the host is swapped in the manifest URL", true, /onHost\(line, streamHost\)/.test(list));
+  check("a reachable host is picked before the backup", true,
+    /Http\.getBytes\(first, 3000, 3000\)/.test(java));
   check("the web-player channels keep their names", true,
     java.includes("CHANNEL_NAMES"));
   check("the old JSON shapes are gone", false, /mpdUrl|servers\.getJSONObject/.test(java));
@@ -556,17 +553,17 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sources sheet offers every APK server", true,
-    /serverChips/s.test(app) && ["m3u", "announce", "update", "cdn", "chat"]
+  check("the sources sheet offers both livestream hosts", true,
+    /serverChips/s.test(app) && ["abslive", "absp-live"]
       .every((label) => html.includes(">" + label + "</button>")));
-  check("auto plus five APK servers are shown", 6,
+  check("auto plus two livestream hosts are shown", 3,
     (html.match(/data-source="/g) || []).length);
-  check("the page clamps the server choice to the APK set", true,
-    /Math\.min\(5, Number\(index\)/.test(app));
-  check("the chosen channel list is tried first", true,
+  check("the page clamps the server choice to the host set", true,
+    /Math\.min\(2, Number\(index\)/.test(app));
+  check("the chosen livestream host is tried first", true,
     /channelSource > 0 \? channelSource - 1 : 0/s.test(java));
-  check("every APK server is in the list", true,
-    APK_SERVERS.every((url) => java.includes(url)));
+  check("both livestream hosts are in the list", true,
+    STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
 }
 
 function playbackAndRecorderFixes() {

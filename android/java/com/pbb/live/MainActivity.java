@@ -41,25 +41,21 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    // Every PBB endpoint shipped in PBB-All-Live-Access v2.0. The M3U carries
-    // the channels; the pastebin pages can point at a list, and the CDN and
-    // chat hosts are kept as the APK's other alternatives.
+    // The M3U carries the channel paths and keys. The two Akamai hosts are the
+    // livestream servers: the APK's host first, the old one as backup.
     private static final String[] CHANNEL_LIST_URLS = {
-        "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u",
-        "https://pastebin.com/raw/3eAThca1",
-        "https://pastebin.com/raw/F3jDEQ6V",
-        "https://abslive.akamaized.net/dash/live/2099522/",
-        "https://wyiupinnbxcxomabkuof.supabase.co"
+        "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u"
+    };
+    private static final String[] STREAM_HOSTS = {
+        "abslive.akamaized.net", "absp-live.akamaized.net"
     };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
-    // 0 = auto, 1..5 = that APK server first, then the others as fallbacks.
+    // 0 = auto (working host first), 1..2 = that livestream host first.
     private static volatile int channelSource = 0;
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
@@ -379,25 +375,29 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** The chosen source first, then the others as fallbacks. */
+    /** Fetch the list once, then try the chosen livestream host and its backup. */
     private static String publishedConfig() {
         int start = channelSource > 0 ? channelSource - 1 : 0;
-        for (int i = 0; i < CHANNEL_LIST_URLS.length; i++) {
-            int pos = (start + i) % CHANNEL_LIST_URLS.length;
-            String candidate = fetchKeys(CHANNEL_LIST_URLS[pos]);
-            if (candidate != null && validKeys(candidate) != null) {
-                return candidate;
+        for (int i = 0; i < STREAM_HOSTS.length; i++) {
+            int pos = (start + i) % STREAM_HOSTS.length;
+            String candidate = fetchKeys(CHANNEL_LIST_URLS[0], STREAM_HOSTS[pos]);
+            if (candidate == null || validKeys(candidate) == null) {
+                continue;
+            }
+            try {
+                String first = new JSONObject(candidate).getJSONArray("streams")
+                    .getJSONObject(0).getString("url");
+                if (Http.getBytes(first, 3000, 3000) != null) {
+                    return candidate;
+                }
+            } catch (Exception ignored) {
             }
         }
         return null;
     }
 
-    /** Reads the three PBB rows from the M3U list, or follows a list link in APK text. */
-    private static String fetchKeys(String url) {
-        return fetchKeys(url, 0);
-    }
-
-    private static String fetchKeys(String url, int depth) {
+    /** Reads the three PBB rows from the M3U list onto one livestream host. */
+    private static String fetchKeys(String url, String streamHost) {
         String raw;
         try {
             raw = Http.getText(url, 5000, 8000);
@@ -408,15 +408,7 @@ public class MainActivity extends Activity {
             return null;
         }
         try {
-            List<ChannelList.Entry> listed = null;
-            if (raw.trim().startsWith("#EXTM3U")) {
-                listed = ChannelList.fromM3u(raw, CHANNEL_NAMES);
-            } else if (depth < 2) {
-                String linked = linkedListUrl(raw);
-                if (linked != null && !linked.equals(url)) {
-                    return fetchKeys(linked, depth + 1);
-                }
-            }
+            List<ChannelList.Entry> listed = ChannelList.fromM3u(raw, CHANNEL_NAMES, streamHost);
             if (listed == null) {
                 return null;
             }
@@ -433,17 +425,6 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private static String linkedListUrl(String raw) {
-        Matcher links = Pattern.compile("https?://[^\\s\"'<>]+").matcher(raw);
-        while (links.find()) {
-            String found = links.group();
-            if (found.endsWith(".m3u") || found.endsWith(".json") || found.contains("/raw/")) {
-                return found;
-            }
-        }
-        return null;
     }
 
     private static JSONArray validKeys(String json) {
