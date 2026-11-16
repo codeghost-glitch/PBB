@@ -554,6 +554,9 @@ function playbackAndRecorderFixes() {
     /setTimeout\(startGridTogether, 5000\)/s.test(app));
   check("no per-load live-edge seek", false,
     /await player\.load[\s\S]{0,220}alignPlayer/s.test(app));
+  check("quality switches keep the buffer so mini and feed swaps stay instant", true,
+    /selectVariantTrack\(chosen, false\)/s.test(app) &&
+    !/selectVariantTrack\(chosen, true\)/s.test(app));
   check("the stop interrupt is cleared before saving", true,
     /Thread\.interrupted\(\)/s.test(java));
   check("empty segment bodies count as misses", true,

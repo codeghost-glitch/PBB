@@ -797,13 +797,14 @@ function applyQuality(player, quality) {
   }
   tracks.sort((a, b) => a.height - b.height);
   const chosen = quality === "hd" ? tracks[tracks.length - 1] : tracks[0];
-  // selectVariantTrack(clearBuffer = true) throws the buffer away, which stalls
-  // the picture. Swapping feeds re-applies quality to every tile, so skip the
-  // ones that already play the variant we would pick.
+  // Keep the buffer when the variant changes. Opening the mini tile or
+  // switching feeds re-applies quality to every player; clearBuffer = true
+  // threw those buffers away and made each switch reload the stream. With
+  // false the new variant takes effect as the buffered media plays out.
   if (chosen.active) {
     return;
   }
-  player.selectVariantTrack(chosen, true);
+  player.selectVariantTrack(chosen, false);
 }
 
 function updateQualityButtons() {
