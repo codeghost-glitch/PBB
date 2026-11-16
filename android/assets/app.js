@@ -1424,6 +1424,9 @@ window.onStreamConfig = async (raw) => {
   for (const [i, s] of streams.entries()) {
     players[i].stream = s;
   }
+  if (!sourceField("sourceSheet").classList.contains("hidden")) {
+    selectSourceChannel(sourceSheet.index);
+  }
   await resyncStreams();
   setStatusText("keys refreshed - reconnecting streams");
 };

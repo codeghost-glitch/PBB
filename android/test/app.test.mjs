@@ -524,6 +524,7 @@ function refreshResyncsAllStreams() {
 }
 
 function channelSourceContract() {
+  const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
   const list = fs.readFileSync(CHANNEL_LIST, "utf8");
   check("the APK M3U server is the channel list source", true, java.includes(LIVE_LIST));
@@ -542,6 +543,8 @@ function channelSourceContract() {
   check("the host is swapped in the manifest URL", true, /onHost\(line, streamHost\)/.test(list));
   check("a reachable host is picked before the backup", true,
     /Http\.getBytes\(first, 3000, 3000\)/.test(java));
+  check("an open sources sheet follows the refreshed config", true,
+    /sourceField\("sourceSheet"\)\.classList\.contains\("hidden"\)[\s\S]{0,160}selectSourceChannel\(sourceSheet\.index\)/.test(app));
   check("the web-player channels keep their names", true,
     java.includes("CHANNEL_NAMES"));
   check("the old JSON shapes are gone", false, /mpdUrl|servers\.getJSONObject/.test(java));
@@ -566,6 +569,9 @@ function stitchAndServerContract() {
       .every((label) => html.includes(">" + label + "</button>")));
   check("auto plus two livestream hosts are shown", 3,
     (html.match(/data-source="/g) || []).length);
+  check("each host chip names its host on hover", true,
+    STREAM_HOSTS.every((host) =>
+      html.includes("title=\"https://" + host + "/dash/live/2099522/\"")));
   check("the page clamps the server choice to the host set", true,
     /Math\.min\(2, Number\(index\)/.test(app));
   check("both livestream hosts are in the list", true,
