@@ -519,7 +519,7 @@ h1 {
 }
 
 .cam-card.connecting .video-wrap::after {
-  background: linear-gradient(180deg, transparent 0%, rgba(78, 205, 196, 0.1) 48%, transparent 52%);
+  background: linear-gradient(180deg, transparent 0%, rgba(78, 205, 196, 0.18) 48%, transparent 52%);
   background-size: 100% 220%;
   animation: scan 2.8s linear infinite;
 }
@@ -879,10 +879,10 @@ body.fullscreen-mode .video-wrap video {
   align-items: center;
   gap: 5px;
   white-space: nowrap;
-  color: var(--fs-muted);
+  color: var(--fs-text);
   font-size: var(--t-xs);
-  font-weight: var(--w-reg);
-  letter-spacing: 0.06em;
+  font-weight: var(--w-bold);
+  letter-spacing: 0.08em;
   text-transform: lowercase;
 }
 
