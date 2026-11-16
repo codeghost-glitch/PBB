@@ -529,6 +529,10 @@ function channelSourceContract() {
   check("the APK M3U server is the channel list source", true, java.includes(LIVE_LIST));
   check("both livestream hosts are configured", true,
     STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
+  check("the host chooser clamps to the host count", true,
+    /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length, index\)\)/.test(java));
+  check("host choice is not clamped to the channel list", false,
+    /Math\.min\(CHANNEL_LIST_URLS\.length, index\)/.test(java));
   check("the M3U rows are parsed onto the chosen host", true,
     /ChannelList\.fromM3u\(raw, CHANNEL_NAMES, streamHost\)/s.test(java));
   check("the host is swapped in the manifest URL", true, /onHost\(line, streamHost\)/.test(list));

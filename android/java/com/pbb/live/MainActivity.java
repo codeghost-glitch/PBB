@@ -912,10 +912,10 @@ public class MainActivity extends Activity {
             MainActivity.this.refreshKeys();
         }
 
-        /** Pick which published channel list to try first. */
+        /** Pick which livestream host to try first. */
         @JavascriptInterface
         public void setChannelSource(int index) {
-            channelSource = Math.max(0, Math.min(CHANNEL_LIST_URLS.length, index));
+            channelSource = Math.max(0, Math.min(STREAM_HOSTS.length, index));
             getSharedPreferences("pbb", MODE_PRIVATE).edit()
                 .putInt("channelSource", channelSource).apply();
         }
