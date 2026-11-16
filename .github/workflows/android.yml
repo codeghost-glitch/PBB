@@ -98,19 +98,6 @@ jobs:
           PBB_KEYSTORE_PASS: ${{ secrets.PBB_KEYSTORE_PASS }}
         run: ./build.sh
 
-      # The release below is the real deliverable; the artifact is a per-run
-      # convenience. Keep only one copy, expire it fast, and never let a full
-      # artifact quota fail an otherwise green build.
-      - name: upload apk
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: PBB-apk
-          path: PBB.apk
-          if-no-files-found: error
-          overwrite: true
-          retention-days: 1
-
       - name: publish release v1.0
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
