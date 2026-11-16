@@ -13,7 +13,6 @@ const state = {
   brightness: 0.5,
   keysStale: false,
   mini: -1,
-  server: 0,
 };
 
 let manualKeyRefresh = false;
@@ -1025,7 +1024,7 @@ function setSound(index) {
 // tile or switching feeds showed a black frame until it buffered again. The
 // hidden cards are rendered in a 1px offscreen box (see styles.css), which keeps
 // their frames live; audio is still routed by applyAudio().
-function playOnly(index) {
+function playOnly() {
   for (const entry of players) {
     entry.video.play().catch(() => {});
   }
@@ -1051,7 +1050,7 @@ function focusStream(index, skipQuality) {
   for (const [i, entry] of players.entries()) {
     entry.card.classList.toggle("focused", i === index);
   }
-  playOnly(index);
+  playOnly();
   ensureSound(index);
   if (!skipQuality) {
     applyAllQualities();
@@ -1156,7 +1155,7 @@ function toggleFullscreen(keepFocus) {
     // viewer taps the picture, so fullscreen starts as nothing but the feed.
     showIndicator(feedLabel(state.focused), 1200);
   }
-  playOnly(state.focused);
+  playOnly();
   updateControls();
   // Leaving fullscreen drops the focus with it, so land back on the grid
   // instead of a single focused feed. PiP asks to keep it.
@@ -1175,7 +1174,7 @@ function setMini(index) {
   if (index >= 0) {
     players[index].video.play().catch(() => {});
   } else {
-    playOnly(state.focused);
+    playOnly();
   }
   applyAudio();
   applyAllQualities();
@@ -1333,7 +1332,7 @@ window.setPipMode = (enabled) => {
     }
     state.pip = true;
     ensureSound(state.focused);
-    playOnly(state.focused);
+    playOnly();
     setStatusText(`picture-in-picture: ${players[state.focused].stream.name}`);
   } else {
     state.pip = false;
@@ -1687,7 +1686,6 @@ function storedServer() {
 
 function selectServer(index) {
   const picked = Math.max(0, Math.min(3, Number(index) || 0));
-  state.server = picked;
   try {
     localStorage.setItem("pbb-server", String(picked));
   } catch (e) {

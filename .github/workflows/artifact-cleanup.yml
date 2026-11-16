@@ -1,8 +1,7 @@
-name: artifact cleanup
+name: cleanup
 
-# Build artifacts and run logs are reproducible; the GitHub Release is the
-# deliverable. Keep at most one day of artifacts and one week of run history so
-# the private-account Actions storage quota can never fill up again.
+# The GitHub Release is the deliverable; no artifacts are uploaded. Old run
+# logs still count against account storage, so keep a week of them.
 
 on:
   push:
@@ -18,35 +17,17 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: delete stale artifacts and runs
+      - name: delete old workflow runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          KEEP_DAYS: ${{ vars.ARTIFACT_KEEP_DAYS || '1' }}
-          KEEP_RUNS_DAYS: ${{ vars.KEEP_RUNS_DAYS || '7' }}
         run: |
-          set -u
-          cutoff="$(date -u -d "-${KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
-          run_cutoff="$(date -u -d "-${KEEP_RUNS_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
-          echo "Deleting artifacts before ${cutoff} and runs before ${run_cutoff} in ${REPO}"
-
-          gh api --paginate "repos/${REPO}/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | [.id, .created_at] | @tsv' |
-          while IFS="$(printf '\t')" read -r id created; do
-            [ -z "${id}" ] && continue
-            if [[ "${created}" < "${cutoff}" ]]; then
-              gh api --method DELETE "repos/${REPO}/actions/artifacts/${id}" >/dev/null 2>&1 \
-                || echo "could not delete artifact ${id}"
-            fi
-          done
-
-          # Old workflow-run logs count against the same account storage
-          # allowance, so clearing artifacts alone is not enough.
+          cutoff="$(date -u -d '-7 days' +%Y-%m-%dT%H:%M:%SZ)"
           gh api --paginate "repos/${REPO}/actions/runs?per_page=100" \
             --jq '.workflow_runs[] | [.id, .created_at] | @tsv' |
           while IFS="$(printf '\t')" read -r id created; do
             [ -z "${id}" ] && continue
-            if [[ "${created}" < "${run_cutoff}" ]]; then
+            if [[ "${created}" < "${cutoff}" ]]; then
               gh api --method DELETE "repos/${REPO}/actions/runs/${id}" >/dev/null 2>&1 \
                 || echo "could not delete run ${id}"
             fi

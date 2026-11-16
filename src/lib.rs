@@ -6,37 +6,11 @@ use jni::JNIEnv;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const STREAM_CONFIG_JSON: &str = r#"{
-  "app": "PBB",
-  "streams": [
-    {
-      "name": "PBB All Access",
-      "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream/manifest.mpd",
-      "kid": "8150b74d16324bb4b2ff62e3e202fc7a",
-      "key": "0c5ed4f9db9d4ee61bbc91b3a51ef8b5"
-    },
-    {
-      "name": "PBB Dining Area",
-      "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream-diningarea/manifest.mpd",
-      "kid": "ea6588d030c94ca89925ac0c49974430",
-      "key": "3e6de4afee1eff8e14f9506b76ac9ee6"
-    },
-    {
-      "name": "PBB External Den",
-      "url": "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30allaccesslivestream-externalden/manifest.mpd",
-      "kid": "b750a40736a24e60b5a4f256208b92c5",
-      "key": "af07292597f692726dcac2bd297ddf8e"
-    }
-  ]
-}"#;
+const STREAM_CONFIG_JSON: &str = include_str!("../keys/keys.json");
 
 const QUALITY_AUTO: &str = "auto";
 const QUALITY_HD: &str = "hd";
 const QUALITY_SD: &str = "sd";
-
-pub fn stream_config_json() -> &'static str {
-    STREAM_CONFIG_JSON
-}
 
 fn normalize_quality(value: &str) -> String {
     match value.trim().to_ascii_lowercase().as_str() {
@@ -110,7 +84,7 @@ pub extern "system" fn Java_com_pbb_live_MainActivity_streamConfig<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
-    java_string(&env, stream_config_json())
+    java_string(&env, STREAM_CONFIG_JSON)
 }
 
 #[no_mangle]
@@ -265,7 +239,7 @@ mod tests {
 
     #[test]
     fn config_has_three_streams_and_keys() {
-        let json = stream_config_json();
+        let json = STREAM_CONFIG_JSON;
         assert_eq!(json.matches(r#""url":"#).count(), 3);
         assert_eq!(json.matches(r#""kid":"#).count(), 3);
         assert_eq!(json.matches(r#""key":"#).count(), 3);
