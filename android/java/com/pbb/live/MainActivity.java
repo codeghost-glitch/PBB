@@ -395,8 +395,12 @@ public class MainActivity extends Activity {
                 return null;
             }
         }
-        String json = new JSONObject().put("streams", streams).toString();
-        return validKeys(json) != null ? json : null;
+        try {
+            String json = new JSONObject().put("streams", streams).toString();
+            return validKeys(json) != null ? json : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static JSONArray validKeys(String json) {
