@@ -142,7 +142,7 @@ The stream host and the key source are separate things:
 - Segment host: the `baseUrl` in that data, currently `absp-live.akamaized.net`. The published `manifest.mpd` 403s, but the init and media segments under that base answer 200, so the app writes a small SegmentTemplate MPD itself.
 - ClearKey: the `key` beside each channel in the same bundle.
 
-At startup and on manual refresh the app builds one MPD per channel, base64-encodes it into a `data:application/dash+xml;base64,` URL, and turns the bundle values into the app's `{name,url,kid,key}` config. `Http.getBytes()` decodes that URL for the recorder, and the recorder reads `<BaseURL>` from the generated MPD instead of guessing a path from the data URL.
+At startup and on manual refresh the app first tries `/api/stream?channel=...` and uses its `manifestUri` and `ClearKey` when the API answers. When the API 429s, it builds one MPD per channel from the bundle, including the same ClearKey PSSH the site's own player uses, base64-encodes it into a `data:application/dash+xml;base64,` URL, and turns the bundle values into the app's `{name,url,kid,key}` config. `Http.getBytes()` decodes that URL for the recorder, and the recorder reads `<BaseURL>` from the generated MPD instead of guessing a path from the data URL.
 
 The feed data lives outside the app, so a rotation shows up on the site and not in a new build.
 

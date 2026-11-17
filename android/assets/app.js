@@ -616,13 +616,14 @@ function createCard(stream, index) {
 // with a bounded backoff instead of leaving the tile dead.
 const RECOVERABLE_SHAKA = new Set([1001, 1002, 1003]);
 
-function scheduleRecover(entry, index) {
+function scheduleRecover(entry, index, detail) {
   if (entry.retryTimer) {
     return;
   }
   entry.retries = (entry.retries || 0) + 1;
   const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(entry.retries - 1, 5)));
-  setStreamStatus(entry, `retrying in ${Math.round(delay / 1000)}s`, true);
+  const why = detail ? ` (${detail})` : "";
+  setStreamStatus(entry, `retrying in ${Math.round(delay / 1000)}s${why}`, true);
   entry.retryTimer = setTimeout(async () => {
     entry.retryTimer = null;
     try {
@@ -727,7 +728,8 @@ async function initPlayer(entry, index) {
       return;
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
-      scheduleRecover(entry, index);
+      const http = Array.isArray(detail.data) ? detail.data[1] : null;
+      scheduleRecover(entry, index, `${detail.code}${http ? ` HTTP ${http}` : ""}`);
     } else {
       setStreamStatus(entry, `error ${message}`, true);
     }

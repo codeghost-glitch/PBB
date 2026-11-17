@@ -532,11 +532,17 @@ function channelSourceContract() {
   check("the signed feed data is parsed from the bundle", true,
     java.includes('availStart:\\"([^\\"]+)\\",kid:')
     && java.includes('startNum:0x([0-9a-fA-F]+)'));
+  check("the site API is tried first", true,
+    java.includes('"/api/stream?channel="') && /apiConfig\(\)/.test(java));
   check("the MPD is generated locally and inlined", true,
     java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
     && /Base64\.encodeToString\(mpd/.test(java));
+  check("the generated MPD carries a ClearKey PSSH", true,
+    java.includes('clearKeyPssh') && java.includes('<cenc:pssh>'));
   check("Http decodes inlined MPDs", true,
     /Base64\.getDecoder\(\)\.decode/.test(http));
+  check("recoveries show the Shaka error code", true,
+    /scheduleRecover\(entry, index, `.+detail.code.+`\)/.test(app));
   const recorder = fs.readFileSync(
     path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
   check("recording uses the generated MPD's BaseURL", true,

@@ -268,7 +268,7 @@ public class MainActivity extends Activity {
         String cleanUrl = url == null ? "" : url.trim();
         String cleanKid = kid == null ? "" : kid.replace("-", "").toLowerCase();
         String cleanKey = key == null ? "" : key.replace("-", "").toLowerCase();
-        if (!cleanUrl.startsWith("https://")) {
+        if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith(DATA_MPD)) {
             return "the manifest link has to be https";
         }
         if (!cleanKid.matches("[0-9a-f]{32}") || !cleanKey.matches("[0-9a-f]{32}")) {
@@ -372,8 +372,54 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** Read the current feed data from the pbb3 site bundle. */
+    /** Prefer the site API; its bundle data is the fallback when the API 429s. */
     private static String publishedConfig() {
+        String json = apiConfig();
+        if (json != null) {
+            return json;
+        }
+        return bundleConfig();
+    }
+
+    private static String apiConfig() {
+        JSONArray streams = new JSONArray();
+        for (int i = 0; i < CHANNEL_IDS.length; i++) {
+            String raw;
+            try {
+                raw = Http.getText(PBB3_SITE + "/api/stream?channel=" + CHANNEL_IDS[i],
+                    5000, 8000);
+            } catch (Exception e) {
+                return null;
+            }
+            if (raw == null) {
+                return null;
+            }
+            try {
+                JSONObject data = new JSONObject(raw);
+                JSONObject keys = data.getJSONObject("ClearKey");
+                String url = data.getString("manifestUri");
+                if (!url.startsWith("https://") && !url.startsWith(DATA_MPD)) {
+                    return null;
+                }
+                JSONObject stream = new JSONObject();
+                stream.put("name", CHANNEL_NAMES[i]);
+                stream.put("url", url);
+                stream.put("kid", keys.getString("k1").replace("-", ""));
+                stream.put("key", keys.getString("k2"));
+                streams.put(stream);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        try {
+            String json = new JSONObject().put("streams", streams).toString();
+            return validKeys(json) != null ? json : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String bundleConfig() {
         String html;
         try {
             html = Http.getText(PBB3_SITE + "/", 5000, 8000);
@@ -462,6 +508,7 @@ public class MainActivity extends Activity {
         SimpleDateFormat utc = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
         utc.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
         String start = Long.toString(entry.getLong("startNum"));
+        String pssh = clearKeyPssh(entry.getString("kid"));
         String mpd = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             + "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xmlns:cenc=\"urn:mpeg:cenc:2013\" "
             + "type=\"dynamic\" publishTime=\"" + utc.format(new Date()) + "\" "
@@ -471,7 +518,8 @@ public class MainActivity extends Activity {
             + "<BaseURL>" + entry.getString("baseUrl") + "</BaseURL>"
             + "<Period start=\"PT0S\" id=\"1\"><AdaptationSet mimeType=\"video/mp4\" segmentAlignment=\"true\">"
             + "<ContentProtection cenc:default_KID=\"" + entry.getString("kid") + "\" "
-            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\"/>"
+            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\">"
+            + "<cenc:pssh>" + pssh + "</cenc:pssh></ContentProtection>"
             + "<ContentProtection schemeIdUri=\"urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e\" value=\"ClearKey1.0\"/>"
             + "<SegmentTemplate timescale=\"90000\" duration=\"360360\" startNumber=\"" + start + "\"/>";
         String[][] videos = {
@@ -488,12 +536,30 @@ public class MainActivity extends Activity {
         }
         mpd += "</AdaptationSet><AdaptationSet mimeType=\"audio/mp4\" segmentAlignment=\"true\">"
             + "<ContentProtection cenc:default_KID=\"" + entry.getString("kid") + "\" "
-            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\"/>"
+            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\">"
+            + "<cenc:pssh>" + pssh + "</cenc:pssh></ContentProtection>"
             + "<SegmentTemplate timescale=\"48000\" duration=\"192192\" startNumber=\"" + start
             + "\" media=\"manifest_audio_$Number$.mp4\" initialization=\"manifest_audio_init.mp4\"/>"
             + "<Representation id=\"5\" bandwidth=\"96000\" audioSamplingRate=\"48000\" codecs=\"mp4a.40.2\"/>"
             + "</AdaptationSet></Period></MPD>";
         return DATA_MPD + Base64.encodeToString(mpd.getBytes("UTF-8"), Base64.NO_WRAP);
+    }
+
+    /** Same 52-byte ClearKey PSSH the pbb3 site puts in its generated MPD. */
+    private static String clearKeyPssh(String kid) throws Exception {
+        byte[] box = new byte[52];
+        byte[] raw = kid.replace("-", "").toLowerCase(Locale.US).getBytes("UTF-8");
+        for (int i = 0; i < 16; i++) {
+            box[32 + i] = (byte) Integer.parseInt(
+                new String(raw, i * 2, 2, "UTF-8"), 16);
+        }
+        System.arraycopy(new byte[] {0, 0, 0, 52}, 0, box, 0, 4);
+        System.arraycopy(new byte[] {'p', 's', 's', 'h'}, 0, box, 4, 4);
+        System.arraycopy(new byte[] {1, 0, 0, 0}, 0, box, 8, 4);
+        System.arraycopy(new byte[] {16, 119, -17, -20, -64, -78, 77, 2,
+            -84, -29, 60, 30, 82, -30, -5, 75}, 0, box, 12, 16);
+        System.arraycopy(new byte[] {0, 0, 0, 1}, 0, box, 28, 4);
+        return Base64.encodeToString(box, Base64.NO_WRAP);
     }
 
     private static JSONArray validKeys(String json) {
