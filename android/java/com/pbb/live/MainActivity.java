@@ -21,6 +21,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
@@ -126,6 +127,10 @@ public class MainActivity extends Activity {
 
     private void setupWebView() {
         webView = new WebView(this);
+        // The page origin is not pbbcollab.live, so its session cookie is
+        // third-party here even though it is first-party on the website.
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         // Android 15 with targetSdk 35 forces edge to edge, so nothing reserves
         // the status and navigation bar space any more. Pad the container instead
         // of the WebView: a child is laid out inside its parent's padding, and

@@ -558,6 +558,8 @@ function channelSourceContract() {
   check("the site session cookie is kept", true, /siteCookie\s*=\s*set\.split\(";", 2\)/.test(http));
   check("the site cookie reaches the WebView", true,
     /CookieManager\.getInstance\(\)\.setCookie\(SITE, set\)/.test(http));
+  check("the site cookie is allowed as third-party", true,
+    /setAcceptThirdPartyCookies\(webView, true\)/.test(java));
   check("a stale native session cookie is dropped", true, /siteCookie = null;/.test(http));
   check("the WebView cookie is kept on refresh", false, /pbb_sid=; Max-Age=0/.test(http));
   check("the WebView cookie is flushed", true, /CookieManager\.getInstance\(\)\.flush\(\)/.test(http));
