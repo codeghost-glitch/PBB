@@ -533,8 +533,12 @@ function channelSourceContract() {
     /endsWith\(" Live"\)/.test(list));
   check("both livestream hosts are configured", true,
     STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
-  check("the host chooser clamps to the host count", true,
-    /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length, index\)\)/.test(java));
+  check("the server chooser clamps to every server", true,
+    /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length \+ 1, index\)\)/.test(java));
+  check("the pbb3 proxy server is configured", true,
+    java.includes("PBB3_M3U") && java.includes("pbb3collablive.xyz/api/proxy/stream"));
+  check("the pbb3 server is reachable in auto", true,
+    /channelSource == 3/.test(java) && /reachable\(pbb3\)/.test(java));
   check("host choice is not clamped to the channel list", false,
     /Math\.min\(CHANNEL_LIST_URLS\.length, index\)/.test(java));
   check("an explicit host is pinned", true,
@@ -567,16 +571,16 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sources sheet offers both livestream hosts", true,
-    /serverChips/s.test(app) && ["abslive", "absp-live"]
+  check("the sources sheet offers every livestream server", true,
+    /serverChips/s.test(app) && ["abslive", "absp-live", "pbb3"]
       .every((label) => html.includes(">" + label + "</button>")));
-  check("auto plus two livestream hosts are shown", 3,
+  check("auto plus three livestream servers are shown", 4,
     (html.match(/data-source="/g) || []).length);
   check("each host chip names its host on hover", true,
     STREAM_HOSTS.every((host) =>
       html.includes("title=\"https://" + host + "/dash/live/2099522/\"")));
-  check("the page clamps the server choice to the host set", true,
-    /Math\.min\(2, Number\(index\)/.test(app));
+  check("the page clamps the server choice to every server", true,
+    /Math\.min\(3, Number\(index\)/.test(app));
   check("both livestream hosts are in the list", true,
     STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
 }

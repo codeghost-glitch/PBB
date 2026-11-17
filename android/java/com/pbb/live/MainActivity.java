@@ -69,6 +69,22 @@ public class MainActivity extends Activity {
         + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
         + "https://absp-live.akamaized.net/dash/live/2099522/"
         + "pbbcollab30allaccesslivestream-externalden/manifest.mpd\n";
+    private static final String PBB3_M3U = "#EXTM3U\n"
+        + "#EXTINF:-1,PBB All Access\n"
+        + "#KODIPROP:inputstream.adaptive.license_key="
+        + "8150b74d16324bb4b2ff62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5\n"
+        + "https://pbb3collablive.xyz/api/proxy/stream/"
+        + "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22/manifest.mpd\n"
+        + "#EXTINF:-1,PBB Dining Area\n"
+        + "#KODIPROP:inputstream.adaptive.license_key="
+        + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
+        + "https://pbb3collablive.xyz/api/proxy/stream/"
+        + "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44/manifest.mpd\n"
+        + "#EXTINF:-1,PBB External Den\n"
+        + "#KODIPROP:inputstream.adaptive.license_key="
+        + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
+        + "https://pbb3collablive.xyz/api/proxy/stream/"
+        + "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11/manifest.mpd\n";
     private static final String[] CHANNEL_LIST_URLS = {BUILTIN_M3U, CHANNEL_LIST_URL};
     private static final String[] STREAM_HOSTS = {
         "abslive.akamaized.net", "absp-live.akamaized.net"
@@ -76,7 +92,7 @@ public class MainActivity extends Activity {
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
-    // 0 = auto (working host first), 1..2 = that livestream host first.
+    // 0 = auto, 1..2 = Akamai host, 3 = pbb3collablive.xyz proxy.
     private static volatile int channelSource = 0;
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
@@ -398,6 +414,10 @@ public class MainActivity extends Activity {
 
     /** Fetch the supplied M3U first, then try the chosen host and its backup. */
     private static String publishedConfig() {
+        if (channelSource == 3) {
+            String pinned = fetchKeys(PBB3_M3U, "pbb3collablive.xyz");
+            return validKeys(pinned) != null ? pinned : null;
+        }
         if (channelSource > 0) {
             String pinned = fetchKeys(BUILTIN_M3U, STREAM_HOSTS[channelSource - 1]);
             return validKeys(pinned) != null ? pinned : null;
@@ -405,20 +425,23 @@ public class MainActivity extends Activity {
         for (String host : STREAM_HOSTS) {
             for (String source : CHANNEL_LIST_URLS) {
                 String candidate = fetchKeys(source, host);
-                if (candidate == null || validKeys(candidate) == null) {
-                    continue;
-                }
-                try {
-                    String first = new JSONObject(candidate).getJSONArray("streams")
-                        .getJSONObject(0).getString("url");
-                    if (Http.getBytes(first, 3000, 3000) != null) {
-                        return candidate;
-                    }
-                } catch (Exception ignored) {
+                if (validKeys(candidate) != null && reachable(candidate)) {
+                    return candidate;
                 }
             }
         }
-        return null;
+        String pbb3 = fetchKeys(PBB3_M3U, "pbb3collablive.xyz");
+        return validKeys(pbb3) != null && reachable(pbb3) ? pbb3 : null;
+    }
+
+    private static boolean reachable(String json) {
+        try {
+            String first = new JSONObject(json).getJSONArray("streams")
+                .getJSONObject(0).getString("url");
+            return Http.getBytes(first, 3000, 3000) != null;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** Reads the three PBB rows from supplied M3U text or a remote M3U URL. */
@@ -942,7 +965,7 @@ public class MainActivity extends Activity {
         /** Pick which livestream host to try first. */
         @JavascriptInterface
         public void setChannelSource(int index) {
-            channelSource = Math.max(0, Math.min(STREAM_HOSTS.length, index));
+            channelSource = Math.max(0, Math.min(STREAM_HOSTS.length + 1, index));
             getSharedPreferences("pbb", MODE_PRIVATE).edit()
                 .putInt("channelSource", channelSource).apply();
         }
