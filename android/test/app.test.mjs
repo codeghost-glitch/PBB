@@ -529,6 +529,7 @@ function channelSourceContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
   const list = fs.readFileSync(CHANNEL_LIST, "utf8");
   const http = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
+  const session = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "PbbSession.java"), "utf8");
   check("the APK M3U server is the channel list source", true, java.includes(LIVE_LIST));
   check("both livestream hosts are configured", true,
     STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
@@ -549,6 +550,9 @@ function channelSourceContract() {
     /Http\.getBytes\(first, 3000, 3000\)/.test(java));
   check("pbbcollab.live session API is used", true,
     java.includes("PbbSession.config") && /for \(String key : SITE_KEYS\)/.test(java));
+  check("site manifests carry the site's cache key", true,
+    /registerRequestFilter/.test(app) && /Math\.floor\(Date\.now\(\) \/ 15000\)/.test(app)
+      && /_b=/.test(session));
   check("the site session cookie is kept", true, /siteCookie\s*=\s*set\.split\(";", 2\)/.test(http));
   check("the site cookie reaches the WebView", true,
     /CookieManager\.getInstance\(\)\.setCookie\(SITE, set\)/.test(http));

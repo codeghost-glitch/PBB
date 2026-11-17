@@ -24,9 +24,12 @@ final class PbbSession {
         for (int i = 0; i < CAMS.length; i++) {
             JSONObject desc = streams.getJSONObject(CAMS[i]);
             String[] pair = decode(desc.getString("token"), nonce);
+            String endpoint = desc.getString("endpoint");
             JSONObject entry = new JSONObject();
             entry.put("name", names[i]);
-            entry.put("url", ORIGIN + desc.getString("endpoint"));
+            entry.put("url", ORIGIN + endpoint
+                + (endpoint.contains("?") ? "&" : "?") + "_b="
+                + (System.currentTimeMillis() / 15000L));
             entry.put("kid", pair[0]);
             entry.put("key", pair[1]);
             listed.put(entry);
