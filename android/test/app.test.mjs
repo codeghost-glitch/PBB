@@ -385,8 +385,8 @@ function channelListContract() {
     /CHANNEL_LIST_URL\s*=/.test(java) && java.includes(LIVE_LIST));
   check("the app ships the supplied M3U", true,
     java.includes("BUILTIN_M3U = \"#EXTM3U"));
-  check("the supplied M3U is tried first", true,
-    /CHANNEL_LIST_URLS = \{BUILTIN_M3U, CHANNEL_LIST_URL\}/.test(java));
+  check("the published M3U is tried first", true,
+    /CHANNEL_LIST_URLS = \{CHANNEL_LIST_URL, BUILTIN_M3U\}/.test(java));
   check("the M3U rows are parsed", true, java.includes("ChannelList.fromM3u"));
   check("metadata endpoints are not channel sources", false,
     /pastebin\.com|supabase\.co/.test(java));

@@ -79,7 +79,7 @@ Environment overrides, all optional:
 4. cargo fmt --check, cargo clippy -D warnings, cargo test
 5. node --check on the page plus the page checks in android/test/app.test.mjs
 6. ./build.sh
-7. uploads PBB-apk as a workflow artifact
+7. uploads `PBB.apk` as the `PBB-apk` workflow artifact
 8. on main only, creates or updates the rolling GitHub release v1.0 with one asset, `PBB-1.0-<build>.apk`
 
 The release tag is fixed at v1.0. The asset name includes the build number so a new download never hits a stale cached APK. The workflow deletes old .apk assets so exactly one APK is offered. App version is always 1.0; versionCode carries the build number.

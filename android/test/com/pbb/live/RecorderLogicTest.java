@@ -21,6 +21,8 @@ public final class RecorderLogicTest {
         liveOffsetFollowsMpdTiming();
         partNameKeepsTheExtension();
         emptyGapPartRetriesButIsBounded();
+        liveListIsTriedFirst();
+        serviceStopsOnlyWhenIdle();
         if (failures > 0) {
             System.err.println(failures + " check(s) failed");
             System.exit(1);
@@ -75,6 +77,20 @@ public final class RecorderLogicTest {
         check("a missing channel rejects the list", null,
             ChannelList.fromM3u(
                 m3u.replace("PBB Dining Area", "Gone"), names, "abslive.akamaized.net"));
+    }
+
+    private static void liveListIsTriedFirst() throws Exception {
+        String source = new String(java.nio.file.Files.readAllBytes(
+            java.nio.file.Paths.get("android/java/com/pbb/live/MainActivity.java")),
+            java.nio.charset.StandardCharsets.UTF_8);
+        check("the published list beats the built-in snapshot", true,
+            source.contains("CHANNEL_LIST_URLS = {CHANNEL_LIST_URL, BUILTIN_M3U}"));
+    }
+
+    private static void serviceStopsOnlyWhenIdle() {
+        check("an idle service stops", true, RecordService.shouldStopService(0, false));
+        check("another recording keeps it up", false, RecordService.shouldStopService(1, false));
+        check("a join keeps it up", false, RecordService.shouldStopService(0, true));
     }
 
     private static void check(String what, Object expected, Object actual) {

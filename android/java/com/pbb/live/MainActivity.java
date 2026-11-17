@@ -85,7 +85,7 @@ public class MainActivity extends Activity {
         + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
         + "https://pbb3collablive.xyz/api/proxy/stream/"
         + "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11/manifest.mpd\n";
-    private static final String[] CHANNEL_LIST_URLS = {BUILTIN_M3U, CHANNEL_LIST_URL};
+    private static final String[] CHANNEL_LIST_URLS = {CHANNEL_LIST_URL, BUILTIN_M3U};
     private static final String[] STREAM_HOSTS = {
         "abslive.akamaized.net", "absp-live.akamaized.net"
     };
@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
         // of the WebView: a child is laid out inside its parent's padding, and
         // padding on a WebView itself does not shrink what it renders.
         rootView = new FrameLayout(this);
-        rootView.setBackgroundColor(0xFFFAFADF);
+        rootView.setBackgroundColor(0xFF070A0F);
         applyBarIconAppearance();
         rootView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override
@@ -187,7 +187,7 @@ public class MainActivity extends Activity {
                 0, dimension("status_bar_height"), 0, dimension("navigation_bar_height"));
             rootView.requestApplyInsets();
         }
-        webView.setBackgroundColor(0xFFFAFADF);
+        webView.setBackgroundColor(0xFF070A0F);
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setVerticalScrollBarEnabled(false);

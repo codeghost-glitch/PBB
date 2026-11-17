@@ -32,6 +32,8 @@ def parse_m3u(text):
         line = raw.strip()
         if line.startswith("#EXTINF:"):
             name = line[line.rfind(",") + 1:].strip()
+            if name.endswith(" Live"):
+                name = name[:-5]
             license = None
         elif line.startswith(LICENSE):
             license = line[len(LICENSE):].strip()

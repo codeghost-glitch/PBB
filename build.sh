@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
 
 VERSION_NAME="${VERSION_NAME:-1.0}"
 VERSION_CODE="${VERSION_CODE:-1}"
@@ -110,6 +111,22 @@ echo "ndk:          $ANDROID_NDK_HOME"
 echo "build-tools:  $BUILD_TOOLS"
 echo "platform:     $PLATFORM"
 echo "version:      $VERSION_NAME ($VERSION_CODE)"
+
+echo "== plugin checksum =="
+PLUGIN_SHA="$(python3 - "$ROOT/android/assets/libpbbffmpeg.so.b64" <<'PY'
+import base64, hashlib, sys
+print(hashlib.sha256(base64.b64decode(open(sys.argv[1], "rb").read())).hexdigest())
+PY
+)"
+EXPECTED_SHA="$(python3 - "$ROOT/android/java/com/pbb/live/RecordService.java" <<'PY'
+import re, sys
+print(re.search(r'PLUGIN_SHA256\s*=\s*"([0-9a-f]+)"', open(sys.argv[1]).read()).group(1))
+PY
+)"
+if [ "$PLUGIN_SHA" != "$EXPECTED_SHA" ]; then
+  echo "recorder plugin hash $PLUGIN_SHA does not match pinned $EXPECTED_SHA" >&2
+  exit 1
+fi
 
 rm -rf "$OUT"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/apk" "$APK_LIB"

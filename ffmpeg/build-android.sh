@@ -8,7 +8,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="$HERE/out"
 WORK="/tmp/pbb-ffmpeg-build"
 FFMPEG_VERSION="n7.1"
-X264_VERSION="stable"
+# Immutable commit from the x264 stable branch; keeps plugin builds reproducible.
+X264_VERSION="b35605ace3ddf7c1a5d67a2eb553f034aef41d55"
 SDK="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}"
 NDK="${ANDROID_NDK_HOME:-$SDK/ndk/27.2.12479018}"
 API=26

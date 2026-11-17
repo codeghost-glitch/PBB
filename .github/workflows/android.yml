@@ -98,6 +98,13 @@ jobs:
           PBB_KEYSTORE_PASS: ${{ secrets.PBB_KEYSTORE_PASS }}
         run: ./build.sh
 
+      - name: upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: PBB-apk
+          path: PBB.apk
+          if-no-files-found: error
+
       - name: publish release v1.0
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
@@ -107,7 +114,7 @@ jobs:
           ASSET="PBB-$VERSION_NAME-$VERSION_CODE.apk"
           cp PBB.apk "$ASSET"
           SUM="$(sha256sum "$ASSET" | cut -d' ' -f1)"
-          NOTES="$(printf 'PBB %s (build %s)\n\nsha256: %s\n\nThree PBB live DASH/clear-key streams, neobrutalist three-view, single-stream picture-in-picture, direct-pull recording to Movies/PBB.\n\nInstall: adb install -r %s' "$VERSION_NAME" "$VERSION_CODE" "$SUM" "$ASSET")"
+          NOTES="$(printf 'PBB %s (build %s)\n\nsha256: %s\n\nThree PBB live DASH/clear-key streams, cinematic broadcast three-view, single-stream picture-in-picture, direct-pull recording to Movies/PBB.\n\nInstall: adb install -r %s' "$VERSION_NAME" "$VERSION_CODE" "$SUM" "$ASSET")"
           gh release view "v$VERSION_NAME" >/dev/null 2>&1 || \
             gh release create "v$VERSION_NAME" --title "PBB $VERSION_NAME" --notes "$NOTES"
           for old in $(gh release view "v$VERSION_NAME" --json assets --jq '.assets[].name'); do

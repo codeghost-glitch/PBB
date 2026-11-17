@@ -130,6 +130,11 @@ public class RecordService extends Service {
     /** Called by the page before starting the two feeds of a stitch recording. */
     static void markStackPair(int top, int bottom) {
         synchronized (PAIR_LOCK) {
+            // A generic record start clears the pair. Ignore it while a stack
+            // is pending or running, or the two feeds finish as separate files.
+            if (top < 0 && (pairTop >= 0 || pairStacking)) {
+                return;
+            }
             pairTop = top;
             pairBottom = bottom;
             pairStacking = false;
@@ -171,6 +176,11 @@ public class RecordService extends Service {
         synchronized (STARTED) {
             return STARTED.size();
         }
+    }
+
+    /** The service can only stop when no worker is left and no join is running. */
+    static boolean shouldStopService(int activeCount, boolean stacking) {
+        return activeCount == 0 && !stacking;
     }
 
     /** Stream indices recording right now, ascending. */
@@ -220,6 +230,17 @@ public class RecordService extends Service {
         long suggestedOffset = -1;
     }
 
+    /** Where a file landed, and whether it is only an app-private fallback. */
+    private static final class Published {
+        final String path;
+        final boolean fallback;
+
+        Published(String path, boolean fallback) {
+            this.path = path;
+            this.fallback = fallback;
+        }
+    }
+
     private static class Template {
         String media;
         String init;
@@ -251,6 +272,7 @@ public class RecordService extends Service {
         Thread worker;
         Uri publishedUri;
         File publishedFile;
+        File publishedFallbackFile;
 
         Session(int index, String mpdUrl, String key, String displayName,
                 String streamName, String quality) {
@@ -503,7 +525,7 @@ public class RecordService extends Service {
                     if (outTmp.length() < 4096) {
                         throw new IOException("remux produced no media");
                     }
-                    result = "saved to " + publish(outTmp, name, session);
+                    result = "saved to " + publish(outTmp, name, session).path;
                     savedMessage = result;
                 } catch (Throwable t) {
                     // Keep this part's segments: a remux failure is recoverable,
@@ -546,10 +568,8 @@ public class RecordService extends Service {
                     delete(outTmp);
                 }
             }
-            boolean last;
             synchronized (sessions) {
                 sessions.remove(index);
-                last = sessions.isEmpty();
             }
             synchronized (STARTED) {
                 STARTED.remove(index);
@@ -558,7 +578,7 @@ public class RecordService extends Service {
             if (manager != null) {
                 manager.cancel(SESSION_ID_BASE + index);
             }
-            if (!last) {
+            if (activeCount() > 0) {
                 updateSummary();
             }
             status(false, index, result, failed ? KIND_ERROR : KIND_DONE);
@@ -569,7 +589,7 @@ public class RecordService extends Service {
             synchronized (PAIR_LOCK) {
                 joinRunning = pairStacking;
             }
-            if (last && !joinRunning) {
+            if (shouldStopService(activeCount(), joinRunning)) {
                 stopForeground(true);
                 stopSelf();
             }
@@ -590,6 +610,8 @@ public class RecordService extends Service {
             }
             if (!savedOk) {
                 pairFailed = true;
+                pairTop = -1;
+                pairBottom = -1;
                 delete(new File(getFilesDir(), "pull_out_" + session.index + ".mp4"));
                 return;
             }
@@ -598,8 +620,10 @@ public class RecordService extends Service {
             if (session.publishedUri != null) {
                 pairUris.put(session.index, session.publishedUri);
             }
-            if (session.publishedFile != null) {
-                pairPublished.put(session.index, session.publishedFile);
+            File published = session.publishedFile != null
+                ? session.publishedFile : session.publishedFallbackFile;
+            if (published != null) {
+                pairPublished.put(session.index, published);
             }
             if (!pairSources.containsKey(pairTop) || !pairSources.containsKey(pairBottom)) {
                 return;
@@ -638,15 +662,17 @@ public class RecordService extends Service {
                 throw new IOException("stack produced no media");
             }
             String name = "PBB_stitch_" + System.currentTimeMillis() + ".mp4";
-            String where = publish(joined, name, null);
-            result = "saved stacked video to " + where;
+            Published joinedOut = publish(joined, name, null);
+            result = "saved stacked video to " + joinedOut.path;
             ok = true;
-            if (topUri != null) getContentResolver().delete(topUri, null, null);
-            if (bottomUri != null) getContentResolver().delete(bottomUri, null, null);
-            // Legacy paths have no MediaStore row. Remove them only now, after
-            // the joined file is safely published.
-            delete(topPublished);
-            delete(bottomPublished);
+            // Only remove the originals when the joined file is in a real
+            // gallery location; a fallback copy must leave them alone.
+            if (!joinedOut.fallback) {
+                if (topUri != null) getContentResolver().delete(topUri, null, null);
+                if (bottomUri != null) getContentResolver().delete(bottomUri, null, null);
+                delete(topPublished);
+                delete(bottomPublished);
+            }
         } catch (Throwable t) {
             Log.e(TAG, "stitch failed", t);
             result = "stitch failed: " + t.getMessage();
@@ -661,8 +687,10 @@ public class RecordService extends Service {
             }
         }
         status(false, -1, result, ok ? KIND_DONE : KIND_ERROR);
-        stopForeground(true);
-        stopSelf();
+        if (shouldStopService(activeCount(), false)) {
+            stopForeground(true);
+            stopSelf();
+        }
     }
 
     static String partName(String displayName, int part) {
@@ -711,7 +739,12 @@ public class RecordService extends Service {
             return;
         }
         File file = new File(context.getFilesDir(), PLUGIN_FILE);
-        byte[] existing = file.exists() ? Http.readAll(new FileInputStream(file)) : null;
+        byte[] existing = null;
+        if (file.exists()) {
+            try (FileInputStream in = new FileInputStream(file)) {
+                existing = Http.readAll(in);
+            }
+        }
         if (existing == null || !PLUGIN_SHA256.equals(hex(sha256(existing)))) {
             byte[] so = bundledPlugin(context);
             if (so == null) {
@@ -1207,7 +1240,7 @@ public class RecordService extends Service {
         return sb.toString();
     }
 
-    private String publish(File src, String displayName, Session session) throws IOException {
+    private Published publish(File src, String displayName, Session session) throws IOException {
         if (Build.VERSION.SDK_INT >= 29) {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Video.Media.DISPLAY_NAME, displayName);
@@ -1218,12 +1251,12 @@ public class RecordService extends Service {
             Uri uri = getContentResolver().insert(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
             if (uri == null) {
-                return publishFallback(src, displayName);
+                return publishFallback(src, displayName, session);
             }
             ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "w");
             if (pfd == null) {
                 getContentResolver().delete(uri, null, null);
-                return publishFallback(src, displayName);
+                return publishFallback(src, displayName, session);
             }
             try {
                 copy(src, pfd);
@@ -1237,12 +1270,12 @@ public class RecordService extends Service {
                 // An entry left IS_PENDING is invisible in the gallery; keep a
                 // real copy rather than reporting a save that cannot be found.
                 getContentResolver().delete(uri, null, null);
-                return publishFallback(src, displayName);
+                return publishFallback(src, displayName, session);
             }
             if (session != null) {
                 session.publishedUri = uri;
             }
-            return "Movies/PBB/" + displayName;
+            return new Published("Movies/PBB/" + displayName, false);
         }
         File dir = new File(Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_MOVIES), "PBB");
@@ -1265,12 +1298,12 @@ public class RecordService extends Service {
         if (session != null) {
             session.publishedFile = dest;
         }
-        return dest.getAbsolutePath();
+        return new Published(dest.getAbsolutePath(), false);
     }
 
     /** Last-resort copy when MediaStore will not take the file. App-private,
      *  but the recording is not lost; the status text carries the real path. */
-    private String publishFallback(File src, String displayName) throws IOException {
+    private Published publishFallback(File src, String displayName, Session session) throws IOException {
         File dir = new File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "PBB");
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("cannot create the fallback PBB folder");
@@ -1288,7 +1321,10 @@ public class RecordService extends Service {
             in.close();
             out.close();
         }
-        return dest.getAbsolutePath();
+        if (session != null) {
+            session.publishedFallbackFile = dest;
+        }
+        return new Published(dest.getAbsolutePath(), true);
     }
 
     private static void copy(File src, ParcelFileDescriptor pfd) throws IOException {
