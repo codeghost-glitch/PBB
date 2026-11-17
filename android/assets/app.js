@@ -622,8 +622,8 @@ function scheduleRecover(entry, index, detail) {
   }
   entry.retries = (entry.retries || 0) + 1;
   const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(entry.retries - 1, 5)));
-  const why = detail ? ` (${detail})` : "";
-  setStreamStatus(entry, `retrying in ${Math.round(delay / 1000)}s${why}`, true);
+  const why = detail ? `[${detail}] ` : "";
+  setStreamStatus(entry, `${why}retrying ${Math.round(delay / 1000)}s`, true);
   entry.retryTimer = setTimeout(async () => {
     entry.retryTimer = null;
     try {
@@ -729,7 +729,9 @@ async function initPlayer(entry, index) {
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
       const http = Array.isArray(detail.data) ? detail.data[1] : null;
-      scheduleRecover(entry, index, `${detail.code}${http ? ` HTTP ${http}` : ""}`);
+      const why = `${detail.code}${http ? `/${http}` : ""}`;
+      scheduleRecover(entry, index, why);
+      setTransientStatus(`camera ${index + 1}: ${why}`, 4500);
     } else {
       setStreamStatus(entry, `error ${message}`, true);
     }

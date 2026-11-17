@@ -542,7 +542,8 @@ function channelSourceContract() {
   check("Http decodes inlined MPDs", true,
     /Base64\.getDecoder\(\)\.decode/.test(http));
   check("recoveries show the Shaka error code", true,
-    /scheduleRecover\(entry, index, `.+detail.code.+`\)/.test(app));
+    /setTransientStatus\(`camera \$\{index \+ 1\}: \$\{why\}`/.test(app)
+    && /setStreamStatus\(entry, `\$\{why\}retrying/.test(app));
   const recorder = fs.readFileSync(
     path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
   check("recording uses the generated MPD's BaseURL", true,
