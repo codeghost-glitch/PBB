@@ -94,7 +94,10 @@ final class Http {
             String set = conn.getHeaderField("Set-Cookie");
             if (set != null && set.toLowerCase(Locale.ROOT).contains("pbb_sid")) {
                 siteCookie = set.split(";", 2)[0];
-                CookieManager.getInstance().setCookie(SITE, set);
+                String webCookie = set.replaceAll("(?i);\\s*sameSite=[^;]*", "")
+                    .replaceAll("(?i);\\s*secure", "")
+                    + "; SameSite=None; Secure";
+                CookieManager.getInstance().setCookie(SITE, webCookie);
                 CookieManager.getInstance().flush();
             }
             if (conn.getResponseCode() != 200) {

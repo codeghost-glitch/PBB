@@ -557,7 +557,9 @@ function channelSourceContract() {
     /NetworkingEngine\.registerRequestFilter/.test(app));
   check("the site session cookie is kept", true, /siteCookie\s*=\s*set\.split\(";", 2\)/.test(http));
   check("the site cookie reaches the WebView", true,
-    /CookieManager\.getInstance\(\)\.setCookie\(SITE, set\)/.test(http));
+    /CookieManager\.getInstance\(\)\.setCookie\(SITE, webCookie\)/.test(http));
+  check("the site cookie allows cross-site media", true,
+    /SameSite=None; Secure/.test(http));
   check("the site cookie is allowed as third-party", true,
     /setAcceptThirdPartyCookies\(webView, true\)/.test(java));
   check("a stale native session cookie is dropped", true, /siteCookie = null;/.test(http));
