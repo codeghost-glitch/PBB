@@ -21,7 +21,6 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
-import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
@@ -45,19 +44,39 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    // The M3U carries the channel paths and keys for the two Akamai hosts.
-    // pbbcollab.live serves its own two stream servers through a session API.
-    private static final String[] CHANNEL_LIST_URLS = {
-        "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u"
-    };
+    // The supplied M3U is the channel list. The remote M3U stays as fallback.
+    private static final String CHANNEL_LIST_URL =
+        "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u";
+    private static final String BUILTIN_M3U = "#EXTM3U\n"
+        + "#EXTINF:-1 tvg-name=\"PBB All Access Live\",PBB All Access Live\n"
+        + "#KODIPROP:inputstream.adaptive.license_type=clearkey\n"
+        + "#KODIPROP:inputstream.adaptive.license_key="
+        + "8150b74d16324bb4b2ff62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5\n"
+        + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
+        + "https://absp-live.akamaized.net/dash/live/2099522/"
+        + "pbbcollab30allaccesslivestream/manifest.mpd\n"
+        + "#EXTINF:-1 tvg-name=\"PBB Dining Area\",PBB Dining Area\n"
+        + "#KODIPROP:inputstream.adaptive.license_type=clearkey\n"
+        + "#KODIPROP:inputstream.adaptive.license_key="
+        + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
+        + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
+        + "https://absp-live.akamaized.net/dash/live/2099522/"
+        + "pbbcollab30allaccesslivestream-diningarea/manifest.mpd\n"
+        + "#EXTINF:-1 tvg-name=\"PBB External Den\",PBB External Den\n"
+        + "#KODIPROP:inputstream.adaptive.license_type=clearkey\n"
+        + "#KODIPROP:inputstream.adaptive.license_key="
+        + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
+        + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
+        + "https://absp-live.akamaized.net/dash/live/2099522/"
+        + "pbbcollab30allaccesslivestream-externalden/manifest.mpd\n";
+    private static final String[] CHANNEL_LIST_URLS = {BUILTIN_M3U, CHANNEL_LIST_URL};
     private static final String[] STREAM_HOSTS = {
         "abslive.akamaized.net", "absp-live.akamaized.net"
     };
-    private static final String[] SITE_KEYS = {"s1", "s2"};
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
-    // 0 = auto, 1..2 = Akamai host, 3..4 = pbbcollab.live server.
+    // 0 = auto (working host first), 1..2 = that livestream host first.
     private static volatile int channelSource = 0;
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
@@ -127,10 +146,6 @@ public class MainActivity extends Activity {
 
     private void setupWebView() {
         webView = new WebView(this);
-        // The page origin is not pbbcollab.live, so its session cookie is
-        // third-party here even though it is first-party on the website.
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         // Android 15 with targetSdk 35 forces edge to edge, so nothing reserves
         // the status and navigation bar space any more. Pad the container instead
         // of the WebView: a child is laid out inside its parent's padding, and
@@ -230,9 +245,7 @@ public class MainActivity extends Activity {
             public void run() {
                 final String json = publishedConfig();
                 if (json == null) {
-                    reportKeys(channelSource > STREAM_HOSTS.length
-                        ? "pbbcollab.live server unavailable - try another server"
-                        : rotationReport());
+                    reportKeys(rotationReport());
                     return;
                 }
                 streamConfigJson = json;
@@ -383,54 +396,40 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** Fetch from the chosen server; auto walks both Akamai hosts then both site servers. */
+    /** Fetch the supplied M3U first, then try the chosen host and its backup. */
     private static String publishedConfig() {
         if (channelSource > 0) {
-            String pinned = channelSource <= STREAM_HOSTS.length
-                ? fetchKeys(CHANNEL_LIST_URLS[0], STREAM_HOSTS[channelSource - 1])
-                : fetchSiteConfig(SITE_KEYS[channelSource - STREAM_HOSTS.length - 1]);
+            String pinned = fetchKeys(BUILTIN_M3U, STREAM_HOSTS[channelSource - 1]);
             return validKeys(pinned) != null ? pinned : null;
         }
         for (String host : STREAM_HOSTS) {
-            String candidate = fetchKeys(CHANNEL_LIST_URLS[0], host);
-            if (validKeys(candidate) != null && reachable(candidate)) {
-                return candidate;
-            }
-        }
-        for (String key : SITE_KEYS) {
-            String candidate = fetchSiteConfig(key);
-            if (validKeys(candidate) != null && reachable(candidate)) {
-                return candidate;
+            for (String source : CHANNEL_LIST_URLS) {
+                String candidate = fetchKeys(source, host);
+                if (candidate == null || validKeys(candidate) == null) {
+                    continue;
+                }
+                try {
+                    String first = new JSONObject(candidate).getJSONArray("streams")
+                        .getJSONObject(0).getString("url");
+                    if (Http.getBytes(first, 3000, 3000) != null) {
+                        return candidate;
+                    }
+                } catch (Exception ignored) {
+                }
             }
         }
         return null;
     }
 
-    private static String fetchSiteConfig(String serverKey) {
-        try {
-            return PbbSession.config(serverKey, CHANNEL_NAMES);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static boolean reachable(String json) {
-        try {
-            String first = new JSONObject(json).getJSONArray("streams")
-                .getJSONObject(0).getString("url");
-            return Http.getBytes(first, 3000, 3000) != null;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /** Reads the three PBB rows from the M3U list onto one livestream host. */
-    private static String fetchKeys(String url, String streamHost) {
-        String raw;
-        try {
-            raw = Http.getText(url, 5000, 8000);
-        } catch (Exception e) {
-            return null;
+    /** Reads the three PBB rows from supplied M3U text or a remote M3U URL. */
+    private static String fetchKeys(String source, String streamHost) {
+        String raw = source.startsWith("#EXTM3U") ? source : null;
+        if (raw == null) {
+            try {
+                raw = Http.getText(source, 5000, 8000);
+            } catch (Exception e) {
+                return null;
+            }
         }
         if (raw == null) {
             return null;
@@ -940,10 +939,10 @@ public class MainActivity extends Activity {
             MainActivity.this.refreshKeys();
         }
 
-        /** Pick which livestream server to try first. */
+        /** Pick which livestream host to try first. */
         @JavascriptInterface
         public void setChannelSource(int index) {
-            channelSource = Math.max(0, Math.min(STREAM_HOSTS.length + SITE_KEYS.length, index));
+            channelSource = Math.max(0, Math.min(STREAM_HOSTS.length, index));
             getSharedPreferences("pbb", MODE_PRIVATE).edit()
                 .putInt("channelSource", channelSource).apply();
         }

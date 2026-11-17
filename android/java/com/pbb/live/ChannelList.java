@@ -42,7 +42,7 @@ final class ChannelList {
                 int index = indexOf(names, name);
                 int colon = license.indexOf(':');
                 if (index >= 0 && colon > 0) {
-                    found[index] = new Entry(name, onHost(line, streamHost),
+                    found[index] = new Entry(names[index], onHost(line, streamHost),
                         license.substring(0, colon).replace("-", ""),
                         license.substring(colon + 1).replace("-", ""));
                 }
@@ -68,8 +68,9 @@ final class ChannelList {
     }
 
     private static int indexOf(String[] names, String name) {
+        String clean = name.endsWith(" Live") ? name.substring(0, name.length() - 5) : name;
         for (int i = 0; i < names.length; i++) {
-            if (names[i].equals(name)) {
+            if (names[i].equals(clean)) {
                 return i;
             }
         }

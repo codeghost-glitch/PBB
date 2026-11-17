@@ -60,6 +60,9 @@ public final class RecorderLogicTest {
         check("the M3U yields three streams", 3, streams.size());
         ChannelList.Entry first = streams.get(0);
         check("the first row is All Access", names[0], first.name);
+        check("the Live name suffix is accepted", names[0],
+            ChannelList.fromM3u(m3u.replace("PBB All Access", "PBB All Access Live"),
+                names, "abslive.akamaized.net").get(0).name);
         check("the manifest uses the chosen live host",
             "https://abslive.akamaized.net/dash/live/2099522/all/manifest.mpd",
             first.url);

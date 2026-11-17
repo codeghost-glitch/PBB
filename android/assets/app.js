@@ -679,22 +679,6 @@ async function initPlayer(entry, index) {
   const player = new shaka.Player(entry.video);
   entry.player = player;
 
-  const netEngine = player.getNetworkingEngine && player.getNetworkingEngine();
-  if (netEngine && typeof netEngine.registerRequestFilter === "function"
-      && shaka.net && shaka.net.NetworkingEngine) {
-    netEngine.registerRequestFilter((type, request) => {
-      if (type !== shaka.net.NetworkingEngine.RequestType.MANIFEST) {
-        return;
-      }
-      request.uris = request.uris.map((uri) => {
-        if (!/^https:\/\/www\.pbbcollab\.live\//.test(uri)) {
-          return uri;
-        }
-        return uri.split("?")[0] + "?_b=" + Math.floor(Date.now() / 15000);
-      });
-    });
-  }
-
   const clearKeys = {};
   clearKeys[entry.stream.kid] = entry.stream.key;
   clearKeys[uuidKid(entry.stream.kid)] = entry.stream.key;
@@ -1707,14 +1691,14 @@ function toggleStitch() {
 function storedServer() {
   try {
     const value = Number(localStorage.getItem("pbb-server"));
-    return Number.isInteger(value) && value >= 0 && value <= 4 ? value : 0;
+    return Number.isInteger(value) && value >= 0 && value <= 2 ? value : 0;
   } catch {
     return 0;
   }
 }
 
 function selectServer(index) {
-  const picked = Math.max(0, Math.min(4, Number(index) || 0));
+  const picked = Math.max(0, Math.min(2, Number(index) || 0));
   try {
     localStorage.setItem("pbb-server", String(picked));
   } catch {

@@ -18,7 +18,6 @@ const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
 const CHANNEL_LIST = path.join(HERE, "..", "java", "com", "pbb", "live", "ChannelList.java");
 const LIVE_LIST = "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u";
 const STREAM_HOSTS = ["abslive.akamaized.net", "absp-live.akamaized.net"];
-const SITE_KEYS = ["s1", "s2"];
 
 let failures = 0;
 
@@ -378,13 +377,12 @@ function bridgeContract() {
 
 function channelListContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  const block = /CHANNEL_LIST_URLS\s*=\s*\{([^}]*)\}/.exec(java);
-  check("the app has channel list addresses", true, Boolean(block));
-  if (!block) {
-    return;
-  }
-  const urls = block[1].match(/https?:\/\/[^"]+/g) || [];
-  check("the app uses the M3U channel list", true, urls.length === 1 && urls[0] === LIVE_LIST);
+  check("the app keeps the remote M3U fallback", true,
+    /CHANNEL_LIST_URL\s*=/.test(java) && java.includes(LIVE_LIST));
+  check("the app ships the supplied M3U", true,
+    java.includes("BUILTIN_M3U = \"#EXTM3U"));
+  check("the supplied M3U is tried first", true,
+    /CHANNEL_LIST_URLS = \{BUILTIN_M3U, CHANNEL_LIST_URL\}/.test(java));
   check("the M3U rows are parsed", true, java.includes("ChannelList.fromM3u"));
   check("metadata endpoints are not channel sources", false,
     /pastebin\.com|supabase\.co/.test(java));
@@ -528,15 +526,15 @@ function channelSourceContract() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
   const list = fs.readFileSync(CHANNEL_LIST, "utf8");
-  const http = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
-  const session = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "PbbSession.java"), "utf8");
-  check("the APK M3U server is the channel list source", true, java.includes(LIVE_LIST));
+  check("the app uses the remote M3U fallback", true, java.includes(LIVE_LIST));
+  check("the supplied M3U can be read without a request", true,
+    /source\.startsWith\("#EXTM3U"\)/.test(java));
+  check("the parser accepts the Live name suffix", true,
+    /endsWith\(" Live"\)/.test(list));
   check("both livestream hosts are configured", true,
     STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
-  check("both site servers are configured", true,
-    SITE_KEYS.every((key) => java.includes("\"" + key + "\"")));
-  check("the server chooser clamps to every server", true,
-    /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length \+ SITE_KEYS\.length, index\)\)/.test(java));
+  check("the host chooser clamps to the host count", true,
+    /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length, index\)\)/.test(java));
   check("host choice is not clamped to the channel list", false,
     /Math\.min\(CHANNEL_LIST_URLS\.length, index\)/.test(java));
   check("an explicit host is pinned", true,
@@ -546,27 +544,8 @@ function channelSourceContract() {
   check("the M3U rows are parsed onto the chosen host", true,
     /ChannelList\.fromM3u\(raw, CHANNEL_NAMES, streamHost\)/s.test(java));
   check("the host is swapped in the manifest URL", true, /onHost\(line, streamHost\)/.test(list));
-  check("a reachable server is picked before the backups", true,
+  check("a reachable host is picked before the backup", true,
     /Http\.getBytes\(first, 3000, 3000\)/.test(java));
-  check("pbbcollab.live session API is used", true,
-    java.includes("PbbSession.config") && /for \(String key : SITE_KEYS\)/.test(java));
-  check("site manifests carry the site's cache key", true,
-    /getNetworkingEngine/.test(app) && /netEngine\.registerRequestFilter/.test(app)
-      && /Math\.floor\(Date\.now\(\) \/ 15000\)/.test(app) && /_b=/.test(session));
-  check("no static Shaka request filter call", false,
-    /NetworkingEngine\.registerRequestFilter/.test(app));
-  check("the site session cookie is kept", true, /siteCookie\s*=\s*set\.split\(";", 2\)/.test(http));
-  check("the site cookie reaches the WebView", true,
-    /CookieManager\.getInstance\(\)\.setCookie\(SITE, webCookie\)/.test(http));
-  check("the site cookie allows cross-site media", true,
-    /SameSite=None; Secure/.test(http));
-  check("the site cookie is allowed as third-party", true,
-    /setAcceptThirdPartyCookies\(webView, true\)/.test(java));
-  check("a stale native session cookie is dropped", true, /siteCookie = null;/.test(http));
-  check("the WebView cookie is kept on refresh", false, /pbb_sid=; Max-Age=0/.test(http));
-  check("the WebView cookie is flushed", true, /CookieManager\.getInstance\(\)\.flush\(\)/.test(http));
-  check("a failed site server says so", true,
-    /pbbcollab\.live server unavailable - try another server/.test(java));
   check("an open sources sheet follows the refreshed config", true,
     /sourceField\("sourceSheet"\)\.classList\.contains\("hidden"\)[\s\S]{0,160}selectSourceChannel\(sourceSheet\.index\)/.test(app));
   check("the web-player channels keep their names", true,
@@ -588,21 +567,18 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sources sheet offers every server", true,
-    /serverChips/s.test(app) && ["abslive", "absp-live", "pbb s1", "pbb s2"]
+  check("the sources sheet offers both livestream hosts", true,
+    /serverChips/s.test(app) && ["abslive", "absp-live"]
       .every((label) => html.includes(">" + label + "</button>")));
-  check("auto plus four servers are shown", 5,
+  check("auto plus two livestream hosts are shown", 3,
     (html.match(/data-source="/g) || []).length);
-  check("each server chip names its host on hover", true,
+  check("each host chip names its host on hover", true,
     STREAM_HOSTS.every((host) =>
-      html.includes("title=\"https://" + host + "/dash/live/2099522/\""))
-      && html.includes("title=\"https://www.pbbcollab.live/ - Server 1\"")
-      && html.includes("title=\"https://www.pbbcollab.live/ - Server 2\""));
-  check("the page clamps the server choice to every server", true,
-    /Math\.min\(4, Number\(index\)/.test(app));
-  check("both livestream hosts and site servers are in the list", true,
-    STREAM_HOSTS.every((host) => java.includes("\"" + host + "\""))
-      && SITE_KEYS.every((key) => java.includes("\"" + key + "\"")));
+      html.includes("title=\"https://" + host + "/dash/live/2099522/\"")));
+  check("the page clamps the server choice to the host set", true,
+    /Math\.min\(2, Number\(index\)/.test(app));
+  check("both livestream hosts are in the list", true,
+    STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
 }
 
 function playbackAndRecorderFixes() {
