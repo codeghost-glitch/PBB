@@ -379,7 +379,7 @@ function bridgeContract() {
 function channelListContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
   check("the old channel list servers are gone", false,
-    /gist\.githubusercontent\.com\/codeghost-glitch|pbbliveaccess\.lovable\.app|pbb-v2\.pages\.dev/.test(java));
+    /gist\.githubusercontent\.com\/codeghost-glitch|pbbliveaccess\.lovable\.app/.test(java));
 
   const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
   const streams = snapshot.streams;
@@ -519,28 +519,25 @@ function channelSourceContract() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
   const http = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
-  const ids = [
-    "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
-    "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
-    "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
-  ];
-  check("the site bundle is the source", true,
-    java.includes('PBB3_SITE = "https://pbb3collablive.xyz"')
-    && java.includes('"/_next/static/chunks/'));
-  check("all three channels have a feed id", true,
-    ids.every((id) => java.includes(`"${id}"`)));
-  check("the signed feed data is parsed from the bundle", true,
-    java.includes('availStart:\\"([^\\"]+)\\",kid:')
-    && java.includes('startNum:0x([0-9a-fA-F]+)'));
-  check("the site API is tried first", true,
-    java.includes('"/api/stream?channel="') && /apiConfig\(\)/.test(java));
+  check("the pbb-v2 site is the source", true,
+    java.includes('V2_SITE = "https://pbb-v2.pages.dev"')
+    && java.includes('live-stream4\\\\.js\\\\?v='));
+  check("all three cameras have an id", true,
+    ['"1"', '"2"', '"3"'].every((id) => java.includes(id)));
+  check("the site's sealed key vault is decoded", true,
+    java.includes('SEALED_VAULT_PAYLOAD') && java.includes('unrot'));
+  check("the live period is probed from a segment", true,
+    java.includes('probeSidx') && java.includes('manifest_360p_')
+    && java.includes('lastModified'));
   check("the MPD is generated locally and inlined", true,
     java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
     && /Base64\.encodeToString\(mpd/.test(java));
-  check("the generated MPD carries a ClearKey PSSH", true,
-    java.includes('clearKeyPssh') && java.includes('<cenc:pssh>'));
-  check("Http decodes inlined MPDs", true,
-    /Base64\.getDecoder\(\)\.decode/.test(http));
+  check("the generated MPD uses the site's live window", true,
+    java.includes('timeShiftBufferDepth=\\\"PT120S\\\"')
+    && java.includes('urn:mpeg:dash:utc:direct:2014'));
+  check("Http decodes inlined MPDs and reads Last-Modified", true,
+    /Base64\.getDecoder\(\)\.decode/.test(http)
+    && /getLastModified\(\)/.test(http));
   check("recoveries show the Shaka error code", true,
     /setTransientStatus\(`camera \$\{index \+ 1\}: \$\{why\}`/.test(app)
     && /setStreamStatus\(entry, `\$\{why\}retrying/.test(app));
@@ -548,8 +545,8 @@ function channelSourceContract() {
     path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
   check("recording uses the generated MPD's BaseURL", true,
     /plan\.baseUrl = baseEnd > baseStart/.test(recorder));
-  check("the dead proxy endpoints are gone", false,
-    /\/api\/proxy\/stream|PBB3_M3U/.test(java));
+  check("the dead pbb3 source is gone", false,
+    /pbb3collablive|PBB3_M3U|api\.Config/.test(java));
   check("no reachability gate rejects the generated manifests", false,
     /reachable\(/.test(java));
   check("an open sources sheet follows the refreshed config", true,

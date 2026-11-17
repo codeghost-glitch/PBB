@@ -71,6 +71,18 @@ final class Http {
         return getBytes(url, connectMs, readMs, null);
     }
 
+    /** Unix seconds from Last-Modified, or 0 when the server omits it. */
+    static long lastModified(String url, int connectMs, int readMs) throws IOException {
+        HttpURLConnection conn = open(url, connectMs, readMs);
+        conn.setRequestMethod("HEAD");
+        try {
+            long value = conn.getLastModified();
+            return value > 0 ? value / 1000L : 0;
+        } finally {
+            conn.disconnect();
+        }
+    }
+
     static String getText(String url, int connectMs, int readMs, String referer) throws IOException {
         byte[] body = getBytes(url, connectMs, readMs, referer);
         return body == null ? null : new String(body, "UTF-8");

@@ -46,13 +46,9 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    private static final String PBB3_SITE = "https://pbb3collablive.xyz";
+    private static final String V2_SITE = "https://pbb-v2.pages.dev";
     private static final String DATA_MPD = "data:application/dash+xml;base64,";
-    private static final String[] CHANNEL_IDS = {
-        "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
-        "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
-        "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
-    };
+    private static final String[] CHANNEL_IDS = {"1", "2", "3"};
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
@@ -372,44 +368,37 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** Prefer the site API; its bundle data is the fallback when the API 429s. */
+    /** Read the cameras and keys from the pbb-v2 site bundle. */
     private static String publishedConfig() {
-        String json = apiConfig();
-        if (json != null) {
-            return json;
+        String html;
+        try {
+            html = Http.getText(V2_SITE + "/", 5000, 8000);
+        } catch (Exception e) {
+            return null;
         }
-        return bundleConfig();
-    }
-
-    private static String apiConfig() {
-        JSONArray streams = new JSONArray();
-        for (int i = 0; i < CHANNEL_IDS.length; i++) {
-            String raw;
-            try {
-                raw = Http.getText(PBB3_SITE + "/api/stream?channel=" + CHANNEL_IDS[i],
-                    5000, 8000);
-            } catch (Exception e) {
-                return null;
-            }
-            if (raw == null) {
-                return null;
-            }
-            try {
-                JSONObject data = new JSONObject(raw);
-                JSONObject keys = data.getJSONObject("ClearKey");
-                String url = data.getString("manifestUri");
-                if (!url.startsWith("https://") && !url.startsWith(DATA_MPD)) {
-                    return null;
-                }
-                JSONObject stream = new JSONObject();
-                stream.put("name", CHANNEL_NAMES[i]);
-                stream.put("url", url);
-                stream.put("kid", keys.getString("k1").replace("-", ""));
-                stream.put("key", keys.getString("k2"));
-                streams.put(stream);
-            } catch (Exception e) {
-                return null;
-            }
+        if (html == null) {
+            return null;
+        }
+        Matcher script = Pattern.compile("live-stream4\\.js\\?v=\\d+").matcher(html);
+        if (!script.find()) {
+            return null;
+        }
+        String js;
+        try {
+            js = Http.getText(V2_SITE + "/" + script.group(), 5000, 10000);
+        } catch (Exception e) {
+            return null;
+        }
+        if (js == null) {
+            return null;
+        }
+        JSONObject vault = sealedVault(js);
+        if (vault == null) {
+            return null;
+        }
+        JSONArray streams = v2Streams(js, vault);
+        if (streams == null) {
+            return null;
         }
         try {
             String json = new JSONObject().put("streams", streams).toString();
@@ -419,82 +408,58 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static String bundleConfig() {
-        String html;
+    /** The site hides its camera keys in a small masked JSON vault. */
+    private static JSONObject sealedVault(String js) {
+        int[] mask = {0x7a, 0x56, 0x33, 0x30, 0x9e, 0x37, 0x79, 0xb9, 0x7f, 0x4a, 0x7c, 0x15,
+            0xf3, 0x9c, 0xc0, 0x60, 0x51, 0xd7, 0x28, 0xae, 0x52, 0x99, 0x16, 0x34, 0xc6, 0x71,
+            0x48, 0x92, 0xa5, 0x5d, 0xe8, 0x1f};
         try {
-            html = Http.getText(PBB3_SITE + "/", 5000, 8000);
-        } catch (Exception e) {
-            return null;
-        }
-        if (html == null) {
-            return null;
-        }
-        Matcher chunks = Pattern.compile("/_next/static/chunks/[^\"']+\\.js").matcher(html);
-        while (chunks.find()) {
-            String js;
-            try {
-                js = Http.getText(PBB3_SITE + chunks.group(), 5000, 8000);
-            } catch (Exception e) {
-                continue;
+            Matcher payload = Pattern.compile("const SEALED_VAULT_PAYLOAD\\s*=\\s*(\\{.*?\\});")
+                .matcher(js);
+            if (!payload.find()) {
+                return null;
             }
-            if (js == null || !js.contains("let et={")) {
-                continue;
+            JSONObject sealed = new JSONObject(payload.group(1));
+            byte[] salt = Base64.decode(sealed.getString("s"), Base64.DEFAULT);
+            byte[] data = Base64.decode(sealed.getString("d"), Base64.DEFAULT);
+            byte[] plain = new byte[data.length];
+            for (int i = 0; i < data.length; i++) {
+                int b = data[i] & 0xff;
+                int unrot = ((b >>> 3) | (b << 5)) & 0xff;
+                int m = (mask[(i * 7 + 3) & 31] ^ (salt[i & 7] & 0xff)
+                    ^ ((i * 131 + 17) & 0xff)) & 0xff;
+                plain[i] = (byte) ((unrot ^ m) & 0xff);
             }
-            JSONArray streams = pbb3Streams(js);
-            if (streams == null) {
-                continue;
-            }
-            try {
-                String json = new JSONObject().put("streams", streams).toString();
-                if (validKeys(json) != null) {
-                    return json;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
-    }
-
-    /** The site signs segment access but publishes the feed data in its JS chunk. */
-    private static JSONObject pbb3Entry(String js, String id) {
-        int at = js.indexOf("\"" + id + "\":{baseUrl:\"");
-        if (at < 0) {
-            return null;
-        }
-        Matcher feed = Pattern.compile(
-            "baseUrl:\"([^\"]+)\",availStart:\"([^\"]+)\",kid:\"([^\"]+)\",startNum:0x([0-9a-fA-F]+)")
-            .matcher(js.substring(at, Math.min(js.length(), at + 700)));
-        Matcher key = Pattern.compile("\"" + id + "\":\\{[^}]*key:\"([0-9a-fA-F]{32})\"")
-            .matcher(js);
-        if (!feed.find() || !key.find()) {
-            return null;
-        }
-        try {
-            JSONObject entry = new JSONObject();
-            entry.put("baseUrl", feed.group(1));
-            entry.put("availStart", feed.group(2));
-            entry.put("kid", feed.group(3));
-            entry.put("startNum", Long.parseLong(feed.group(4), 16));
-            entry.put("key", key.group(1));
-            return entry;
+            return new JSONObject(new String(plain, "UTF-8"));
         } catch (Exception e) {
             return null;
         }
     }
 
-    private static JSONArray pbb3Streams(String js) {
+    private static JSONArray v2Streams(String js, JSONObject vault) {
         JSONArray streams = new JSONArray();
         for (int i = 0; i < CHANNEL_IDS.length; i++) {
-            JSONObject entry = pbb3Entry(js, CHANNEL_IDS[i]);
-            if (entry == null) {
+            String id = CHANNEL_IDS[i];
+            Matcher spec = Pattern.compile("\"" + id + "\":\\s*\\{\\s*baseDir:\\s*\"([^\"]+)\",\\s*"
+                + "availStart:\\s*\"([^\"]+)\",\\s*kid:\\s*\"([^\"]+)\",\\s*p1Dur:\\s*\"[^\"]+\",\\s*"
+                + "p1StartNum:\\s*\\d+,\\s*p2StartNum:\\s*(\\d+),\\s*periodStartSec:\\s*(\\d+)").matcher(js);
+            if (!spec.find()) {
                 return null;
             }
             try {
+                JSONObject camera = vault.getJSONObject(id);
+                String kid = spec.group(3).replace("-", "");
+                JSONObject feed = new JSONObject();
+                feed.put("baseUrl", spec.group(1));
+                feed.put("startNum", Long.parseLong(spec.group(4)));
+                feed.put("periodStartSec", Long.parseLong(spec.group(5)));
+                resyncFeed(feed);
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
-                stream.put("url", generatedMpd(entry));
-                stream.put("kid", entry.getString("kid").replace("-", ""));
-                stream.put("key", entry.getString("key"));
+                stream.put("url", v2Mpd(feed.getString("baseUrl"), kid,
+                    feed.getLong("startNum"), feed.getLong("periodStartSec")));
+                stream.put("kid", kid);
+                stream.put("key", camera.getString("key"));
                 streams.put(stream);
             } catch (Exception e) {
                 return null;
@@ -503,25 +468,80 @@ public class MainActivity extends Activity {
         return streams;
     }
 
-    /** The published Akamai manifest 403s; its segments play, so build the MPD. */
-    private static String generatedMpd(JSONObject entry) throws Exception {
+    /** The site's baked period can be hours old; probe a recent segment for the live one. */
+    private static void resyncFeed(JSONObject feed) {
+        try {
+            long now = System.currentTimeMillis() / 1000L;
+            long estimate = feed.getLong("startNum")
+                + (long) ((now - feed.getLong("periodStartSec")) / 4.004) - 3;
+            long[] hit = probeSidx(feed.getString("baseUrl"), estimate);
+            if (hit == null) {
+                hit = probeSidx(feed.getString("baseUrl"), now - 10);
+            }
+            if (hit != null) {
+                feed.put("startNum", hit[0]);
+                feed.put("periodStartSec", hit[1] > 0 ? hit[1] : hit[0] + 1);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Read the sidx of one 360p segment to recover its live period start. */
+    private static long[] probeSidx(String base, long segment) {
+        try {
+            String url = base + "manifest_360p_" + segment + ".mp4";
+            byte[] body = Http.getBytes(url, 4000, 6000);
+            if (body == null) {
+                return null;
+            }
+            long modified = Http.lastModified(url, 4000, 6000);
+            for (int off = 0; off + 32 <= body.length;) {
+                long size = u32(body, off);
+                if (size < 8) {
+                    return null;
+                }
+                if (body[off + 4] == 's' && body[off + 5] == 'i'
+                        && body[off + 6] == 'd' && body[off + 7] == 'x') {
+                    long ept = (body[off + 8] == 0) ? u32(body, off + 20) : u64(body, off + 20);
+                    long index = Math.max(0, Math.round((ept - 3003) / 360360.0));
+                    return new long[] {segment - index, modified};
+                }
+                off += (int) Math.min(size, Integer.MAX_VALUE);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static long u32(byte[] b, int at) {
+        return ((long) (b[at] & 0xff) << 24) | ((long) (b[at + 1] & 0xff) << 16)
+            | ((long) (b[at + 2] & 0xff) << 8) | (b[at + 3] & 0xff);
+    }
+
+    private static long u64(byte[] b, int at) {
+        return (u32(b, at) << 32) | u32(b, at + 4);
+    }
+
+    /** The site's own fallback MPD: one live period with a direct UTC clock. */
+    private static String v2Mpd(String base, String kid, long startNum, long periodStartSec)
+            throws Exception {
         SimpleDateFormat utc = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
         utc.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-        String start = Long.toString(entry.getLong("startNum"));
-        String pssh = clearKeyPssh(entry.getString("kid"));
+        String now = utc.format(new Date());
+        String periodStart = utc.format(new Date(periodStartSec * 1000L));
+        String uuid = kid.substring(0, 8) + "-" + kid.substring(8, 12) + "-"
+            + kid.substring(12, 16) + "-" + kid.substring(16, 20) + "-" + kid.substring(20);
         String mpd = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             + "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xmlns:cenc=\"urn:mpeg:cenc:2013\" "
-            + "type=\"dynamic\" publishTime=\"" + utc.format(new Date()) + "\" "
-            + "minimumUpdatePeriod=\"PT30S\" availabilityStartTime=\"" + entry.getString("availStart") + "\" "
-            + "minBufferTime=\"PT4S\" suggestedPresentationDelay=\"PT12S\" "
-            + "timeShiftBufferDepth=\"PT7200S\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\">"
-            + "<BaseURL>" + entry.getString("baseUrl") + "</BaseURL>"
-            + "<Period start=\"PT0S\" id=\"1\"><AdaptationSet mimeType=\"video/mp4\" segmentAlignment=\"true\">"
-            + "<ContentProtection cenc:default_KID=\"" + entry.getString("kid") + "\" "
-            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\">"
-            + "<cenc:pssh>" + pssh + "</cenc:pssh></ContentProtection>"
-            + "<ContentProtection schemeIdUri=\"urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e\" value=\"ClearKey1.0\"/>"
-            + "<SegmentTemplate timescale=\"90000\" duration=\"360360\" startNumber=\"" + start + "\"/>";
+            + "type=\"dynamic\" minimumUpdatePeriod=\"PT4S\" availabilityStartTime=\"" + periodStart + "\" "
+            + "timeShiftBufferDepth=\"PT120S\" minBufferTime=\"PT4.000S\" "
+            + "suggestedPresentationDelay=\"PT12S\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\" "
+            + "publishTime=\"" + now + "\"><BaseURL>" + base + "</BaseURL>"
+            + "<Period start=\"PT0S\" id=\"p_" + startNum + "\"><AdaptationSet "
+            + "mimeType=\"video/mp4\" segmentAlignment=\"true\">"
+            + "<ContentProtection schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\" "
+            + "cenc:default_KID=\"" + uuid + "\"/>"
+            + "<SegmentTemplate timescale=\"90000\" duration=\"360360\" startNumber=\"" + startNum + "\"/>";
         String[][] videos = {
             {"1", "1920", "1080", "4000000", "avc1.4d4028", "1080p"},
             {"2", "1280", "720", "2000000", "avc1.4d401f", "720p"},
@@ -535,31 +555,15 @@ public class MainActivity extends Activity {
                 + "initialization=\"manifest_" + v[5] + "_init.mp4\"/></Representation>";
         }
         mpd += "</AdaptationSet><AdaptationSet mimeType=\"audio/mp4\" segmentAlignment=\"true\">"
-            + "<ContentProtection cenc:default_KID=\"" + entry.getString("kid") + "\" "
-            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\">"
-            + "<cenc:pssh>" + pssh + "</cenc:pssh></ContentProtection>"
-            + "<SegmentTemplate timescale=\"48000\" duration=\"192192\" startNumber=\"" + start
+            + "<ContentProtection schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\" "
+            + "cenc:default_KID=\"" + uuid + "\"/>"
+            + "<SegmentTemplate timescale=\"48000\" duration=\"192192\" startNumber=\"" + startNum
             + "\" media=\"manifest_audio_$Number$.mp4\" initialization=\"manifest_audio_init.mp4\"/>"
             + "<Representation id=\"5\" bandwidth=\"96000\" audioSamplingRate=\"48000\" codecs=\"mp4a.40.2\"/>"
-            + "</AdaptationSet></Period></MPD>";
+            + "</AdaptationSet></Period>"
+            + "<UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:direct:2014\" value=\"" + now + "\"/>"
+            + "</MPD>";
         return DATA_MPD + Base64.encodeToString(mpd.getBytes("UTF-8"), Base64.NO_WRAP);
-    }
-
-    /** Same 52-byte ClearKey PSSH the pbb3 site puts in its generated MPD. */
-    private static String clearKeyPssh(String kid) throws Exception {
-        byte[] box = new byte[52];
-        byte[] raw = kid.replace("-", "").toLowerCase(Locale.US).getBytes("UTF-8");
-        for (int i = 0; i < 16; i++) {
-            box[32 + i] = (byte) Integer.parseInt(
-                new String(raw, i * 2, 2, "UTF-8"), 16);
-        }
-        System.arraycopy(new byte[] {0, 0, 0, 52}, 0, box, 0, 4);
-        System.arraycopy(new byte[] {'p', 's', 's', 'h'}, 0, box, 4, 4);
-        System.arraycopy(new byte[] {1, 0, 0, 0}, 0, box, 8, 4);
-        System.arraycopy(new byte[] {16, 119, -17, -20, -64, -78, 77, 2,
-            -84, -29, 60, 30, 82, -30, -5, 75}, 0, box, 12, 16);
-        System.arraycopy(new byte[] {0, 0, 0, 1}, 0, box, 28, 4);
-        return Base64.encodeToString(box, Base64.NO_WRAP);
     }
 
     private static JSONArray validKeys(String json) {

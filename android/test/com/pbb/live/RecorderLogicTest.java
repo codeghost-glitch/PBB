@@ -83,8 +83,8 @@ public final class RecorderLogicTest {
         String source = new String(java.nio.file.Files.readAllBytes(
             java.nio.file.Paths.get("android/java/com/pbb/live/MainActivity.java")),
             java.nio.charset.StandardCharsets.UTF_8);
-        check("the pbb3 site supplies the streams", true,
-            source.contains("https://pbb3collablive.xyz"));
+        check("the pbb-v2 site supplies the streams", true,
+            source.contains("https://pbb-v2.pages.dev"));
     }
 
     private static void serviceStopsOnlyWhenIdle() {

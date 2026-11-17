@@ -14,7 +14,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Opening fullscreen or PiP turns that feed's sound on automatically.
 - Fullscreen button on every card: hides system bars, letterboxes the feed on black, and keeps the picture at its full size - nothing reserves a lane and the video never shrinks when the controls come up. The two-column keypad with five keys - zoom, next, mini, lock, exit - sits in the top-right corner as a small smoked-glass panel with amber active keys - clean in daylight, near-black after hours - with a centred on-air strip (the camera number stays in the channel bug), 44px keys with a word under every glyph and the amber exit key across the bottom; locking leaves only the amber unlock key. It does not open automatically when fullscreen starts, and fades a few seconds after it is shown; there is no separate controls button, because a tap anywhere on the picture brings the deck back. A channel bug in the top-left corner names the feed when fullscreen opens or the feed is switched. A connecting feed shows a breathing lamp over a slow scan, and a dropped feed a steady red retry chip over a dim wash, so the picture is never silent about its state. The recording clock of a camera that is recording is hidden in fullscreen. The mini feed is the same small floating monitor as before, now in the bottom-right corner with a light glass frame: no dock, no number, no status, just its picture. Tapping it swaps it with the big feed. The mini tile keeps the chosen quality and its own sound, so both feeds are audible at once; the feed hidden behind fullscreen keeps the chosen quality too. A swap clears the zoom - the feed arriving in the big slot starts unzoomed and the zoom key loses its highlight. It is the same card element moved by CSS, so no video is re-attached and both feeds keep playing. The card-level PiP button is still there for watching while you leave the app. Exiting fullscreen drops the focus and lands on the three-feed grid.
 - Global default quality: hd or sd. Rust validates and persists the choice in app-private storage and maps old auto values to hd. hd picks 720p and sd picks 360p; every feed uses the chosen quality.
-- The three feeds and their current ClearKeys come from the pbb3 site bundle at <https://pbb3collablive.xyz/>. The site's published manifest URLs 403, so the app builds the same small DASH manifests the site builds and points them at the segment paths that do work. The config in src/lib.rs is the offline fallback.
+- The three feeds and their current ClearKeys come from the pbb-v2 site at <https://pbb-v2.pages.dev/>. The site's published manifest URLs 403, so the app builds the same small DASH manifests the site builds and points them at segment paths that answer. The config in src/lib.rs is the offline fallback.
 - A sources key in the footer opens a sheet where a new manifest, kid and key can be pasted in and applied, so a rotated feed is handled in the app: no build, no release, no asking anyone for a new APK.
 - PBB All Access is the default sound stream on launch.
 - Record any camera on its own: the record button on a card starts that camera, or stops it, while the other cameras keep recording. All three can run at once. Every tap is confirmed by the service, and a recording card gets a red tally on the picture with its running time. There is no master record button in the header: each camera is started on its own card, and the footer strip shows how many are running and for how long.
@@ -129,20 +129,20 @@ Purging the file from the history is optional and does not replace the rotation:
 
 The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; an in-flight recording would also produce garbage files because it uses the same key.
 
-The app reads the pbb3 page, finds its Next.js chunk containing `let et={`, and reads each channel's signed feed data:
+The app reads the pbb-v2 page, finds `live-stream4.js?v=...`, and reads two things from that bundle:
 
 ~~~text
-"4f8b2c15-...": { baseUrl, availStart, kid, startNum, ... }
-"4f8b2c15-...": { ..., key: "<32 hex key>" }
+LIVE_PERIOD_SPECS[1] = { baseDir, availStart, kid, p2StartNum, periodStartSec }
+SEALED_VAULT_PAYLOAD = masked JSON with each camera's ClearKey
 ~~~
 
 The stream host and the key source are separate things:
 
-- Feed source: `baseUrl`, `availStart`, `kid` and `startNum` from the site bundle. The site's own player uses the same values to build a dynamic MPD when its API is unavailable.
-- Segment host: the `baseUrl` in that data, currently `absp-live.akamaized.net`. The published `manifest.mpd` 403s, but the init and media segments under that base answer 200, so the app writes a small SegmentTemplate MPD itself.
-- ClearKey: the `key` beside each channel in the same bundle.
+- Feed source: `baseDir`, `kid` and `p2StartNum` from `LIVE_PERIOD_SPECS`. The app probes a recent `manifest_360p_<n>.mp4` segment and reads its `sidx`, then uses `Last-Modified` for the live period start, exactly like the site's client resync.
+- Segment host: the `baseDir` in that data, currently `absp-live.akamaized.net`. The published `manifest.mpd` 403s, but the init and media segments under that base answer 200, so the app writes a small SegmentTemplate MPD itself.
+- ClearKey: the key in the site's sealed vault, unmasked with the same rotation and mask the site uses.
 
-At startup and on manual refresh the app first tries `/api/stream?channel=...` and uses its `manifestUri` and `ClearKey` when the API answers. When the API 429s, it builds one MPD per channel from the bundle, including the same ClearKey PSSH the site's own player uses, base64-encodes it into a `data:application/dash+xml;base64,` URL, and turns the bundle values into the app's `{name,url,kid,key}` config. `Http.getBytes()` decodes that URL for the recorder, and the recorder reads `<BaseURL>` from the generated MPD instead of guessing a path from the data URL.
+At startup and on manual refresh the app builds one MPD per channel with a `PT120S` live window and a direct UTC clock, base64-encodes it into a `data:application/dash+xml;base64,` URL, and turns the bundle values into the app's `{name,url,kid,key}` config. `Http.getBytes()` decodes that URL for the recorder, and the recorder reads `<BaseURL>` from the generated MPD instead of guessing a path from the data URL.
 
 The feed data lives outside the app, so a rotation shows up on the site and not in a new build.
 
@@ -173,7 +173,7 @@ To refresh the checked-in fallback snapshot from the same site:
 ./keys/update.sh
 ~~~
 
-It writes keys/keys.json with the same inlined MPD URLs and KID/key pairs the app builds. src/lib.rs includes that file as `STREAM_CONFIG_JSON`, so the built-in fallback uses the same config shape as the runtime app. The runtime app reads the site directly and caches the result in filesDir/streams.json. Commit the snapshot after a rotation, or leave the fallback stale and let the first launch with a network fix it.
+It writes keys/keys.json with the same probed, inlined MPD URLs and KID/key pairs the app builds. src/lib.rs includes that file as `STREAM_CONFIG_JSON`, so the built-in fallback uses the same config shape as the runtime app. The runtime app reads the site directly and caches the result in filesDir/streams.json. Commit the snapshot after a rotation, or leave the fallback stale and let the first launch with a network fix it.
 
 ## Downloadable recorder plugin
 
