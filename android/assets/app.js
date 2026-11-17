@@ -1691,14 +1691,14 @@ function toggleStitch() {
 function storedServer() {
   try {
     const value = Number(localStorage.getItem("pbb-server"));
-    return Number.isInteger(value) && value >= 0 && value <= 2 ? value : 0;
+    return Number.isInteger(value) && value >= 0 && value <= 4 ? value : 0;
   } catch {
     return 0;
   }
 }
 
 function selectServer(index) {
-  const picked = Math.max(0, Math.min(2, Number(index) || 0));
+  const picked = Math.max(0, Math.min(4, Number(index) || 0));
   try {
     localStorage.setItem("pbb-server", String(picked));
   } catch {
