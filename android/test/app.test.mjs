@@ -535,6 +535,9 @@ function channelSourceContract() {
   check("the generated MPD uses the site's live window", true,
     java.includes('timeShiftBufferDepth=\\\"PT120S\\\"')
     && java.includes('urn:mpeg:dash:utc:direct:2014'));
+  check("the generated MPD includes ClearKey init data", true,
+    java.includes('clearKeyPssh') && java.includes('<cenc:pssh>')
+    && java.includes('urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e'));
   check("Http decodes inlined MPDs and reads Last-Modified", true,
     /Base64\.getDecoder\(\)\.decode/.test(http)
     && /getLastModified\(\)/.test(http));

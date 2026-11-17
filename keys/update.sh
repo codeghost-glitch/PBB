@@ -76,8 +76,20 @@ def resync(base, start, period):
     return hit[0], hit[1] or hit[0] + 1
 
 
+def pssh(kid):
+    box = bytearray(52)
+    box[0:4] = (52).to_bytes(4, "big")
+    box[4:8] = b"pssh"
+    box[8:12] = (0x01000000).to_bytes(4, "big")
+    box[12:28] = bytes.fromhex("1077efecc0b24d02ace33c1e52e2fb4b")
+    box[28:32] = (1).to_bytes(4, "big")
+    box[32:48] = bytes.fromhex(kid.replace("-", ""))
+    return base64.b64encode(box).decode("ascii")
+
+
 def mpd(base, kid, start, period_start):
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    protection = "<cenc:pssh>" + pssh(kid) + "</cenc:pssh>"
     period = datetime.datetime.fromtimestamp(period_start, datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S.000Z")
     uuid = f"{kid[:8]}-{kid[8:12]}-{kid[12:16]}-{kid[16:20]}-{kid[20:]}"
@@ -93,7 +105,8 @@ def mpd(base, kid, start, period_start):
         'suggestedPresentationDelay="PT12S" profiles="urn:mpeg:dash:profile:isoff-live:2011" '
         f'publishTime="{now}"><BaseURL>{base}</BaseURL>',
         f'<Period start="PT0S" id="p_{start}"><AdaptationSet mimeType="video/mp4" segmentAlignment="true">',
-        f'<ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc" cenc:default_KID="{uuid}"/>',
+        f'<ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc" cenc:default_KID="{uuid}">{protection}</ContentProtection>',
+        '<ContentProtection schemeIdUri="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e" value="ClearKey1.0"/>',
         f'<SegmentTemplate timescale="90000" duration="360360" startNumber="{start}"/>',
     ]
     for ident, width, height, bandwidth, codecs, label in videos:
@@ -104,7 +117,8 @@ def mpd(base, kid, start, period_start):
             f'initialization="manifest_{label}_init.mp4"/></Representation>')
     out.extend([
         '</AdaptationSet><AdaptationSet mimeType="audio/mp4" segmentAlignment="true">',
-        f'<ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc" cenc:default_KID="{uuid}"/>',
+        f'<ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc" cenc:default_KID="{uuid}">{protection}</ContentProtection>',
+        '<ContentProtection schemeIdUri="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e" value="ClearKey1.0"/>',
         f'<SegmentTemplate timescale="48000" duration="192192" startNumber="{start}" '
         'media="manifest_audio_$Number$.mp4" initialization="manifest_audio_init.mp4"/>',
         '<Representation id="5" bandwidth="96000" audioSamplingRate="48000" codecs="mp4a.40.2"/>',

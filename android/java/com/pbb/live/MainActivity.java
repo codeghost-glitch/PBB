@@ -531,6 +531,7 @@ public class MainActivity extends Activity {
         String periodStart = utc.format(new Date(periodStartSec * 1000L));
         String uuid = kid.substring(0, 8) + "-" + kid.substring(8, 12) + "-"
             + kid.substring(12, 16) + "-" + kid.substring(16, 20) + "-" + kid.substring(20);
+        String pssh = clearKeyPssh(kid);
         String mpd = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             + "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xmlns:cenc=\"urn:mpeg:cenc:2013\" "
             + "type=\"dynamic\" minimumUpdatePeriod=\"PT4S\" availabilityStartTime=\"" + periodStart + "\" "
@@ -540,7 +541,9 @@ public class MainActivity extends Activity {
             + "<Period start=\"PT0S\" id=\"p_" + startNum + "\"><AdaptationSet "
             + "mimeType=\"video/mp4\" segmentAlignment=\"true\">"
             + "<ContentProtection schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\" "
-            + "cenc:default_KID=\"" + uuid + "\"/>"
+            + "cenc:default_KID=\"" + uuid + "\">"
+            + "<cenc:pssh>" + pssh + "</cenc:pssh></ContentProtection>"
+            + "<ContentProtection schemeIdUri=\"urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e\" value=\"ClearKey1.0\"/>"
             + "<SegmentTemplate timescale=\"90000\" duration=\"360360\" startNumber=\"" + startNum + "\"/>";
         String[][] videos = {
             {"1", "1920", "1080", "4000000", "avc1.4d4028", "1080p"},
@@ -556,7 +559,9 @@ public class MainActivity extends Activity {
         }
         mpd += "</AdaptationSet><AdaptationSet mimeType=\"audio/mp4\" segmentAlignment=\"true\">"
             + "<ContentProtection schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\" "
-            + "cenc:default_KID=\"" + uuid + "\"/>"
+            + "cenc:default_KID=\"" + uuid + "\">"
+            + "<cenc:pssh>" + pssh + "</cenc:pssh></ContentProtection>"
+            + "<ContentProtection schemeIdUri=\"urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e\" value=\"ClearKey1.0\"/>"
             + "<SegmentTemplate timescale=\"48000\" duration=\"192192\" startNumber=\"" + startNum
             + "\" media=\"manifest_audio_$Number$.mp4\" initialization=\"manifest_audio_init.mp4\"/>"
             + "<Representation id=\"5\" bandwidth=\"96000\" audioSamplingRate=\"48000\" codecs=\"mp4a.40.2\"/>"
@@ -564,6 +569,22 @@ public class MainActivity extends Activity {
             + "<UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:direct:2014\" value=\"" + now + "\"/>"
             + "</MPD>";
         return DATA_MPD + Base64.encodeToString(mpd.getBytes("UTF-8"), Base64.NO_WRAP);
+    }
+
+    /** ClearKey PSSH built from the KID, the same 52-byte box the sites use. */
+    private static String clearKeyPssh(String kid) {
+        byte[] box = new byte[52];
+        System.arraycopy(new byte[] {0, 0, 0, 52}, 0, box, 0, 4);
+        System.arraycopy(new byte[] {'p', 's', 's', 'h'}, 0, box, 4, 4);
+        System.arraycopy(new byte[] {1, 0, 0, 0}, 0, box, 8, 4);
+        System.arraycopy(new byte[] {16, 119, -17, -20, -64, -78, 77, 2,
+            -84, -29, 60, 30, 82, -30, -5, 75}, 0, box, 12, 16);
+        System.arraycopy(new byte[] {0, 0, 0, 1}, 0, box, 28, 4);
+        String clean = kid.replace("-", "").toLowerCase(Locale.US);
+        for (int i = 0; i < 16; i++) {
+            box[32 + i] = (byte) Integer.parseInt(clean.substring(i * 2, i * 2 + 2), 16);
+        }
+        return Base64.encodeToString(box, Base64.NO_WRAP);
     }
 
     private static JSONArray validKeys(String json) {
