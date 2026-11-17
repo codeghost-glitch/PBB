@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Base64;
 
 /**
  * The two HTTP GETs the app makes and the one stream reader, in a single place
@@ -39,6 +40,14 @@ final class Http {
 
     /** Returns null when the server answered anything but 200. */
     static byte[] getBytes(String url, int connectMs, int readMs, String referer) throws IOException {
+        String prefix = "data:application/dash+xml;base64,";
+        if (url.startsWith(prefix)) {
+            try {
+                return Base64.getDecoder().decode(url.substring(prefix.length()));
+            } catch (IllegalArgumentException e) {
+                throw new IOException("bad data manifest", e);
+            }
+        }
         HttpURLConnection conn = open(url, connectMs, readMs);
         if (referer != null) {
             conn.setRequestProperty("Referer", referer);

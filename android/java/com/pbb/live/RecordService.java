@@ -805,9 +805,14 @@ public class RecordService extends Service {
         for (Track t : videos) maxStart = Math.max(maxStart, t.startNumber);
         for (Track t : audios) maxStart = Math.max(maxStart, t.startNumber);
 
+        String xml = new String(body, StandardCharsets.UTF_8);
         Plan plan = new Plan();
-        plan.suggestedOffset = liveOffsetFromMpd(new String(body, StandardCharsets.UTF_8));
-        plan.baseUrl = mpdUrl.substring(0, mpdUrl.lastIndexOf('/') + 1);
+        plan.suggestedOffset = liveOffsetFromMpd(xml);
+        int baseStart = xml.indexOf("<BaseURL>");
+        int baseEnd = baseStart < 0 ? -1 : xml.indexOf("</BaseURL>", baseStart);
+        plan.baseUrl = baseEnd > baseStart
+            ? xml.substring(baseStart + "<BaseURL>".length(), baseEnd)
+            : mpdUrl.substring(0, mpdUrl.lastIndexOf('/') + 1);
         plan.video = pickVideo(videos, quality, maxStart);
         plan.audio = pickAudio(audios, maxStart);
         if (plan.video == null || plan.video.seconds <= 0

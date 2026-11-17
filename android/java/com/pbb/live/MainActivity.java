@@ -16,6 +16,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Base64;
 import android.util.Rational;
 import android.view.View;
 import android.view.WindowInsets;
@@ -40,11 +41,13 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    private static final String STREAM_API = "https://liveplayph.pages.dev/api/getData?channel=";
-    private static final String STREAM_API_REFERER = "https://liveplayph.pages.dev/";
+    private static final String PBB3_SITE = "https://pbb3collablive.xyz";
+    private static final String DATA_MPD = "data:application/dash+xml;base64,";
     private static final String[] CHANNEL_IDS = {
         "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
         "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
@@ -369,38 +372,128 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** Read the three current manifests and keys from the liveplayph API. */
+    /** Read the current feed data from the pbb3 site bundle. */
     private static String publishedConfig() {
+        String html;
+        try {
+            html = Http.getText(PBB3_SITE + "/", 5000, 8000);
+        } catch (Exception e) {
+            return null;
+        }
+        if (html == null) {
+            return null;
+        }
+        Matcher chunks = Pattern.compile("/_next/static/chunks/[^\"']+\\.js").matcher(html);
+        while (chunks.find()) {
+            String js;
+            try {
+                js = Http.getText(PBB3_SITE + chunks.group(), 5000, 8000);
+            } catch (Exception e) {
+                continue;
+            }
+            if (js == null || !js.contains("let et={")) {
+                continue;
+            }
+            JSONArray streams = pbb3Streams(js);
+            if (streams == null) {
+                continue;
+            }
+            try {
+                String json = new JSONObject().put("streams", streams).toString();
+                if (validKeys(json) != null) {
+                    return json;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    /** The site signs segment access but publishes the feed data in its JS chunk. */
+    private static JSONObject pbb3Entry(String js, String id) {
+        int at = js.indexOf("\"" + id + "\":{baseUrl:\"");
+        if (at < 0) {
+            return null;
+        }
+        Matcher feed = Pattern.compile(
+            "baseUrl:\"([^\"]+)\",availStart:\"([^\"]+)\",kid:\"([^\"]+)\",startNum:0x([0-9a-fA-F]+)")
+            .matcher(js.substring(at, Math.min(js.length(), at + 700)));
+        Matcher key = Pattern.compile("\"" + id + "\":\\{[^}]*key:\"([0-9a-fA-F]{32})\"")
+            .matcher(js);
+        if (!feed.find() || !key.find()) {
+            return null;
+        }
+        try {
+            JSONObject entry = new JSONObject();
+            entry.put("baseUrl", feed.group(1));
+            entry.put("availStart", feed.group(2));
+            entry.put("kid", feed.group(3));
+            entry.put("startNum", Long.parseLong(feed.group(4), 16));
+            entry.put("key", key.group(1));
+            return entry;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static JSONArray pbb3Streams(String js) {
         JSONArray streams = new JSONArray();
         for (int i = 0; i < CHANNEL_IDS.length; i++) {
-            String raw;
-            try {
-                raw = Http.getText(STREAM_API + CHANNEL_IDS[i], 5000, 8000, STREAM_API_REFERER);
-            } catch (Exception e) {
-                return null;
-            }
-            if (raw == null) {
+            JSONObject entry = pbb3Entry(js, CHANNEL_IDS[i]);
+            if (entry == null) {
                 return null;
             }
             try {
-                JSONObject data = new JSONObject(raw);
-                JSONObject keys = data.getJSONObject("ClearKey");
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
-                stream.put("url", data.getString("manifestUri"));
-                stream.put("kid", keys.getString("k1"));
-                stream.put("key", keys.getString("k2"));
+                stream.put("url", generatedMpd(entry));
+                stream.put("kid", entry.getString("kid").replace("-", ""));
+                stream.put("key", entry.getString("key"));
                 streams.put(stream);
             } catch (Exception e) {
                 return null;
             }
         }
-        try {
-            String json = new JSONObject().put("streams", streams).toString();
-            return validKeys(json) != null ? json : null;
-        } catch (Exception e) {
-            return null;
+        return streams;
+    }
+
+    /** The published Akamai manifest 403s; its segments play, so build the MPD. */
+    private static String generatedMpd(JSONObject entry) throws Exception {
+        SimpleDateFormat utc = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+        utc.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        String start = Long.toString(entry.getLong("startNum"));
+        String mpd = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            + "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xmlns:cenc=\"urn:mpeg:cenc:2013\" "
+            + "type=\"dynamic\" publishTime=\"" + utc.format(new Date()) + "\" "
+            + "minimumUpdatePeriod=\"PT30S\" availabilityStartTime=\"" + entry.getString("availStart") + "\" "
+            + "minBufferTime=\"PT4S\" suggestedPresentationDelay=\"PT12S\" "
+            + "timeShiftBufferDepth=\"PT7200S\" profiles=\"urn:mpeg:dash:profile:isoff-live:2011\">"
+            + "<BaseURL>" + entry.getString("baseUrl") + "</BaseURL>"
+            + "<Period start=\"PT0S\" id=\"1\"><AdaptationSet mimeType=\"video/mp4\" segmentAlignment=\"true\">"
+            + "<ContentProtection cenc:default_KID=\"" + entry.getString("kid") + "\" "
+            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\"/>"
+            + "<ContentProtection schemeIdUri=\"urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e\" value=\"ClearKey1.0\"/>"
+            + "<SegmentTemplate timescale=\"90000\" duration=\"360360\" startNumber=\"" + start + "\"/>";
+        String[][] videos = {
+            {"1", "1920", "1080", "4000000", "avc1.4d4028", "1080p"},
+            {"2", "1280", "720", "2000000", "avc1.4d401f", "720p"},
+            {"3", "640", "360", "1000000", "avc1.4d401e", "360p"},
+            {"4", "320", "180", "500000", "avc1.4d400d", "180p"}
+        };
+        for (String[] v : videos) {
+            mpd += "<Representation id=\"" + v[0] + "\" width=\"" + v[1] + "\" height=\"" + v[2]
+                + "\" bandwidth=\"" + v[3] + "\" codecs=\"" + v[4] + "\">"
+                + "<SegmentTemplate media=\"manifest_" + v[5] + "_$Number$.mp4\" "
+                + "initialization=\"manifest_" + v[5] + "_init.mp4\"/></Representation>";
         }
+        mpd += "</AdaptationSet><AdaptationSet mimeType=\"audio/mp4\" segmentAlignment=\"true\">"
+            + "<ContentProtection cenc:default_KID=\"" + entry.getString("kid") + "\" "
+            + "schemeIdUri=\"urn:mpeg:dash:mp4protection:2011\" value=\"cenc\"/>"
+            + "<SegmentTemplate timescale=\"48000\" duration=\"192192\" startNumber=\"" + start
+            + "\" media=\"manifest_audio_$Number$.mp4\" initialization=\"manifest_audio_init.mp4\"/>"
+            + "<Representation id=\"5\" bandwidth=\"96000\" audioSamplingRate=\"48000\" codecs=\"mp4a.40.2\"/>"
+            + "</AdaptationSet></Period></MPD>";
+        return DATA_MPD + Base64.encodeToString(mpd.getBytes("UTF-8"), Base64.NO_WRAP);
     }
 
     private static JSONArray validKeys(String json) {
@@ -411,7 +504,8 @@ public class MainActivity extends Activity {
             }
             for (int i = 0; i < streams.length(); i++) {
                 JSONObject s = streams.getJSONObject(i);
-                if (!s.getString("url").startsWith("https://")
+                String url = s.getString("url");
+                if ((!url.startsWith("https://") && !url.startsWith(DATA_MPD))
                         || !s.getString("kid").matches("(?i)[0-9a-f]{32}")
                         || !s.getString("key").matches("(?i)[0-9a-f]{32}")) {
                     return null;

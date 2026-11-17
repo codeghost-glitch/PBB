@@ -390,8 +390,9 @@ function channelListContract() {
   const count = /CHANNEL_COUNT\s*=\s*(\d+)/.exec(java);
   check("the app and the snapshot agree on the channel count", streams.length, Number(count[1]));
   for (const stream of streams) {
-    check(`manifest URL of ${stream.name} is the API's https manifest`, true,
-      stream.url.startsWith("https://absp-live.akamaized.net/") && stream.url.endsWith("/manifest.mpd"));
+    check(`manifest URL of ${stream.name} is an inlined pbb3 MPD`, true,
+      stream.url.startsWith("data:application/dash+xml;base64,")
+      && Buffer.from(stream.url.split(",")[1], "base64").toString("utf8").includes("<BaseURL>https://"));
     check(`KID of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.kid));
     check(`key of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.key));
   }
@@ -523,21 +524,26 @@ function channelSourceContract() {
     "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
     "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
   ];
-  check("the liveplayph API supplies the streams", true,
-    java.includes("https://liveplayph.pages.dev/api/getData?channel="));
-  check("all three channels have an API id", true,
+  check("the site bundle is the source", true,
+    java.includes('PBB3_SITE = "https://pbb3collablive.xyz"')
+    && java.includes('"/_next/static/chunks/'));
+  check("all three channels have a feed id", true,
     ids.every((id) => java.includes(`"${id}"`)));
-  check("the API gets its referer header", true,
-    java.includes('STREAM_API_REFERER = "https://liveplayph.pages.dev/"')
-    && /Http\.getText\(STREAM_API \+ CHANNEL_IDS\[i\], 5000, 8000, STREAM_API_REFERER\)/.test(java));
-  check("Http sends an explicit referer", true,
-    /setRequestProperty\("Referer", referer\)/.test(http));
-  check("the API's manifest and ClearKey are read", true,
-    /data\.getString\("manifestUri"\)/.test(java)
-    && /data\.getJSONObject\("ClearKey"\)/.test(java));
-  check("the dead pbb3 proxy is gone", false,
-    /pbb3collablive\.xyz|PBB3_M3U/.test(java));
-  check("no reachability gate rejects the API's manifests", false,
+  check("the signed feed data is parsed from the bundle", true,
+    java.includes('availStart:\\"([^\\"]+)\\",kid:')
+    && java.includes('startNum:0x([0-9a-fA-F]+)'));
+  check("the MPD is generated locally and inlined", true,
+    java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
+    && /Base64\.encodeToString\(mpd/.test(java));
+  check("Http decodes inlined MPDs", true,
+    /Base64\.getDecoder\(\)\.decode/.test(http));
+  const recorder = fs.readFileSync(
+    path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
+  check("recording uses the generated MPD's BaseURL", true,
+    /plan\.baseUrl = baseEnd > baseStart/.test(recorder));
+  check("the dead proxy endpoints are gone", false,
+    /\/api\/proxy\/stream|PBB3_M3U/.test(java));
+  check("no reachability gate rejects the generated manifests", false,
     /reachable\(/.test(java));
   check("an open sources sheet follows the refreshed config", true,
     /sourceField\("sourceSheet"\)\.classList\.contains\("hidden"\)[\s\S]{0,160}selectSourceChannel\(sourceSheet\.index\)/.test(app));

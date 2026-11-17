@@ -14,7 +14,7 @@ Rust + JNI Android app for three PBB live DASH/clear-key streams.
 - Opening fullscreen or PiP turns that feed's sound on automatically.
 - Fullscreen button on every card: hides system bars, letterboxes the feed on black, and keeps the picture at its full size - nothing reserves a lane and the video never shrinks when the controls come up. The two-column keypad with five keys - zoom, next, mini, lock, exit - sits in the top-right corner as a small smoked-glass panel with amber active keys - clean in daylight, near-black after hours - with a centred on-air strip (the camera number stays in the channel bug), 44px keys with a word under every glyph and the amber exit key across the bottom; locking leaves only the amber unlock key. It does not open automatically when fullscreen starts, and fades a few seconds after it is shown; there is no separate controls button, because a tap anywhere on the picture brings the deck back. A channel bug in the top-left corner names the feed when fullscreen opens or the feed is switched. A connecting feed shows a breathing lamp over a slow scan, and a dropped feed a steady red retry chip over a dim wash, so the picture is never silent about its state. The recording clock of a camera that is recording is hidden in fullscreen. The mini feed is the same small floating monitor as before, now in the bottom-right corner with a light glass frame: no dock, no number, no status, just its picture. Tapping it swaps it with the big feed. The mini tile keeps the chosen quality and its own sound, so both feeds are audible at once; the feed hidden behind fullscreen keeps the chosen quality too. A swap clears the zoom - the feed arriving in the big slot starts unzoomed and the zoom key loses its highlight. It is the same card element moved by CSS, so no video is re-attached and both feeds keep playing. The card-level PiP button is still there for watching while you leave the app. Exiting fullscreen drops the focus and lands on the three-feed grid.
 - Global default quality: hd or sd. Rust validates and persists the choice in app-private storage and maps old auto values to hd. hd picks 720p and sd picks 360p; every feed uses the chosen quality.
-- The three feeds and their current ClearKeys come from the liveplayph API at <https://liveplayph.pages.dev/api/getData>. The dead Akamai host list and pbb3 proxy are no longer queried. The config in src/lib.rs is the offline fallback.
+- The three feeds and their current ClearKeys come from the pbb3 site bundle at <https://pbb3collablive.xyz/>. The site's published manifest URLs 403, so the app builds the same small DASH manifests the site builds and points them at the segment paths that do work. The config in src/lib.rs is the offline fallback.
 - A sources key in the footer opens a sheet where a new manifest, kid and key can be pasted in and applied, so a rotated feed is handled in the app: no build, no release, no asking anyone for a new APK.
 - PBB All Access is the default sound stream on launch.
 - Record any camera on its own: the record button on a card starts that camera, or stops it, while the other cameras keep recording. All three can run at once. Every tap is confirmed by the service, and a recording card gets a red tally on the picture with its running time. There is no master record button in the header: each camera is started on its own card, and the footer strip shows how many are running and for how long.
@@ -129,23 +129,22 @@ Purging the file from the history is optional and does not replace the rotation:
 
 The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; an in-flight recording would also produce garbage files because it uses the same key.
 
-The app asks the liveplayph API for each channel by id:
+The app reads the pbb3 page, finds its Next.js chunk containing `let et={`, and reads each channel's signed feed data:
 
 ~~~text
-GET https://liveplayph.pages.dev/api/getData?channel=4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22
-Referer: https://liveplayph.pages.dev/
-
-{"manifestUri":"https://.../manifest.mpd","ClearKey":{"k1":"<32 hex kid>","k2":"<32 hex key>"},"type":"mpd"}
+"4f8b2c15-...": { baseUrl, availStart, kid, startNum, ... }
+"4f8b2c15-...": { ..., key: "<32 hex key>" }
 ~~~
 
 The stream host and the key source are separate things:
 
-- Key source: the liveplayph API. `manifestUri` is the current manifest and `ClearKey.k1/k2` are the current KID and key. The site requires a `Referer` header, which `Http.getText()` sends for this call.
-- Stream host: whatever `manifestUri` the API returns. Today these are `absp-live.akamaized.net` manifests. The old fixed `abslive`, `absp-live` and pbb3 proxy choices are gone.
+- Feed source: `baseUrl`, `availStart`, `kid` and `startNum` from the site bundle. The site's own player uses the same values to build a dynamic MPD when its API is unavailable.
+- Segment host: the `baseUrl` in that data, currently `absp-live.akamaized.net`. The published `manifest.mpd` 403s, but the init and media segments under that base answer 200, so the app writes a small SegmentTemplate MPD itself.
+- ClearKey: the `key` beside each channel in the same bundle.
 
-At startup and on manual refresh the app calls the API for all three channels and turns each reply into the app's `{name,url,kid,key}` config. The manifest itself is not probed first: a proxy that 403s the app's own GET must not stop the keys from loading; the player reports a failed feed if the URL is truly dead.
+At startup and on manual refresh the app builds one MPD per channel, base64-encodes it into a `data:application/dash+xml;base64,` URL, and turns the bundle values into the app's `{name,url,kid,key}` config. `Http.getBytes()` decodes that URL for the recorder, and the recorder reads `<BaseURL>` from the generated MPD instead of guessing a path from the data URL.
 
-The keys live outside the app, so a rotated feed shows up in the API response and not in a new build.
+The feed data lives outside the app, so a rotation shows up on the site and not in a new build.
 
 ### The sources sheet
 
@@ -154,7 +153,7 @@ The other way in is the app itself. The footer strip carries a sources key next 
 - A paste into any box fills the boxes it understands. A manifest link goes to the manifest box, a `kid:key` line (with or without dashes, `:` or `=` between them) goes to the kid and the key, and a ClearKey json blob is read as well. This is the same Auto License Tool the web site has.
 - "detect kid" reads the manifest and fills the kid box from `cenc:default_KID`. The Akamai manifests send `Access-Control-Allow-Origin: *`, so the page can read them itself.
 - "apply" hands the three values to Pbb.setSource(). The app checks them (https manifest, 32 hex kid and key), writes them into filesDir/streams.json and pushes the new config to the page, so the players re-init with the new keys and the source survives a restart.
-- The app always reads the liveplayph API; there is no server picker. Refresh happens immediately.
+- The app always reads the pbb3 site bundle; there is no server picker. Refresh happens immediately.
 - The footer also carries a stitch key: it records Main Access and Dining Area together and saves **one stacked MP4** in Movies/PBB - Main Access on top, Dining Area below. A WebView cannot copy DRM-protected video frames into a canvas (every captured frame comes back black), so the two feeds are recorded by the native service, then their finished local MP4s are decoded and joined by the FFmpeg plugin: both H.264 streams are stacked into a single 1280x1440-style frame with libx264 and the first feed's AAC track carries over. The two originals are deleted once the join succeeds, so only `PBB_stitch_...mp4` remains. The key turns red while both are running and both cards show their recording tallies; a second tap stops both and the joined file lands a moment later. The plugin now includes an H.264 decoder, swscale and libx264 (reproducibly cross-built by `ffmpeg/build-android.sh`) and is pinned by SHA-256 in `RecordService`; the fallback download URL is no longer used because its old hash no longer matches.
 - The refresh icon also works without the API: it reads the kid out of every manifest and names the cameras that rotated, so the sheet is opened only for a camera that needs it.
 - The sheet is how a rotated feed is handled when no one publishes a list: the forum thread shows the new manifest and key, they are pasted into the sheet, and the app plays on. No build, no release, no new APK.
@@ -165,16 +164,16 @@ The other way in is the app itself. The footer strip carries a sources key next 
 - The status strip sits below the grid: a status LED, the message, a recording badge with the number of active recordings and the longest elapsed time, the sources key, the stitch key, the refresh icon, and the back button when a feed is focused. The LED turns red while any camera records. It is hidden in PiP and fullscreen. In the grid it never hides itself: with no message it reads "tap refresh or open sources for the stream keys".
 - The refresh icon calls Pbb.refreshKeys() and doubles as a stream sync: a manual refresh with unchanged keys does NOT rebuild the players (a full reload is slow and leaves late feeds behind). It pulls every playing feed to its live edge in the same tick, tries once more for a feed still connecting, and every player aligns itself as soon as its load finishes. A changed key list still destroys and reloads all three in the same tick. Fullscreen hides the strip, so a message that arrives there is mirrored by the on-screen indicator. On 4012 the tiles say "keys rotated - open sources" and the strip says "keys rotated - open sources to paste the new key".
 - While the keys are known to be stale the record buttons refuse to start and say so. A recording that is remuxed with the wrong key is a file that will not play, and it would land in Movies/PBB looking like a normal recording.
-- A manual refresh always resolves its status text. With a live API: changed keys re-init the players and unchanged keys pull them to the live edge and report the streams are aligned. Without one: the app reads the kid out of every manifest and compares it with the kid it plays with, so the strip says "keys rotated on pbb all access - open sources to paste the new key" when a camera changed, "no published channel list - the sources sheet holds the current feed" when everything still matches, and "could not reach the streams - tap refresh to retry" when the manifests do not answer. Silent startup fetches never overwrite the status.
-- Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall. The one thing the app can not do is learn a key nobody published: the KID travels in the manifest, but the key itself only comes from the API or from the sources sheet.
+- A manual refresh always resolves its status text. With a live feed: changed keys re-init the players and unchanged keys pull them to the live edge and report the streams are aligned. Without one: the app reads the kid out of every manifest and compares it with the kid it plays with, so the strip says "keys rotated on pbb all access - open sources to paste the new key" when a camera changed, "no published channel list - the sources sheet holds the current feed" when everything still matches, and "could not reach the streams - tap refresh to retry" when the manifests do not answer. Silent startup fetches never overwrite the status.
+- Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall. The one thing the app can not do is learn a key nobody published: the KID travels in the manifest, but the key itself only comes from the site bundle or from the sources sheet.
 
-To refresh the checked-in fallback snapshot from the same API:
+To refresh the checked-in fallback snapshot from the same site:
 
 ~~~bash
 ./keys/update.sh
 ~~~
 
-It writes keys/keys.json with the API's manifest URLs and KID/key pairs. src/lib.rs includes that file as `STREAM_CONFIG_JSON`, so the built-in fallback uses the same config shape as the runtime app. The runtime app calls the API directly and caches the result in filesDir/streams.json. Commit the snapshot after a rotation, or leave the fallback stale and let the first launch with a network fix it.
+It writes keys/keys.json with the same inlined MPD URLs and KID/key pairs the app builds. src/lib.rs includes that file as `STREAM_CONFIG_JSON`, so the built-in fallback uses the same config shape as the runtime app. The runtime app reads the site directly and caches the result in filesDir/streams.json. Commit the snapshot after a rotation, or leave the fallback stale and let the first launch with a network fix it.
 
 ## Downloadable recorder plugin
 
