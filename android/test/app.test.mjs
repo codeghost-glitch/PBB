@@ -15,9 +15,6 @@ const APP = path.join(HERE, "..", "assets", "app.js");
 const CSS = path.join(HERE, "..", "assets", "styles.css");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
-const CHANNEL_LIST = path.join(HERE, "..", "java", "com", "pbb", "live", "ChannelList.java");
-const LIVE_LIST = "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u";
-const STREAM_HOSTS = ["abslive.akamaized.net", "absp-live.akamaized.net"];
 
 let failures = 0;
 
@@ -381,15 +378,6 @@ function bridgeContract() {
 
 function channelListContract() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  check("the app keeps the remote M3U fallback", true,
-    /CHANNEL_LIST_URL\s*=/.test(java) && java.includes(LIVE_LIST));
-  check("the app ships the supplied M3U", true,
-    java.includes("BUILTIN_M3U = \"#EXTM3U"));
-  check("the published M3U is tried first", true,
-    /CHANNEL_LIST_URLS = \{CHANNEL_LIST_URL, BUILTIN_M3U\}/.test(java));
-  check("the M3U rows are parsed", true, java.includes("ChannelList.fromM3u"));
-  check("metadata endpoints are not channel sources", false,
-    /pastebin\.com|supabase\.co/.test(java));
   check("the old channel list servers are gone", false,
     /gist\.githubusercontent\.com\/codeghost-glitch|pbbliveaccess\.lovable\.app|pbb-v2\.pages\.dev/.test(java));
 
@@ -402,8 +390,8 @@ function channelListContract() {
   const count = /CHANNEL_COUNT\s*=\s*(\d+)/.exec(java);
   check("the app and the snapshot agree on the channel count", streams.length, Number(count[1]));
   for (const stream of streams) {
-    check(`manifest URL of ${stream.name} uses the live CDN`, true,
-      stream.url.startsWith("https://abslive.akamaized.net/dash/live/2099522/"));
+    check(`manifest URL of ${stream.name} is the API's https manifest`, true,
+      stream.url.startsWith("https://absp-live.akamaized.net/") && stream.url.endsWith("/manifest.mpd"));
     check(`KID of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.kid));
     check(`key of ${stream.name} is 32 hex`, true, /^[0-9a-f]{32}$/i.test(stream.key));
   }
@@ -529,31 +517,28 @@ function refreshResyncsAllStreams() {
 function channelSourceContract() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  const list = fs.readFileSync(CHANNEL_LIST, "utf8");
-  check("the app uses the remote M3U fallback", true, java.includes(LIVE_LIST));
-  check("the supplied M3U can be read without a request", true,
-    /source\.startsWith\("#EXTM3U"\)/.test(java));
-  check("the parser accepts the Live name suffix", true,
-    /endsWith\(" Live"\)/.test(list));
-  check("both livestream hosts are configured", true,
-    STREAM_HOSTS.every((host) => java.includes(`"${host}"`)));
-  check("the server chooser clamps to every server", true,
-    /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length \+ 1, index\)\)/.test(java));
-  check("the pbb3 proxy server is configured", true,
-    java.includes("PBB3_M3U") && java.includes("pbb3collablive.xyz/api/proxy/stream"));
-  check("the pbb3 server is reachable in auto", true,
-    /channelSource == 3/.test(java) && /reachable\(pbb3\)/.test(java));
-  check("host choice is not clamped to the channel list", false,
-    /Math\.min\(CHANNEL_LIST_URLS\.length, index\)/.test(java));
-  check("an explicit host is pinned", true,
-    /if \(channelSource > 0\) \{[\s\S]{0,200}STREAM_HOSTS\[channelSource - 1\]/.test(java));
-  check("a pinned host does not fall through", true,
-    /return validKeys\(pinned\) != null \? pinned : null;/.test(java));
-  check("the M3U rows are parsed onto the chosen host", true,
-    /ChannelList\.fromM3u\(raw, CHANNEL_NAMES, streamHost\)/s.test(java));
-  check("the host is swapped in the manifest URL", true, /onHost\(line, streamHost\)/.test(list));
-  check("a reachable host is picked before the backup", true,
-    /Http\.getBytes\(first, 3000, 3000\)/.test(java));
+  const http = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
+  const ids = [
+    "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
+    "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
+    "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
+  ];
+  check("the liveplayph API supplies the streams", true,
+    java.includes("https://liveplayph.pages.dev/api/getData?channel="));
+  check("all three channels have an API id", true,
+    ids.every((id) => java.includes(`"${id}"`)));
+  check("the API gets its referer header", true,
+    java.includes('STREAM_API_REFERER = "https://liveplayph.pages.dev/"')
+    && /Http\.getText\(STREAM_API \+ CHANNEL_IDS\[i\], 5000, 8000, STREAM_API_REFERER\)/.test(java));
+  check("Http sends an explicit referer", true,
+    /setRequestProperty\("Referer", referer\)/.test(http));
+  check("the API's manifest and ClearKey are read", true,
+    /data\.getString\("manifestUri"\)/.test(java)
+    && /data\.getJSONObject\("ClearKey"\)/.test(java));
+  check("the dead pbb3 proxy is gone", false,
+    /pbb3collablive\.xyz|PBB3_M3U/.test(java));
+  check("no reachability gate rejects the API's manifests", false,
+    /reachable\(/.test(java));
   check("an open sources sheet follows the refreshed config", true,
     /sourceField\("sourceSheet"\)\.classList\.contains\("hidden"\)[\s\S]{0,160}selectSourceChannel\(sourceSheet\.index\)/.test(app));
   check("the web-player channels keep their names", true,
@@ -575,18 +560,10 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sources sheet offers every livestream server", true,
-    /serverChips/s.test(app) && ["abslive", "absp-live", "pbb3"]
-      .every((label) => html.includes(`>${label}</button>`)));
-  check("auto plus three livestream servers are shown", 4,
-    (html.match(/data-source="/g) || []).length);
-  check("each host chip names its host on hover", true,
-    STREAM_HOSTS.every((host) =>
-      html.includes(`title="https://${host}/dash/live/2099522/"`)));
-  check("the page clamps the server choice to every server", true,
-    /Math\.min\(3, Number\(index\)/.test(app));
-  check("both livestream hosts are in the list", true,
-    STREAM_HOSTS.every((host) => java.includes(`"${host}"`)));
+  check("the sources sheet has no server picker", false,
+    /serverChips|data-source=/.test(html) || /serverChips|selectServer/.test(app));
+  check("the bridge has no server setter", false,
+    /setChannelSource/.test(java));
 }
 
 function playbackAndRecorderFixes() {

@@ -39,61 +39,20 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
-    // The supplied M3U is the channel list. The remote M3U stays as fallback.
-    private static final String CHANNEL_LIST_URL =
-        "https://raw.githubusercontent.com/kupsbabaero-ux/cignal-yarn/refs/heads/main/zslive.m3u";
-    private static final String BUILTIN_M3U = "#EXTM3U\n"
-        + "#EXTINF:-1 tvg-name=\"PBB All Access Live\",PBB All Access Live\n"
-        + "#KODIPROP:inputstream.adaptive.license_type=clearkey\n"
-        + "#KODIPROP:inputstream.adaptive.license_key="
-        + "8150b74d16324bb4b2ff62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5\n"
-        + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
-        + "https://absp-live.akamaized.net/dash/live/2099522/"
-        + "pbbcollab30allaccesslivestream/manifest.mpd\n"
-        + "#EXTINF:-1 tvg-name=\"PBB Dining Area\",PBB Dining Area\n"
-        + "#KODIPROP:inputstream.adaptive.license_type=clearkey\n"
-        + "#KODIPROP:inputstream.adaptive.license_key="
-        + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
-        + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
-        + "https://absp-live.akamaized.net/dash/live/2099522/"
-        + "pbbcollab30allaccesslivestream-diningarea/manifest.mpd\n"
-        + "#EXTINF:-1 tvg-name=\"PBB External Den\",PBB External Den\n"
-        + "#KODIPROP:inputstream.adaptive.license_type=clearkey\n"
-        + "#KODIPROP:inputstream.adaptive.license_key="
-        + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
-        + "#EXTVLCOPT:http-user-agent=Mozilla/5.0\n"
-        + "https://absp-live.akamaized.net/dash/live/2099522/"
-        + "pbbcollab30allaccesslivestream-externalden/manifest.mpd\n";
-    private static final String PBB3_M3U = "#EXTM3U\n"
-        + "#EXTINF:-1,PBB All Access\n"
-        + "#KODIPROP:inputstream.adaptive.license_key="
-        + "8150b74d16324bb4b2ff62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5\n"
-        + "https://pbb3collablive.xyz/api/proxy/stream/"
-        + "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22/manifest.mpd\n"
-        + "#EXTINF:-1,PBB Dining Area\n"
-        + "#KODIPROP:inputstream.adaptive.license_key="
-        + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
-        + "https://pbb3collablive.xyz/api/proxy/stream/"
-        + "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44/manifest.mpd\n"
-        + "#EXTINF:-1,PBB External Den\n"
-        + "#KODIPROP:inputstream.adaptive.license_key="
-        + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
-        + "https://pbb3collablive.xyz/api/proxy/stream/"
-        + "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11/manifest.mpd\n";
-    private static final String[] CHANNEL_LIST_URLS = {CHANNEL_LIST_URL, BUILTIN_M3U};
-    private static final String[] STREAM_HOSTS = {
-        "abslive.akamaized.net", "absp-live.akamaized.net"
+    private static final String STREAM_API = "https://liveplayph.pages.dev/api/getData?channel=";
+    private static final String STREAM_API_REFERER = "https://liveplayph.pages.dev/";
+    private static final String[] CHANNEL_IDS = {
+        "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
+        "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
+        "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
     };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
-    // 0 = auto, 1..2 = Akamai host, 3 = pbb3collablive.xyz proxy.
-    private static volatile int channelSource = 0;
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
@@ -151,8 +110,6 @@ public class MainActivity extends Activity {
         appVolumeLevel = appVolume(filesDir);
         appBrightnessLevel = appBrightness(filesDir);
         streamConfigJson = streamConfig();
-        channelSource = getSharedPreferences("pbb", MODE_PRIVATE)
-            .getInt("channelSource", 0);
         loadCachedKeys();
         setupWebView();
         applyOrientation();
@@ -412,69 +369,34 @@ public class MainActivity extends Activity {
         return RecordService.manifestKid(raw);
     }
 
-    /** Fetch the supplied M3U first, then try the chosen host and its backup. */
+    /** Read the three current manifests and keys from the liveplayph API. */
     private static String publishedConfig() {
-        if (channelSource == 3) {
-            String pinned = fetchKeys(PBB3_M3U, "pbb3collablive.xyz");
-            return validKeys(pinned) != null ? pinned : null;
-        }
-        if (channelSource > 0) {
-            String pinned = fetchKeys(BUILTIN_M3U, STREAM_HOSTS[channelSource - 1]);
-            return validKeys(pinned) != null ? pinned : null;
-        }
-        for (String host : STREAM_HOSTS) {
-            for (String source : CHANNEL_LIST_URLS) {
-                String candidate = fetchKeys(source, host);
-                if (validKeys(candidate) != null && reachable(candidate)) {
-                    return candidate;
-                }
-            }
-        }
-        String pbb3 = fetchKeys(PBB3_M3U, "pbb3collablive.xyz");
-        return validKeys(pbb3) != null && reachable(pbb3) ? pbb3 : null;
-    }
-
-    private static boolean reachable(String json) {
-        try {
-            String first = new JSONObject(json).getJSONArray("streams")
-                .getJSONObject(0).getString("url");
-            return Http.getBytes(first, 3000, 3000) != null;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /** Reads the three PBB rows from supplied M3U text or a remote M3U URL. */
-    private static String fetchKeys(String source, String streamHost) {
-        String raw = source.startsWith("#EXTM3U") ? source : null;
-        if (raw == null) {
+        JSONArray streams = new JSONArray();
+        for (int i = 0; i < CHANNEL_IDS.length; i++) {
+            String raw;
             try {
-                raw = Http.getText(source, 5000, 8000);
+                raw = Http.getText(STREAM_API + CHANNEL_IDS[i], 5000, 8000, STREAM_API_REFERER);
+            } catch (Exception e) {
+                return null;
+            }
+            if (raw == null) {
+                return null;
+            }
+            try {
+                JSONObject data = new JSONObject(raw);
+                JSONObject keys = data.getJSONObject("ClearKey");
+                JSONObject stream = new JSONObject();
+                stream.put("name", CHANNEL_NAMES[i]);
+                stream.put("url", data.getString("manifestUri"));
+                stream.put("kid", keys.getString("k1"));
+                stream.put("key", keys.getString("k2"));
+                streams.put(stream);
             } catch (Exception e) {
                 return null;
             }
         }
-        if (raw == null) {
-            return null;
-        }
-        try {
-            List<ChannelList.Entry> listed = ChannelList.fromM3u(raw, CHANNEL_NAMES, streamHost);
-            if (listed == null) {
-                return null;
-            }
-            JSONArray streams = new JSONArray();
-            for (ChannelList.Entry entry : listed) {
-                JSONObject stream = new JSONObject();
-                stream.put("name", entry.name);
-                stream.put("url", entry.url);
-                stream.put("kid", entry.kid);
-                stream.put("key", entry.key);
-                streams.put(stream);
-            }
-            return new JSONObject().put("streams", streams).toString();
-        } catch (Exception e) {
-            return null;
-        }
+        String json = new JSONObject().put("streams", streams).toString();
+        return validKeys(json) != null ? json : null;
     }
 
     private static JSONArray validKeys(String json) {
@@ -960,14 +882,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void refreshKeys() {
             MainActivity.this.refreshKeys();
-        }
-
-        /** Pick which livestream host to try first. */
-        @JavascriptInterface
-        public void setChannelSource(int index) {
-            channelSource = Math.max(0, Math.min(STREAM_HOSTS.length + 1, index));
-            getSharedPreferences("pbb", MODE_PRIVATE).edit()
-                .putInt("channelSource", channelSource).apply();
         }
 
         /** Returns an empty string when the source was stored. */

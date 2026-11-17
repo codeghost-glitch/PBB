@@ -1,69 +1,49 @@
 #!/usr/bin/env bash
-# Refresh the checked-in fallback snapshot from the live channel list.
-# The runtime app fetches the same file directly; the Rust fallback includes
-# this snapshot, so one rewrite keeps them from drifting.
+# Refresh the checked-in fallback snapshot from the liveplayph API.
+# The runtime app calls the same API; the Rust fallback includes this snapshot.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+ACTIVITY="$HERE/../android/java/com/pbb/live/MainActivity.java"
 
-# One place holds the list URL: the app itself.
-LIST_URL="$(grep -A1 -m1 'CHANNEL_LIST_URL =' "$HERE/../android/java/com/pbb/live/MainActivity.java" \
-  | grep -o 'https[^"]*' | head -1)"
-if [ -z "$LIST_URL" ]; then
-  echo "no channel list URL in MainActivity.java" >&2
+API="$(grep -m1 'STREAM_API =' "$ACTIVITY" | grep -o 'https[^"]*' | head -1)"
+REFERER="$(grep -m1 'STREAM_API_REFERER =' "$ACTIVITY" | grep -o 'https[^"]*' | head -1)"
+if [ -z "$API" ] || [ -z "$REFERER" ]; then
+  echo "no liveplayph API in MainActivity.java" >&2
   exit 1
 fi
 
-python3 - "$LIST_URL" "$HERE/keys.json" <<'PY'
+python3 - "$API" "$REFERER" "$HERE/keys.json" <<'PY'
 import json
 import re
 import sys
 import urllib.request
 from pathlib import Path
 
-NAMES = ["PBB All Access", "PBB Dining Area", "PBB External Den"]
-LICENSE = "#KODIPROP:inputstream.adaptive.license_key="
-OLD_CDN = "absp-live.akamaized.net"
-LIVE_CDN = "abslive.akamaized.net"
+api, referer, out_path = sys.argv[1:4]
+streams = [
+    ("PBB All Access", "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22"),
+    ("PBB Dining Area", "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44"),
+    ("PBB External Den", "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"),
+]
 
-def parse_m3u(text):
-    found = {}
-    name = license = None
-    for raw in text.splitlines():
-        line = raw.strip()
-        if line.startswith("#EXTINF:"):
-            name = line[line.rfind(",") + 1:].strip()
-            if name.endswith(" Live"):
-                name = name[:-5]
-            license = None
-        elif line.startswith(LICENSE):
-            license = line[len(LICENSE):].strip()
-        elif line and not line.startswith("#") and name in NAMES and license:
-            kid, key = license.split(":", 1)
-            found[name] = {"name": name, "url": line, "kid": kid, "key": key}
-            name = license = None
-    return [found[n] for n in NAMES if n in found]
-
-url = sys.argv[1]
-request = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "PBB/1.0"})
-with urllib.request.urlopen(request, timeout=20) as response:
-    data = response.read().decode("utf-8")
-
-listed = parse_m3u(data)
-if len(listed) != 3:
-    raise RuntimeError("the channel list needs 3 channels")
-streams = []
-for entry in listed:
-    name = entry.get("name") or "Channel"
-    mpd = entry.get("url", "").replace(OLD_CDN, LIVE_CDN)
-    kid = entry.get("kid", "").replace("-", "")
-    key = entry.get("key", "").replace("-", "")
-    if not re.fullmatch(r"[0-9a-fA-F]{32}", kid) or not re.fullmatch(r"[0-9a-fA-F]{32}", key):
-        raise RuntimeError("bad KID/key pair for " + name)
+out = []
+for name, channel_id in streams:
+    request = urllib.request.Request(
+        api + channel_id,
+        headers={"Referer": referer, "User-Agent": "PBB/1.0", "Cache-Control": "no-cache"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        data = json.load(response)
+    mpd = data["manifestUri"]
+    kid = data["ClearKey"]["k1"].replace("-", "")
+    key = data["ClearKey"]["k2"].replace("-", "")
     if not mpd.startswith("https://"):
         raise RuntimeError("bad manifest URL for " + name)
-    streams.append({"name": name, "url": mpd, "kid": kid, "key": key})
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", kid) or not re.fullmatch(r"[0-9a-fA-F]{32}", key):
+        raise RuntimeError("bad KID/key pair for " + name)
+    out.append({"name": name, "url": mpd, "kid": kid, "key": key})
 
-out = Path(sys.argv[2])
-out.write_text(json.dumps({"streams": streams}, indent=2) + "\n", encoding="utf-8")
-print(f"wrote {out} ({len(streams)} streams)")
+out_path = Path(out_path)
+out_path.write_text(json.dumps({"streams": out}, indent=2) + "\n", encoding="utf-8")
+print(f"wrote {out_path} ({len(out)} streams)")
 PY

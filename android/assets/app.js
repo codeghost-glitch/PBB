@@ -1670,30 +1670,6 @@ function toggleStitch() {
   updateStitchButton();
 }
 
-function storedServer() {
-  try {
-    const value = Number(localStorage.getItem("pbb-server"));
-    return Number.isInteger(value) && value >= 0 && value <= 3 ? value : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function selectServer(index) {
-  const picked = Math.max(0, Math.min(3, Number(index) || 0));
-  try {
-    localStorage.setItem("pbb-server", String(picked));
-  } catch {
-    // Private browsing: the choice still lasts for this page load.
-  }
-  for (const chip of document.querySelectorAll("#serverChips .chip")) {
-    chip.classList.toggle("active", Number(chip.dataset.source) === picked);
-  }
-  if (window.Pbb && typeof Pbb.setChannelSource === "function") {
-    Pbb.setChannelSource(picked);
-  }
-}
-
 function wireSourceSheet() {
   const sheet = sourceField("sourceSheet");
   if (!sheet) {
@@ -1717,18 +1693,6 @@ function wireSourceSheet() {
   const apply = sourceField("sourceApply");
   if (apply) {
     apply.addEventListener("click", applySource);
-  }
-  const serverChips = sourceField("serverChips");
-  if (serverChips) {
-    serverChips.addEventListener("click", (event) => {
-      const chip = event.target && event.target.closest
-        ? event.target.closest(".chip") : null;
-      if (!chip) {
-        return;
-      }
-      selectServer(chip.dataset.source);
-      refreshKeysFromUi();
-    });
   }
 }
 
@@ -1804,7 +1768,6 @@ function boot() {
   if (stitchBtn) {
     stitchBtn.addEventListener("click", toggleStitch);
   }
-  selectServer(storedServer());
   updateStitchButton();
   wireSourceSheet();
   indicator = document.getElementById("indicator");

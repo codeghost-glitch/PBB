@@ -38,8 +38,11 @@ final class Http {
     }
 
     /** Returns null when the server answered anything but 200. */
-    static byte[] getBytes(String url, int connectMs, int readMs) throws IOException {
+    static byte[] getBytes(String url, int connectMs, int readMs, String referer) throws IOException {
         HttpURLConnection conn = open(url, connectMs, readMs);
+        if (referer != null) {
+            conn.setRequestProperty("Referer", referer);
+        }
         try {
             if (conn.getResponseCode() != 200) {
                 return null;
@@ -55,8 +58,16 @@ final class Http {
         }
     }
 
-    static String getText(String url, int connectMs, int readMs) throws IOException {
-        byte[] body = getBytes(url, connectMs, readMs);
+    static byte[] getBytes(String url, int connectMs, int readMs) throws IOException {
+        return getBytes(url, connectMs, readMs, null);
+    }
+
+    static String getText(String url, int connectMs, int readMs, String referer) throws IOException {
+        byte[] body = getBytes(url, connectMs, readMs, referer);
         return body == null ? null : new String(body, "UTF-8");
+    }
+
+    static String getText(String url, int connectMs, int readMs) throws IOException {
+        return getText(url, connectMs, readMs, null);
     }
 }

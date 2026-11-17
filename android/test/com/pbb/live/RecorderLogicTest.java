@@ -21,7 +21,7 @@ public final class RecorderLogicTest {
         liveOffsetFollowsMpdTiming();
         partNameKeepsTheExtension();
         emptyGapPartRetriesButIsBounded();
-        liveListIsTriedFirst();
+        liveApiIsUsed();
         serviceStopsOnlyWhenIdle();
         if (failures > 0) {
             System.err.println(failures + " check(s) failed");
@@ -79,12 +79,12 @@ public final class RecorderLogicTest {
                 m3u.replace("PBB Dining Area", "Gone"), names, "abslive.akamaized.net"));
     }
 
-    private static void liveListIsTriedFirst() throws Exception {
+    private static void liveApiIsUsed() throws Exception {
         String source = new String(java.nio.file.Files.readAllBytes(
             java.nio.file.Paths.get("android/java/com/pbb/live/MainActivity.java")),
             java.nio.charset.StandardCharsets.UTF_8);
-        check("the published list beats the built-in snapshot", true,
-            source.contains("CHANNEL_LIST_URLS = {CHANNEL_LIST_URL, BUILTIN_M3U}"));
+        check("the live API supplies the streams", true,
+            source.contains("https://liveplayph.pages.dev/api/getData?channel="));
     }
 
     private static void serviceStopsOnlyWhenIdle() {
