@@ -243,10 +243,7 @@ mod tests {
         assert_eq!(json.matches(r#""url":"#).count(), 3);
         assert_eq!(json.matches(r#""kid":"#).count(), 3);
         assert_eq!(json.matches(r#""key":"#).count(), 3);
-        assert!(json.contains("data:application/dash+xml;base64,"));
-        assert!(json.contains("pbbcollab30allaccesslivestream/"));
-        assert!(json.contains("pbbcollab30allaccesslivestream-diningarea/"));
-        assert!(json.contains("pbbcollab30allaccesslivestream-externalden/"));
-        assert!(!json.contains("pinoybigbrothercollabedition30live/manifest.mpd"));
+        assert_eq!(json.matches("data:application/dash+xml;base64,").count(), 3);
+        assert!(json.contains("PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4"));
     }
 }
