@@ -551,13 +551,15 @@ function channelSourceContract() {
   check("pbbcollab.live session API is used", true,
     java.includes("PbbSession.config") && /for \(String key : SITE_KEYS\)/.test(java));
   check("site manifests carry the site's cache key", true,
-    /registerRequestFilter/.test(app) && /Math\.floor\(Date\.now\(\) \/ 15000\)/.test(app)
-      && /_b=/.test(session));
+    /getNetworkingEngine/.test(app) && /netEngine\.registerRequestFilter/.test(app)
+      && /Math\.floor\(Date\.now\(\) \/ 15000\)/.test(app) && /_b=/.test(session));
+  check("no static Shaka request filter call", false,
+    /NetworkingEngine\.registerRequestFilter/.test(app));
   check("the site session cookie is kept", true, /siteCookie\s*=\s*set\.split\(";", 2\)/.test(http));
   check("the site cookie reaches the WebView", true,
     /CookieManager\.getInstance\(\)\.setCookie\(SITE, set\)/.test(http));
-  check("a stale session cookie is cleared first", true,
-    /siteCookie = null;/.test(http) && /setCookie\(SITE, "pbb_sid=; Max-Age=0; Path=\/"\)/.test(http));
+  check("a stale native session cookie is dropped", true, /siteCookie = null;/.test(http));
+  check("the WebView cookie is kept on refresh", false, /pbb_sid=; Max-Age=0/.test(http));
   check("the WebView cookie is flushed", true, /CookieManager\.getInstance\(\)\.flush\(\)/.test(http));
   check("a failed site server says so", true,
     /pbbcollab\.live server unavailable - try another server/.test(java));

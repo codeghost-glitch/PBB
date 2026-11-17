@@ -77,9 +77,9 @@ final class Http {
 
     /** Posts JSON and keeps the session cookie returned by pbbcollab.live. */
     static String postJson(String url, String body, int connectMs, int readMs) throws IOException {
+        // Drop the native cookie only; the new handshake overwrites WebView's.
         siteCookie = null;
         CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setCookie(SITE, "pbb_sid=; Max-Age=0; Path=/");
         HttpURLConnection conn = open(url, connectMs, readMs);
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);

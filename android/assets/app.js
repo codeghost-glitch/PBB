@@ -679,6 +679,22 @@ async function initPlayer(entry, index) {
   const player = new shaka.Player(entry.video);
   entry.player = player;
 
+  const netEngine = player.getNetworkingEngine && player.getNetworkingEngine();
+  if (netEngine && typeof netEngine.registerRequestFilter === "function"
+      && shaka.net && shaka.net.NetworkingEngine) {
+    netEngine.registerRequestFilter((type, request) => {
+      if (type !== shaka.net.NetworkingEngine.RequestType.MANIFEST) {
+        return;
+      }
+      request.uris = request.uris.map((uri) => {
+        if (!/^https:\/\/www\.pbbcollab\.live\//.test(uri)) {
+          return uri;
+        }
+        return uri.split("?")[0] + "?_b=" + Math.floor(Date.now() / 15000);
+      });
+    });
+  }
+
   const clearKeys = {};
   clearKeys[entry.stream.kid] = entry.stream.key;
   clearKeys[uuidKid(entry.stream.kid)] = entry.stream.key;
@@ -1774,19 +1790,6 @@ function boot() {
   }
 
   shaka.polyfill.installAll();
-  if (shaka.net && shaka.net.NetworkingEngine) {
-    shaka.net.NetworkingEngine.registerRequestFilter((type, request) => {
-      if (type !== shaka.net.NetworkingEngine.RequestType.MANIFEST) {
-        return;
-      }
-      request.uris = request.uris.map((uri) => {
-        if (!/^https:\/\/www\.pbbcollab\.live\//.test(uri)) {
-          return uri;
-        }
-        return uri.split("?")[0] + "?_b=" + Math.floor(Date.now() / 15000);
-      });
-    });
-  }
 
   let config;
   try {
