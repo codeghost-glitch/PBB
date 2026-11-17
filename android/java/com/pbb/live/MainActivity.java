@@ -225,7 +225,9 @@ public class MainActivity extends Activity {
             public void run() {
                 final String json = publishedConfig();
                 if (json == null) {
-                    reportKeys(rotationReport());
+                    reportKeys(channelSource > STREAM_HOSTS.length
+                        ? "pbbcollab.live server unavailable - try another server"
+                        : rotationReport());
                     return;
                 }
                 streamConfigJson = json;

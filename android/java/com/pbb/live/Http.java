@@ -77,6 +77,9 @@ final class Http {
 
     /** Posts JSON and keeps the session cookie returned by pbbcollab.live. */
     static String postJson(String url, String body, int connectMs, int readMs) throws IOException {
+        siteCookie = null;
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setCookie(SITE, "pbb_sid=; Max-Age=0; Path=/");
         HttpURLConnection conn = open(url, connectMs, readMs);
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
@@ -92,6 +95,7 @@ final class Http {
             if (set != null && set.toLowerCase(Locale.ROOT).contains("pbb_sid")) {
                 siteCookie = set.split(";", 2)[0];
                 CookieManager.getInstance().setCookie(SITE, set);
+                CookieManager.getInstance().flush();
             }
             if (conn.getResponseCode() != 200) {
                 return null;

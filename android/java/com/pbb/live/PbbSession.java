@@ -16,7 +16,7 @@ final class PbbSession {
     }
 
     static String config(String serverKey, String[] names) throws Exception {
-        String raw = Http.postJson(ORIGIN + "/api/streams/session", payload(serverKey), 5000, 8000);
+        String raw = Http.postJson(ORIGIN + "/api/streams/session", payload(serverKey), 8000, 12000);
         JSONObject data = new JSONObject(raw);
         String nonce = data.getString("nonce");
         JSONObject streams = data.getJSONObject("streams");

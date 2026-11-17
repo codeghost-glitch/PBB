@@ -552,6 +552,11 @@ function channelSourceContract() {
   check("the site session cookie is kept", true, /siteCookie\s*=\s*set\.split\(";", 2\)/.test(http));
   check("the site cookie reaches the WebView", true,
     /CookieManager\.getInstance\(\)\.setCookie\(SITE, set\)/.test(http));
+  check("a stale session cookie is cleared first", true,
+    /siteCookie = null;/.test(http) && /setCookie\(SITE, "pbb_sid=; Max-Age=0; Path=\/"\)/.test(http));
+  check("the WebView cookie is flushed", true, /CookieManager\.getInstance\(\)\.flush\(\)/.test(http));
+  check("a failed site server says so", true,
+    /pbbcollab\.live server unavailable - try another server/.test(java));
   check("an open sources sheet follows the refreshed config", true,
     /sourceField\("sourceSheet"\)\.classList\.contains\("hidden"\)[\s\S]{0,160}selectSourceChannel\(sourceSheet\.index\)/.test(app));
   check("the web-player channels keep their names", true,
