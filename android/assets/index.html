@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#FBF7DE" id="themeColor">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#070A0F" id="themeColor">
   <title>PBB live</title>
   <script>
-    // The room's light switch, set before the first paint: a stored choice
-    // wins, otherwise the desk follows the phone's own dark mode.
+    // The gallery opens after hours. A stored choice wins; otherwise the
+    // broadcast desk stays dark until the operator switches the lights on.
     (function () {
       var theme;
       try {
@@ -16,10 +16,7 @@
       } catch (e) {
         theme = null;
       }
-      if (theme !== "dark" && theme !== "light") {
-        theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      }
-      document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
     })();
   </script>
   <link rel="stylesheet" href="styles.css">
@@ -38,14 +35,13 @@
         </div>
         <div class="brand-copy">
           <h1>pbb live</h1>
-          <p>three cameras around the house, streaming now</p>
+          <p>studio control &middot; three cameras</p>
         </div>
       </div>
       <div class="desk-actions">
-        <span class="live-tag"><span class="live-pip" aria-hidden="true"></span>3 live</span>
+        <span class="live-tag"><span class="live-pip" aria-hidden="true"></span>3 feeds live</span>
         <div class="seg" role="group" aria-label="default quality">
           <span class="seg-label">quality</span>
-          <button class="seg-btn" type="button" data-quality="auto">auto</button>
           <button class="seg-btn" type="button" data-quality="hd">hd</button>
           <button class="seg-btn" type="button" data-quality="sd">sd</button>
         </div>
@@ -59,7 +55,7 @@
 
     <footer class="status" id="statusBar">
       <span class="status-led" aria-hidden="true"></span>
-      <span id="statusText" role="status" aria-atomic="true">connecting three feeds...</span>
+      <span id="statusText" role="status" aria-atomic="true">connecting feeds...</span>
       <span class="rec-badge hidden" id="recBadge" aria-hidden="true">
         <span class="rec-badge-dot" aria-hidden="true"></span>
         <span id="recCount">0</span>

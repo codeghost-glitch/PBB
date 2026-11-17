@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 const STREAM_CONFIG_JSON: &str = include_str!("../keys/keys.json");
 
-const QUALITY_AUTO: &str = "auto";
 const QUALITY_HD: &str = "hd";
 const QUALITY_SD: &str = "sd";
 
@@ -16,7 +15,7 @@ fn normalize_quality(value: &str) -> String {
     match value.trim().to_ascii_lowercase().as_str() {
         QUALITY_HD => QUALITY_HD.to_string(),
         QUALITY_SD => QUALITY_SD.to_string(),
-        _ => QUALITY_AUTO.to_string(),
+        _ => QUALITY_HD.to_string(),
     }
 }
 
@@ -38,7 +37,7 @@ fn write_value(files_dir: &str, name: &str, value: &str) -> std::io::Result<()> 
 fn load_default_quality(files_dir: &str) -> String {
     read_value(files_dir, "default_quality.txt")
         .map(|value| normalize_quality(&value))
-        .unwrap_or_else(|| QUALITY_AUTO.to_string())
+        .unwrap_or_else(|| QUALITY_HD.to_string())
 }
 
 fn save_default_quality(files_dir: &str, quality: &str) -> std::io::Result<()> {
@@ -197,19 +196,20 @@ mod tests {
     fn normalizes_quality() {
         assert_eq!(normalize_quality("HD"), QUALITY_HD);
         assert_eq!(normalize_quality(" sd "), QUALITY_SD);
-        assert_eq!(normalize_quality("4k"), QUALITY_AUTO);
-        assert_eq!(normalize_quality(""), QUALITY_AUTO);
+        assert_eq!(normalize_quality("auto"), QUALITY_HD);
+        assert_eq!(normalize_quality("4k"), QUALITY_HD);
+        assert_eq!(normalize_quality(""), QUALITY_HD);
     }
 
     #[test]
     fn persists_default_quality() {
         let dir = test_dir("quality");
         let dir_str = dir.to_string_lossy().into_owned();
-        assert_eq!(load_default_quality(&dir_str), QUALITY_AUTO);
+        assert_eq!(load_default_quality(&dir_str), QUALITY_HD);
         save_default_quality(&dir_str, "hd").unwrap();
         assert_eq!(load_default_quality(&dir_str), QUALITY_HD);
         save_default_quality(&dir_str, "nope").unwrap();
-        assert_eq!(load_default_quality(&dir_str), QUALITY_AUTO);
+        assert_eq!(load_default_quality(&dir_str), QUALITY_HD);
         fs::remove_dir_all(&dir).unwrap();
     }
 

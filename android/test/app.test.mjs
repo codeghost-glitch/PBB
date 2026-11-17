@@ -35,8 +35,8 @@ function check(what, expected, actual) {
 function makeClassList() {
   const names = new Set();
   return {
-    add: (...c) => c.forEach((x) => names.add(x)),
-    remove: (...c) => c.forEach((x) => names.delete(x)),
+    add: (...c) => { for (const x of c) names.add(x); },
+    remove: (...c) => { for (const x of c) names.delete(x); },
     toggle: (c, force) => {
       const on = force === undefined ? !names.has(c) : Boolean(force);
       if (on) {
@@ -339,7 +339,9 @@ function javaBridgeMethods(java) {
   const methods = new Map();
   const declaration = /@JavascriptInterface\s+public\s+[\w<>\[\]]+\s+(\w+)\s*\(([^)]*)\)/g;
   let match;
-  while ((match = declaration.exec(java)) !== null) {
+  while (true) {
+    match = declaration.exec(java);
+    if (match === null) break;
     const args = match[2].trim();
     methods.set(match[1], args === "" ? 0 : args.split(",").length);
   }
@@ -351,7 +353,9 @@ function pageBridgeCalls(page) {
   const calls = new Map();
   const call = /Pbb\.(\w+)\s*\(/g;
   let match;
-  while ((match = call.exec(page)) !== null) {
+  while (true) {
+    match = call.exec(page);
+    if (match === null) break;
     calls.set(match[1], countCallArgs(page, match.index + match[0].length));
   }
   return calls;
@@ -532,7 +536,7 @@ function channelSourceContract() {
   check("the parser accepts the Live name suffix", true,
     /endsWith\(" Live"\)/.test(list));
   check("both livestream hosts are configured", true,
-    STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
+    STREAM_HOSTS.every((host) => java.includes(`"${host}"`)));
   check("the server chooser clamps to every server", true,
     /Math\.max\(0, Math\.min\(STREAM_HOSTS\.length \+ 1, index\)\)/.test(java));
   check("the pbb3 proxy server is configured", true,
@@ -573,16 +577,16 @@ function stitchAndServerContract() {
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
   check("the sources sheet offers every livestream server", true,
     /serverChips/s.test(app) && ["abslive", "absp-live", "pbb3"]
-      .every((label) => html.includes(">" + label + "</button>")));
+      .every((label) => html.includes(`>${label}</button>`)));
   check("auto plus three livestream servers are shown", 4,
     (html.match(/data-source="/g) || []).length);
   check("each host chip names its host on hover", true,
     STREAM_HOSTS.every((host) =>
-      html.includes("title=\"https://" + host + "/dash/live/2099522/\"")));
+      html.includes(`title="https://${host}/dash/live/2099522/"`)));
   check("the page clamps the server choice to every server", true,
     /Math\.min\(3, Number\(index\)/.test(app));
   check("both livestream hosts are in the list", true,
-    STREAM_HOSTS.every((host) => java.includes("\"" + host + "\"")));
+    STREAM_HOSTS.every((host) => java.includes(`"${host}"`)));
 }
 
 function playbackAndRecorderFixes() {
@@ -603,6 +607,13 @@ function playbackAndRecorderFixes() {
     !/selectVariantTrack\(chosen, true\)/s.test(app));
   check("hidden feeds are never downgraded to sd", true,
     !/qualityFor/s.test(app) && /applyQuality\(entry\.player, state\.quality\)/s.test(app));
+  const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
+  check("only hd and sd quality choices are shown", true,
+    !html.includes('data-quality="auto"') &&
+    ["hd", "sd"].every((q) => html.includes(`data-quality="${q}"`)));
+  check("saved auto quality migrates to hd", true,
+    /return value === "hd" \|\| value === "sd" \? value : "hd"/.test(app));
+  check("adaptive bitrate is off", true, /abr: \{ enabled: false \}/s.test(app));
 
   const page = loadPage();
   const heights = [180, 360, 720, 1080];

@@ -1,5 +1,5 @@
 const state = {
-  quality: "auto",
+  quality: "hd",
   focused: -1,
   pip: false,
   // Stream indices, not a single slot: every camera can record on its own.
@@ -72,7 +72,7 @@ const zoom = {
 
 function normalizeQuality(raw) {
   const value = String(raw || "").toLowerCase();
-  return value === "hd" || value === "sd" ? value : "auto";
+  return value === "hd" || value === "sd" ? value : "hd";
 }
 
 function uuidKid(kid) {
@@ -714,7 +714,7 @@ async function initPlayer(entry, index) {
       dash: { ignoreSuggestedPresentationDelay: true },
       retryParameters: retry(),
     },
-    abr: { enabled: state.quality === "auto" },
+    abr: { enabled: false },
   });
 
   player.addEventListener("error", (event) => {
@@ -769,10 +769,7 @@ function applyQuality(player, quality) {
   if (!player) {
     return;
   }
-  player.configure({ abr: { enabled: quality === "auto" } });
-  if (quality === "auto") {
-    return;
-  }
+  player.configure({ abr: { enabled: false } });
   const tracks = player.getVariantTracks().filter((track) => track.height > 0);
   if (!tracks.length) {
     return;
@@ -879,13 +876,13 @@ function updateDeckControls() {
 
 // m:ss, or h:mm:ss once a recording passes the hour. Tabular figures in the
 // stylesheet keep the tally from jittering as the digits change.
-// The gallery's light switch. A stored choice wins; without one the desk
-// follows the phone's own dark mode.
+// The gallery opens after hours. A stored choice wins; otherwise the
+// broadcast desk stays dark until the operator switches the lights on.
 const THEME_KEY = "pbb-theme";
-const THEME_COLORS = { light: "#FBF7DE", dark: "#171310" };
+const THEME_COLORS = { light: "#ECE9E2", dark: "#070A0F" };
 
-function systemTheme() {
-  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+function defaultTheme() {
+  return "dark";
 }
 
 function storedTheme() {
@@ -937,21 +934,7 @@ function wireTheme() {
       applyTheme(dark ? "light" : "dark", true);
     });
   }
-  applyTheme(storedTheme() || systemTheme(), false);
-  // While the desk has no stored choice it follows the phone's own setting.
-  if (window.matchMedia) {
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => {
-      if (!storedTheme()) {
-        applyTheme(systemTheme(), false);
-      }
-    };
-    if (query.addEventListener) {
-      query.addEventListener("change", onChange);
-    } else if (query.addListener) {
-      query.addListener(onChange);
-    }
-  }
+  applyTheme(storedTheme() || defaultTheme(), false);
 }
 
 function formatClock(totalSeconds) {
@@ -1203,8 +1186,7 @@ function swapMini() {
   }
   const previous = state.focused;
   // Both states must be in place before quality is re-applied, or the tile that
-  // is about to become the mini drops to sd and immediately back to hd, which
-  // clears its buffer twice.
+  // is about to become the mini reselects its variant and clears its buffer twice.
   focusStream(state.mini, true);
   setMini(previous);
 }

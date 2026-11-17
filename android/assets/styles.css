@@ -6,114 +6,95 @@
   font-display: swap;
 }
 
-/* A broadcast control desk: cream paper, ink outlines, hard offset shadows,
-   and one loud signal — the red tally on any camera that is recording. */
+/* Cinematic broadcast: black glass, amber signal, red only when recording.
+   The video is the light source; every surface around it stays quiet. */
 :root {
-  --paper: #FBF7DE;
-  --surface: #FFFDF5;
-  --ink: #14110C;
-  --muted: #6B6455;
-  --coral: #E8635A;
-  --coral-ink: #C0433B;
-  --teal: #4ECDC4;
-  --yellow: #FFE566;
-  --lavender: #C4B5FD;
-  --rec: #E93B2F;
-  --rec-wash: #FDF0EC;
+  color-scheme: light;
 
-  /* The colour a hard offset shadow is cast in, and the ink that stays legible
-     on top of the bright signal colours. */
-  --shade: var(--ink);
-  --on-bright: #14110C;
-  /* A hover lift, and the dot grid printed on the desk surface. */
-  --raise: #ffffff;
-  --dot: rgba(20, 17, 12, 0.08);
-
-  --line: 2px;
-  --border: var(--line) solid var(--ink);
-  --border-thin: 1.5px solid var(--ink);
-  /* The program bar and the status ticker are separated by one heavy rule
-     instead of another rounded card with a soft shadow. */
-  --console-rule: 3px solid var(--ink);
-
-  --r-sm: 8px;
-  --r-md: 14px;
-  --r-pill: 999px;
-
-  --shadow-1: 2px 2px 0 var(--shade);
-  --shadow-2: 4px 4px 0 var(--shade);
-  --shadow-3: 6px 6px 0 var(--shade);
+  --bg: #ECE9E2;
+  --bg-2: #F7F5F0;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: #FFFFFF;
+  --surface-2: #F1EEE7;
+  --line: rgba(20, 26, 35, 0.12);
+  --line-strong: rgba(20, 26, 35, 0.2);
+  --text: #151A21;
+  --muted: #66707E;
+  --accent: #C47719;
+  --accent-soft: rgba(196, 119, 25, 0.14);
+  --accent-ink: #FFFFFF;
+  --live: #0E8C73;
+  --rec: #E23B4C;
+  --rec-soft: rgba(226, 59, 76, 0.14);
+  --focus: #3E63DD;
+  --shadow: 0 18px 44px rgba(28, 34, 46, 0.16);
+  --shadow-soft: 0 8px 24px rgba(28, 34, 46, 0.1);
+  --glow: 0 0 0 1px rgba(196, 119, 25, 0.16), 0 0 36px rgba(196, 119, 25, 0.12);
+  --border: 1px solid var(--line);
+  --console-rule: 1px solid var(--line-strong);
+  --fs-glass: rgba(255, 255, 255, 0.82);
+  --fs-key: rgba(255, 255, 255, 0.72);
+  --fs-key-hi: rgba(255, 255, 255, 0.94);
+  --fs-line: rgba(20, 26, 35, 0.16);
+  --fs-text: #151A21;
+  --fs-muted: rgba(21, 26, 33, 0.62);
+  --fs-shade: rgba(28, 34, 46, 0.26);
+  --fs-accent: #C47719;
+  --fs-accent-wash: rgba(196, 119, 25, 0.16);
+  --fs-frame: rgba(255, 255, 255, 0.9);
 
   --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --t-xs: 0.68rem;
+  --t-sm: 0.78rem;
+  --t-md: 0.92rem;
+  --t-lg: 1.08rem;
+  --w-reg: 600;
+  --w-bold: 800;
 
-  /* One type system: four sizes, two weights. A console full of one-off
-     10px labels is hard to read on a phone and impossible to keep coherent. */
-  --t-xs: 0.7rem;
-  --t-sm: 0.82rem;
-  --t-md: 0.95rem;
-  --t-lg: 1.18rem;
-  --w-reg: 700;
-  --w-bold: 900;
-
-  /* 8-point grid, plus the smallest comfortable finger target. */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 32px;
   --tap: 48px;
-
-  /* Active keys wear a wash of the one accent, not a second bright colour.
-     Lavender stays only on the keyboard focus ring, where contrast is the job. */
-  --accent-wash: #FBE4DF;
-  --accent-line: rgba(232, 99, 90, 0.32);
-  --inner-light: rgba(255, 255, 255, 0.38);
-
-  /* Fullscreen chrome follows the desk theme: cream paper in the light,
-     charcoal with cream silkscreen after hours. Both are translucent so the
-     picture still reads behind them. */
-  --fs-glass: rgba(255, 253, 245, 0.88);
-  --fs-key: rgba(251, 247, 222, 0.92);
-  --fs-key-hi: rgba(255, 255, 255, 0.95);
-  --fs-line: #14110C;
-  --fs-text: #14110C;
-  --fs-muted: rgba(20, 17, 12, 0.55);
-  --fs-shade: rgba(20, 17, 12, 0.3);
-  --fs-accent: #E8635A;
-  --fs-accent-wash: #FBE4DF;
-  /* The monitor bezel is hardware on black glass: cream in either palette. */
-  --fs-frame: #F2E7CC;
+  --radius: 16px;
+  --radius-sm: 10px;
 }
 
-/* The gallery after hours: the room drops to warm charcoal so the monitors
-   carry the light, the silkscreen lines turn cream, and the red tally stays
-   the loudest thing on the desk - a tally is a lamp, not a colour. */
+/* Default first impression: the gallery after hours. Keep the alert red and
+   the live teal unchanged; only the room goes dark. */
 html[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #171310;
-  --surface: #241E17;
-  --ink: #F2E7CC;
-  --muted: #A2957A;
-  --coral: #FF6E61;
-  --coral-ink: #FF9389;
-  --teal: #56E3D6;
-  --yellow: #FFD84D;
-  --lavender: #C9B8FF;
-  --rec: #FF4A3D;
-  --rec-wash: #2B1613;
-  --shade: #060503;
-  --raise: #2E271E;
-  --dot: rgba(242, 231, 204, 0.07);
-  --accent-wash: #40241F;
-  --accent-line: rgba(255, 110, 97, 0.38);
-  --inner-light: rgba(255, 255, 255, 0.16);
-  --fs-glass: rgba(36, 30, 23, 0.88);
-  --fs-key: rgba(242, 231, 204, 0.09);
-  --fs-key-hi: rgba(242, 231, 204, 0.18);
-  --fs-line: #F2E7CC;
-  --fs-text: #F2E7CC;
-  --fs-muted: rgba(242, 231, 204, 0.62);
+  --bg: #070A0F;
+  --bg-2: #0D1118;
+  --surface: rgba(18, 23, 32, 0.88);
+  --surface-solid: #11161E;
+  --surface-2: #171D27;
+  --line: rgba(226, 235, 245, 0.1);
+  --line-strong: rgba(226, 235, 245, 0.18);
+  --text: #F2F5F8;
+  --muted: #8C99AA;
+  --accent: #FFB454;
+  --accent-soft: rgba(255, 180, 84, 0.14);
+  --accent-ink: #0A0C10;
+  --live: #57DCC0;
+  --rec: #FF4D5E;
+  --rec-soft: rgba(255, 77, 94, 0.16);
+  --focus: #8FA8FF;
+  --shadow: 0 20px 56px rgba(0, 0, 0, 0.52);
+  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.38);
+  --glow: 0 0 0 1px rgba(255, 180, 84, 0.16), 0 0 48px rgba(255, 180, 84, 0.1);
+  --fs-glass: rgba(11, 15, 21, 0.78);
+  --fs-key: rgba(235, 242, 250, 0.08);
+  --fs-key-hi: rgba(235, 242, 250, 0.16);
+  --fs-line: rgba(235, 242, 250, 0.14);
+  --fs-text: #F2F5F8;
+  --fs-muted: rgba(242, 245, 248, 0.6);
   --fs-shade: rgba(0, 0, 0, 0.55);
-  --fs-accent: #FF6E61;
-  --fs-accent-wash: rgba(255, 110, 97, 0.22);
+  --fs-accent: #FFB454;
+  --fs-accent-wash: rgba(255, 180, 84, 0.2);
+  --fs-frame: rgba(242, 245, 248, 0.82);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -127,91 +108,121 @@ body {
 
 body {
   margin: 0;
-  background-color: var(--paper);
-  background-image: radial-gradient(var(--dot) 1px, transparent 1.1px);
-  background-size: 17px 17px;
-  color: var(--ink);
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 12% -12%, rgba(255, 180, 84, 0.12), transparent 38%),
+    radial-gradient(circle at 92% 8%, rgba(87, 220, 192, 0.07), transparent 32%);
   font-family: var(--font);
   font-size: var(--t-md);
-  line-height: 1.5;
+  font-weight: var(--w-reg);
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 body.pip-mode {
-  background-color: #000000;
+  background-color: #000;
   background-image: none;
 }
 
-h1, h2, h3, p { margin: 0; color: var(--ink); text-transform: lowercase; }
+h1, h2, h3, p { margin: 0; color: inherit; }
 
 :focus { outline: none; }
 body.keyboard-focus :focus-visible {
-  outline: 3px solid var(--lavender);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
 }
 
 .page {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  padding: var(--sp-2);
-  height: 100%;
+  padding: var(--sp-3);
   overflow: hidden;
+}
+
+.page::before {
+  content: "";
+  position: absolute;
+  inset: 64px 0 72px;
+  background: radial-gradient(ellipse at 50% 8%, var(--accent-soft), transparent 58%);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------- header */
 
-/* Program rail: one flat strip, not a pill. The heavy bottom rule is the
-   desk's first structural line; the controls sit on the same plane. */
 .nav {
   position: relative;
   z-index: 20;
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
   flex: 0 0 auto;
-  padding: var(--sp-2);
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 64px;
+  padding: var(--sp-2) var(--sp-3);
   background: var(--surface);
   border: 0;
   border-bottom: var(--console-rule);
-  border-radius: 0;
-  box-shadow: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow-soft);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   min-width: 0;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
   display: grid;
   place-items: center;
+  width: 38px;
+  height: 38px;
   flex: 0 0 auto;
-  background: var(--yellow);
-  color: var(--ink);
+  color: var(--accent);
+  background: var(--accent-soft);
   border: var(--border);
-  border-radius: 8px;
-  box-shadow: 2px 2px 0 var(--shade);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
-.brand-copy { min-width: 0; }
+.brand-mark svg { width: 24px; height: 24px; display: block; }
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-copy p {
+  order: -1;
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 
 h1 {
+  color: var(--text);
   font-size: var(--t-lg);
   font-weight: var(--w-bold);
-  line-height: 1;
-  letter-spacing: -0.05em;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
-
-.brand-copy p { display: none; }
 
 .desk-actions {
   display: flex;
@@ -224,99 +235,102 @@ h1 {
 .live-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: var(--teal);
-  color: var(--on-bright);
-  border: var(--border-thin);
-  border-radius: var(--r-pill);
-  font-weight: var(--w-reg);
-  line-height: 1.35;
+  gap: 6px;
   flex: 0 0 auto;
+  color: var(--live);
+  background: rgba(87, 220, 192, 0.1);
+  border: 1px solid rgba(87, 220, 192, 0.24);
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.live-tag { padding: 3px 9px 3px 7px; font-size: var(--t-xs); box-shadow: var(--shadow-1); }
-.live-badge { padding: 1px 7px 1px 5px; font-size: var(--t-xs); }
+.live-tag { padding: 8px 10px; }
+.live-badge { padding: 5px 8px; }
 
 .live-pip {
   width: 6px;
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: var(--ink);
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(87, 220, 192, 0.14);
 }
 
-/* One housing for the three quality picks, so they read as a setting rather
-   than three separate buttons. */
 .seg {
   display: inline-flex;
-  align-items: stretch;
-  background: var(--surface);
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface-2);
   border: var(--border);
-  border-radius: 8px;
-  box-shadow: 2px 2px 0 var(--shade);
-  overflow: hidden;
+  border-radius: 12px;
 }
 
-.seg-label { display: none; }
+.seg-label {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 
 .seg-btn {
-  min-width: var(--tap);
-  min-height: var(--tap);
-  padding: var(--sp-1) var(--sp-2);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--sp-2);
+  color: var(--muted);
   background: transparent;
   border: 0;
-  border-right: var(--border-thin);
-  color: var(--ink);
-  font-family: inherit;
+  border-radius: 9px;
+  font-family: var(--font);
   font-size: var(--t-xs);
-  font-weight: var(--w-reg);
-  line-height: 1.3;
+  font-weight: var(--w-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: color 0.14s ease, background 0.14s ease;
 }
 
-.seg-btn:last-child { border-right: 0; }
 .seg-btn.active {
-  background: var(--accent-wash);
-  color: var(--ink);
-  box-shadow: inset 0 -3px 0 var(--coral);
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: 0 4px 14px rgba(255, 180, 84, 0.22);
 }
 
-/* The backlight switch: one key that puts the gallery into the night. */
 .desk-key {
-  display: inline-grid;
+  display: grid;
   place-items: center;
   width: var(--tap);
   height: var(--tap);
   flex: 0 0 auto;
   padding: 0;
-  background: var(--surface);
-  color: var(--ink);
+  color: var(--text);
+  background: var(--surface-2);
   border: var(--border);
-  border-radius: 8px;
-  box-shadow: 2px 2px 0 var(--shade), inset 0 1px 0 var(--inner-light);
+  border-radius: 12px;
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+  transition: transform 0.12s ease, background 0.14s ease;
 }
 
 .desk-key svg { width: 20px; height: 20px; display: block; }
-.desk-key:active { transform: translate(2px, 2px); box-shadow: inset 0 1px 0 var(--inner-light); }
-
-@media (hover: hover) and (pointer: fine) {
-  .desk-key:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shade), inset 0 1px 0 var(--inner-light); }
-}
+.desk-key:active { transform: scale(0.94); }
 
 /* ----------------------------------------------------------------- stage */
 
 .stage {
   position: relative;
+  z-index: 1;
   flex: 1 1 auto;
   min-height: 0;
   margin-top: var(--sp-2);
 }
 
-/* Monitor wall: one full-width program frame over two equal preview frames.
-   The gap is ink, the big frame carries the only large hard shadow. */
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -333,46 +347,42 @@ h1 {
 
 /* ----------------------------------------------------------------- cards */
 
-/* Every camera is a rack monitor: a numbered top strip, the picture, then a
-   key strip. Chrome owns its own lanes; nothing is painted over the feed. */
 .cam-card {
-  --key: 34px;
+  --key: 40px;
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 0;
   min-width: 0;
   min-height: 0;
-  padding: 0;
-  background: var(--surface);
-  border: var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-1);
   overflow: hidden;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--surface-solid);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-/* The program frame is the one bold element: a deeper hard shadow. */
-.cam-card:first-child { --key: 38px; box-shadow: var(--shadow-3); }
+.cam-card:first-child {
+  --key: 44px;
+  border-color: rgba(255, 180, 84, 0.32);
+  box-shadow: var(--shadow), var(--glow);
+}
 
-/* A recording card changes its border and hard shadow colour, so it reads as
-   "on air" from across the room. Steady, never pulsing. */
 .cam-card.rec {
-  background: var(--rec-wash);
   border-color: var(--rec);
-  box-shadow: 5px 5px 0 var(--rec);
-  animation: tally-on 0.45s ease-out;
+  box-shadow: var(--shadow), 0 0 0 1px var(--rec), 0 0 30px rgba(255, 77, 94, 0.2);
+  animation: tally-on 0.5s ease-out;
 }
 
 @keyframes tally-on {
-  0%   { box-shadow: 0 0 0 0 rgba(233, 59, 47, 0.55), 5px 5px 0 var(--rec); }
-  45%  { box-shadow: 0 0 0 8px rgba(233, 59, 47, 0.18), 5px 5px 0 var(--rec); }
-  100% { box-shadow: 0 0 0 0 rgba(233, 59, 47, 0), 5px 5px 0 var(--rec); }
+  0%   { box-shadow: var(--shadow), 0 0 0 0 rgba(255, 77, 94, 0.45); }
+  55%  { box-shadow: var(--shadow), 0 0 0 10px rgba(255, 77, 94, 0); }
+  100% { box-shadow: var(--shadow), 0 0 0 1px var(--rec), 0 0 30px rgba(255, 77, 94, 0.2); }
 }
 
 @keyframes tally-pop {
-  from { transform: scale(0.7); opacity: 0; }
+  from { transform: scale(0.82); opacity: 0; }
   to   { transform: scale(1); opacity: 1; }
 }
 
@@ -381,38 +391,40 @@ h1 {
   align-items: center;
   gap: var(--sp-2);
   flex: 0 0 auto;
-  min-height: 28px;
+  min-height: 36px;
   padding: var(--sp-1) var(--sp-2);
-  background: var(--paper);
+  background: linear-gradient(180deg, var(--surface-2), transparent);
+  border: 0;
   border-bottom: var(--border);
 }
 
 .cam-num {
-  flex: none;
-  min-width: 22px;
-  padding: 1px 4px;
-  background: var(--yellow);
-  color: var(--on-bright);
-  border: var(--border-thin);
-  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-radius: 7px;
+  font-family: var(--mono);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
-  line-height: 1.4;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .cam-title {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  color: var(--text);
   font-size: var(--t-sm);
-  font-weight: var(--w-reg);
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-  text-transform: lowercase;
+  font-weight: var(--w-bold);
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .live-badge { margin-left: auto; }
@@ -420,16 +432,16 @@ h1 {
 .tally {
   display: none;
   align-items: center;
-  gap: 5px;
-  padding: 1px 6px;
+  gap: 6px;
+  padding: 5px 8px;
+  color: #fff;
   background: var(--rec);
-  color: #FFFFFF;
-  border: var(--border-thin);
-  border-radius: 4px;
+  border-radius: 999px;
   font-size: var(--t-xs);
-  font-weight: var(--w-reg);
-  line-height: 1.35;
-  font-variant-numeric: tabular-nums;
+  font-weight: var(--w-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .cam-card.rec .tally { display: inline-flex; animation: tally-pop 0.35s ease-out; }
@@ -439,19 +451,27 @@ h1 {
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: #FFFFFF;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
 }
 
-.tally-time { letter-spacing: 0.02em; }
+.tally-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 .video-wrap {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  background: #000000;
-  border: 0;
-  border-radius: 0;
   overflow: hidden;
+  background: #000;
+}
+
+.video-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.24));
 }
 
 .video-wrap video {
@@ -459,56 +479,60 @@ h1 {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #000000;
+  background: #000;
 }
 
 .stream-status {
   position: absolute;
-  left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  left: 50%;
   z-index: 3;
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  max-width: calc(100% - var(--sp-3));
+  max-width: calc(100% - var(--sp-4));
   overflow: hidden;
-  padding: var(--sp-1) var(--sp-3);
-  background: var(--surface);
-  border: var(--border-thin);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-1);
+  padding: 8px 14px;
+  color: var(--text);
+  background: var(--fs-glass);
+  border: 1px solid var(--fs-line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
   font-size: var(--t-sm);
   font-weight: var(--w-reg);
-  line-height: 1.4;
-  white-space: nowrap;
+  line-height: 1.3;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   pointer-events: none;
 }
 
-/* A breathing lamp says "still working" without shouting. The red lamp on an
-   error is steady - an error should read as a fact, not an alarm. */
 .stream-status::before {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   flex: none;
   border-radius: 50%;
-  background: var(--teal);
-  animation: signal 1.8s ease-out infinite;
+  background: var(--live);
+  animation: signal 1.9s ease-out infinite;
 }
 
 @keyframes signal {
-  0%   { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.55); }
-  70%  { box-shadow: 0 0 0 7px rgba(78, 205, 196, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(87, 220, 192, 0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(87, 220, 192, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(87, 220, 192, 0); }
 }
 
-.stream-status.bad { background: var(--rec); color: #FFFFFF; border-color: var(--rec); }
-.stream-status.bad::before { background: #FFFFFF; animation: none; box-shadow: none; }
+.stream-status.bad {
+  color: #fff;
+  background: var(--rec);
+  border-color: var(--rec);
+}
 
-/* The frame carries the state too: a slow scan while the signal comes up, a
-   dim edge wash when it drops. Both clear the moment the feed is live. */
+.stream-status.bad::before { background: #fff; animation: none; box-shadow: none; }
+
 .cam-card.connecting .video-wrap::after,
 .cam-card.offline .video-wrap::after {
   content: "";
@@ -519,13 +543,13 @@ h1 {
 }
 
 .cam-card.connecting .video-wrap::after {
-  background: linear-gradient(180deg, transparent 0%, rgba(78, 205, 196, 0.18) 48%, transparent 52%);
+  background: linear-gradient(180deg, transparent 0%, rgba(87, 220, 192, 0.16) 48%, transparent 52%);
   background-size: 100% 220%;
   animation: scan 2.8s linear infinite;
 }
 
 .cam-card.offline .video-wrap::after {
-  background: radial-gradient(ellipse at center, transparent 35%, rgba(233, 59, 47, 0.16) 100%);
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(255, 77, 94, 0.18) 100%);
 }
 
 @keyframes scan {
@@ -541,7 +565,8 @@ h1 {
   flex: 0 0 auto;
   min-height: calc(var(--key) + 8px);
   padding: var(--sp-1) var(--sp-2);
-  background: var(--surface);
+  background: linear-gradient(0deg, var(--surface-2), transparent);
+  border: 0;
   border-top: var(--border);
 }
 
@@ -554,145 +579,145 @@ h1 {
   gap: var(--sp-2);
   min-height: var(--tap);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--coral);
-  color: #FFFFFF;
-  border: var(--border);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-2), inset 0 1px 0 var(--inner-light);
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 22px rgba(255, 180, 84, 0.2);
   font-family: var(--font);
-  font-weight: var(--w-reg);
   font-size: var(--t-md);
-  line-height: 1.3;
+  font-weight: var(--w-bold);
+  line-height: 1.2;
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
   -webkit-appearance: none;
   appearance: none;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.12s ease, filter 0.14s ease;
 }
 
-.btn:active { transform: translate(3px, 3px); box-shadow: inset 0 1px 0 var(--inner-light); }
-.btn-ghost { background: var(--surface); color: var(--ink); }
-
-/* Hover only for real pointers: on touch the hover state latches after a tap
-   and leaves the button stuck on its hover colour. */
-@media (hover: hover) and (pointer: fine) {
-  .btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shade), inset 0 1px 0 var(--inner-light); }
-  .btn-ghost:hover { background: var(--paper); }
-  .seg-btn:hover { background: var(--paper); }
-  .seg-btn.active:hover { background: var(--accent-wash); }
+.btn:active { transform: scale(0.97); }
+.btn-ghost {
+  color: var(--text);
+  background: var(--surface-2);
+  border: var(--border);
+  box-shadow: none;
 }
 
 .btn-icon {
   width: var(--tap);
   height: var(--tap);
-  padding: 0;
-  border-radius: 8px;
   flex: 0 0 auto;
+  padding: 0;
+  border-radius: 12px;
 }
 
 .btn-icon svg { width: 20px; height: 20px; display: block; }
-[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+[disabled] { opacity: 0.42; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .cam-actions .btn-icon {
   position: relative;
   width: var(--key);
   height: var(--key);
   padding: 0;
-  background: var(--paper);
-  color: var(--ink);
-  border: var(--border-thin);
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 var(--shade);
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
 }
 
-.cam-actions .btn-icon svg { width: 18px; height: 18px; }
+.cam-actions .btn-icon svg { width: 19px; height: 19px; }
 
-/* Invisible 44px target: the console keeps its dense keys, the finger gets a
-   comfortable one. */
+/* Visible key stays compact; the touch target stays a full 44px. */
 .cam-actions .btn-icon::after {
   content: "";
   position: absolute;
-  inset: -7px -5px;
+  inset: -6px;
 }
 
 .cam-actions .btn-icon.active {
-  background: var(--accent-wash);
-  color: var(--ink);
-  border-color: var(--accent-line);
-  box-shadow: inset 0 -3px 0 var(--coral);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
-.cam-actions .record-btn { color: var(--coral-ink); }
+.cam-actions .record-btn { color: var(--rec); }
 .cam-actions .record-btn svg circle,
 .cam-actions .record-btn svg rect { fill: currentColor; }
 
 .cam-actions .record-btn.recording {
+  color: #fff;
   background: var(--rec);
-  color: #FFFFFF;
-  border-color: var(--ink);
+  box-shadow: 0 0 20px rgba(255, 77, 94, 0.3);
 }
 
 /* ---------------------------------------------------------------- footer */
 
-/* Status ticker: a flat strip under the monitor wall. The heavy top rule
-   closes the console; the LED and keys stay on the same plane. */
 .status {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   flex: 0 0 auto;
+  min-height: 64px;
   margin-top: var(--sp-2);
-  padding: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
   background: var(--surface);
   border: 0;
   border-top: var(--console-rule);
-  border-radius: 0;
-  box-shadow: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow-soft);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 .status-led {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   flex: none;
-  background: var(--teal);
-  border: var(--border-thin);
   border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 0 4px rgba(87, 220, 192, 0.12);
 }
 
-.recording .status-led { background: var(--rec); }
+.recording .status-led {
+  background: var(--rec);
+  box-shadow: 0 0 0 4px rgba(255, 77, 94, 0.14);
+}
 
 .status.success .status-led { animation: led-done 0.9s ease-out; }
 
 @keyframes led-done {
-  from { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.7); }
-  to   { box-shadow: 0 0 0 12px rgba(78, 205, 196, 0); }
+  from { box-shadow: 0 0 0 0 rgba(87, 220, 192, 0.6); }
+  to   { box-shadow: 0 0 0 14px rgba(87, 220, 192, 0); }
 }
 
 #statusText {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  color: var(--text);
   font-size: var(--t-sm);
   font-weight: var(--w-reg);
-  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rec-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex: 0 0 auto;
-  padding: 1px 8px 1px 6px;
+  padding: 6px 10px;
+  color: #fff;
   background: var(--rec);
-  color: #FFFFFF;
-  border: var(--border-thin);
-  border-radius: var(--r-pill);
+  border-radius: 999px;
+  font-family: var(--mono);
   font-size: var(--t-xs);
-  font-weight: var(--w-reg);
+  font-weight: var(--w-bold);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .rec-badge-dot {
@@ -700,29 +725,29 @@ h1 {
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: #FFFFFF;
+  background: #fff;
 }
 
-.rec-badge-label { font-weight: var(--w-reg); opacity: 0.85; }
+.rec-badge-label { opacity: 0.82; }
 
-/* The stitched clip is a recording too, so its key goes tally red while it
-   runs. */
 #stitchBtn.stitch-active {
+  color: #fff;
   background: var(--rec);
-  color: #FFFFFF;
-  border-color: var(--ink);
+  box-shadow: 0 0 20px rgba(255, 77, 94, 0.28);
 }
 
 .status .btn-icon {
   width: var(--tap);
   height: var(--tap);
-  background: var(--paper);
-  border: var(--border-thin);
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 var(--shade);
+  color: var(--muted);
+  background: var(--surface-2);
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: none;
 }
 
-.status .btn-icon svg { width: 18px; height: 18px; }
+.status .btn-icon.active { color: var(--accent); }
+.status .btn-icon svg { width: 19px; height: 19px; }
 
 .hidden { display: none !important; }
 
@@ -735,10 +760,11 @@ h1 {
 }
 
 .focus-mode .grid .cam-card:first-child { grid-column: auto; }
+
 .focus-mode .cam-card:not(.focused),
 body.fullscreen-mode .cam-card:not(.focused) {
-  /* Stay in the layout at 1px instead of display:none: a hidden video stops
-     decoding, which is why the mini tile came up black for a second. */
+  /* Keep hidden decoders alive in a 1px box; display:none made the mini tile
+     come up black for a second while it re-buffered. */
   position: fixed;
   top: 0;
   left: 0;
@@ -749,23 +775,24 @@ body.fullscreen-mode .cam-card:not(.focused) {
   pointer-events: none;
   z-index: -1;
 }
-.focus-mode .cam-card.focused { box-shadow: var(--shadow-3); }
+
+.focus-mode .cam-card.focused { box-shadow: var(--glow), var(--shadow); }
 
 .focus-mode .video-wrap {
   flex: 0 0 auto;
-  aspect-ratio: 16 / 9;
+  width: 100%;
   height: auto;
   min-height: 0;
   max-height: 70vh;
+  aspect-ratio: 16 / 9;
   margin: 0 auto;
-  width: 100%;
 }
 
 .pip-mode .page,
 body.fullscreen-mode .page {
-  padding: 0;
   max-width: none;
   margin: 0;
+  padding: 0;
 }
 
 .pip-mode .nav,
@@ -791,18 +818,15 @@ body.fullscreen-mode .grid {
 .pip-mode .cam-card.focused,
 body.fullscreen-mode .cam-card.focused {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   width: auto;
   height: auto;
   margin: 0;
   padding: 0;
+  background: #000;
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  background: #000000;
   overflow: hidden;
   z-index: 50;
 }
@@ -811,16 +835,17 @@ body.fullscreen-mode .cam-card.focused {
 body.fullscreen-mode .video-wrap {
   position: absolute;
   top: 0;
-  left: 0;
   right: 0;
   bottom: 0;
+  left: 0;
   width: auto;
   height: auto;
   max-height: none;
   aspect-ratio: auto;
+  margin: 0;
+  background: #000;
   border: 0;
   border-radius: 0;
-  background: #000000;
   overflow: hidden;
 }
 
@@ -834,9 +859,8 @@ body.fullscreen-mode .video-wrap video {
   object-fit: contain;
 }
 
-/* Fullscreen controls: the same two-column keypad, now in the top-right
-   corner. It floats over the picture only while it is up; the video keeps
-   its centred frame and never changes size when the keypad is shown. */
+/* ------------------------------------------------------ fullscreen keys */
+
 .fs-controls {
   position: fixed;
   top: 10px;
@@ -847,46 +871,42 @@ body.fullscreen-mode .video-wrap video {
   display: none;
 }
 
-/* The deck is smoked glass, not a bright desk card: over a black picture it
-   should read as chrome that belongs to the monitor, not a second screen. */
 .fs-deck {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
   width: max-content;
-  padding: var(--sp-1);
+  padding: var(--sp-2);
   background: var(--fs-glass);
-  border: 2px solid var(--fs-line);
-  border-radius: var(--r-md);
-  box-shadow: 0 8px 28px var(--fs-shade);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  border: 1px solid var(--fs-line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
 }
 
-/* A tiny on-air strip, centred in the keypad header. The camera number is
-   already in the channel bug, so it is not repeated here. */
 .fs-head {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0 var(--sp-1);
-  border-bottom: 1.5px solid var(--fs-muted);
+  padding: 2px 4px var(--sp-2);
+  border-bottom: 1px solid var(--fs-line);
   color: var(--fs-text);
 }
 
 .fs-air {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  white-space: nowrap;
+  gap: 6px;
   color: var(--fs-text);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
-  letter-spacing: 0.08em;
-  text-transform: lowercase;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.fs-air .live-pip { background: var(--fs-accent); }
+.fs-air .live-pip { background: var(--fs-accent); box-shadow: none; }
 
 .fs-keys {
   display: grid;
@@ -899,55 +919,55 @@ body.fullscreen-mode .video-wrap video {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   width: var(--tap);
   min-height: var(--tap);
   padding: var(--sp-1);
-  background: var(--fs-key);
   color: var(--fs-text);
-  border: 1.5px solid var(--fs-muted);
-  border-radius: 9px;
-  box-shadow: inset 0 1px 0 var(--inner-light);
-  font-family: inherit;
+  background: var(--fs-key);
+  border: 1px solid var(--fs-line);
+  border-radius: 12px;
+  font-family: var(--font);
   font-size: var(--t-xs);
-  font-weight: var(--w-reg);
+  font-weight: var(--w-bold);
   line-height: 1;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: transform 0.06s ease, background 0.12s ease, box-shadow 0.12s ease;
+  transition: transform 0.1s ease, background 0.14s ease;
 }
 
 .fs-glyph { display: flex; }
 .fs-glyph svg { width: 18px; height: 18px; }
+.fs-key:active { transform: scale(0.94); }
 
-.fs-key:active { transform: translate(2px, 2px); box-shadow: none; }
 .fs-key.active {
-  background: var(--fs-accent-wash);
   color: var(--fs-text);
+  background: var(--fs-accent-wash);
   border-color: var(--fs-accent);
-  box-shadow: inset 0 -3px 0 var(--fs-accent);
 }
-.fs-key:disabled { opacity: 0.45; cursor: default; }
+
+.fs-key:disabled { opacity: 0.4; cursor: default; }
+
 .fs-exit {
   grid-column: 1 / -1;
   width: auto;
+  color: var(--accent-ink);
   background: var(--fs-accent);
-  color: #14110C;
   border-color: var(--fs-accent);
 }
-.fs-exit:active { background: var(--coral-ink); }
 
 @media (hover: hover) {
   .fs-key:not(.fs-exit):not(.lock-btn):hover { background: var(--fs-key-hi); }
-  .fs-exit:hover { background: var(--coral-ink); color: var(--fs-text); }
+  .fs-exit:hover { filter: brightness(1.08); }
 }
 
 body.fullscreen-mode .fs-controls {
   display: flex;
   opacity: 0;
   visibility: hidden;
-  transform: translate(6px, -6px);
+  transform: translate(8px, -8px);
   pointer-events: none;
-  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0s linear 0.14s;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
 }
 
 body.fullscreen-mode.controls-visible .fs-controls {
@@ -955,49 +975,49 @@ body.fullscreen-mode.controls-visible .fs-controls {
   visibility: visible;
   transform: translate(0, 0);
   pointer-events: auto;
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-/* A dropped or still-connecting feed must still speak when the picture is the
-   whole screen. The mini tile stays a clean monitor with no status of its own. */
 body.fullscreen-mode .cam-card.focused .stream-status {
-  padding: var(--sp-2) var(--sp-3);
-  font-size: var(--t-sm);
-  background: var(--fs-glass);
+  padding: 10px 16px;
   color: var(--fs-text);
-  border: 1.5px solid var(--fs-muted);
-  box-shadow: 0 6px 20px var(--fs-shade);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: var(--fs-glass);
+  border: 1px solid var(--fs-line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: var(--t-sm);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 body.fullscreen-mode .cam-card.focused .stream-status.bad {
+  color: #fff;
   background: var(--rec);
-  color: #FFFFFF;
   border-color: var(--rec);
 }
 
 body.fullscreen-mode .cam-card.mini .stream-status { display: none !important; }
-
-/* In fullscreen the picture is the whole screen: no tally chip, no clock.
-   The recording still shows on the card in the grid and in the footer. */
 body.fullscreen-mode .tally { display: none; }
 
 body.locked .fs-head,
 body.locked .fs-key:not(.lock-btn) { display: none; }
 body.locked .fs-keys { grid-template-columns: var(--tap); }
-body.locked .lock-btn { background: var(--yellow); color: #14110C; border-color: var(--yellow); }
+body.locked .lock-btn {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
 
 @media (max-height: 320px) {
   .fs-key { min-height: 38px; }
   .fs-head { display: none; }
 }
 
-/* In-app mini tile: the same small floating monitor as before, now in the
-   bottom-right corner. The keypad is above it in the top-right corner. No
-   dock, no number, no status: the card is just its picture. */
+/* The mini monitor is a clean floating picture: no number, no strip, no
+   status. It sits above the video and below the keypad and toast. */
 body.fullscreen-mode .cam-card.mini {
   display: block !important;
+  opacity: 1;
   position: fixed;
   top: auto;
   right: 10px;
@@ -1005,28 +1025,22 @@ body.fullscreen-mode .cam-card.mini {
   bottom: 10px;
   bottom: max(10px, env(safe-area-inset-bottom));
   left: auto;
-  /* Above the focused card (50), below the controls (90) and indicator (95):
-     a lower value paints the tile behind the fullscreen video. */
   z-index: 60;
-  opacity: 1;
-  pointer-events: auto;
   width: 26vw;
   max-width: 180px;
-  /* The card's own ratio sizes the tile; the fullscreen .video-wrap fills it. */
-  aspect-ratio: 16 / 9;
   height: auto;
   min-height: 0;
   margin: 0;
   padding: 0;
+  aspect-ratio: 16 / 9;
+  background: #000;
   border: 2px solid var(--fs-frame);
-  border-radius: var(--r-sm);
-  box-shadow: 0 8px 24px var(--fs-shade);
-  background: #000000;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
   overflow: hidden;
+  pointer-events: auto;
 }
 
-/* The fullscreen rules above hide the top strip, key strip and stream
-   status, so the mini monitor is just its picture. */
 .cam-card.mini .tally { display: none; }
 
 body.fullscreen-mode .cam-card.mini .cam-top,
@@ -1035,52 +1049,54 @@ body.fullscreen-mode .cam-card.mini .cam-actions { display: none !important; }
 body.fullscreen-mode .cam-card.mini .video-wrap {
   position: absolute;
   top: 0;
-  left: 0;
   right: 0;
   bottom: 0;
+  left: 0;
   width: 100%;
   height: 100%;
 }
+
+/* ------------------------------------------------------------- indicator */
 
 .indicator {
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
   z-index: 95;
-  max-width: calc(100vw - 32px);
-  padding: 9px 16px;
-  background: var(--surface);
-  color: var(--ink);
-  border: var(--border);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-2);
-  font-weight: var(--w-reg);
-  font-size: var(--t-md);
+  max-width: calc(100vw - var(--sp-4));
+  padding: 10px 16px;
+  color: var(--text);
+  background: var(--fs-glass);
+  border: 1px solid var(--fs-line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: var(--t-sm);
+  font-weight: var(--w-bold);
   text-align: center;
   overflow-wrap: anywhere;
-  text-transform: lowercase;
+  transform: translate(-50%, -50%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   pointer-events: none;
 }
 
-/* Fullscreen turns the toast into a channel bug in the corner: the feed name
-   reads without covering the middle of the picture. */
+/* Fullscreen turns the toast into a channel bug in the corner. */
 body.fullscreen-mode .indicator {
   top: max(10px, env(safe-area-inset-top));
   left: max(10px, env(safe-area-inset-left));
   transform: none;
   max-width: min(60vw, 320px);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--fs-glass);
   color: var(--fs-text);
-  border: 1.5px solid var(--fs-muted);
-  border-left: 4px solid var(--fs-accent);
-  border-radius: var(--r-sm);
-  box-shadow: 0 6px 20px var(--fs-shade);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: var(--fs-glass);
+  border: 1px solid var(--fs-line);
+  border-left: 3px solid var(--fs-accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
   font-size: var(--t-sm);
   text-align: left;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   animation: bug-in 0.24s ease-out;
 }
 
@@ -1089,8 +1105,8 @@ body.fullscreen-mode .indicator {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* The source sheet: a card on the desk where a new manifest, kid and key
-   go in. The page reads a pasted line the same way the web tool does. */
+/* ----------------------------------------------------------- source sheet */
+
 .sheet {
   position: fixed;
   inset: 0;
@@ -1098,43 +1114,51 @@ body.fullscreen-mode .indicator {
   display: grid;
   place-items: end center;
   padding: 0;
-  background: rgba(20, 17, 12, 0.45);
+  background: rgba(2, 4, 7, 0.68);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
 }
 
 .sheet-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   width: min(520px, 100%);
   max-height: min(88vh, calc(100vh - var(--sp-3)));
   overflow-y: auto;
-  padding: var(--sp-3);
-  padding-bottom: max(var(--sp-3), env(safe-area-inset-bottom));
-  background: var(--surface);
-  border: var(--border);
+  padding: var(--sp-4);
+  padding-bottom: max(var(--sp-4), env(safe-area-inset-bottom));
+  color: var(--text);
+  background: var(--surface-solid);
+  border: 1px solid var(--line-strong);
   border-bottom: 0;
-  border-radius: var(--r-md) var(--r-md) 0 0;
-  box-shadow: var(--shadow-3);
+  border-radius: 24px 24px 0 0;
+  box-shadow: var(--shadow);
+  animation: sheet-in 0.22s ease-out;
 }
 
-/* A grab handle tells the hand this sheet came up from the bottom. */
+@keyframes sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
 .sheet-panel::before {
   content: "";
   align-self: center;
   width: 40px;
   height: 4px;
   margin-bottom: var(--sp-1);
-  border-radius: var(--r-pill);
+  border-radius: 999px;
   background: var(--muted);
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 @media (min-width: 600px) {
   .sheet { place-items: center; padding: var(--sp-3); }
   .sheet-panel {
-    border-bottom: var(--border);
-    border-radius: var(--r-md);
-    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--line-strong);
+    border-radius: 24px;
+    padding-bottom: var(--sp-4);
   }
   .sheet-panel::before { display: none; }
 }
@@ -1147,11 +1171,11 @@ body.fullscreen-mode .indicator {
 }
 
 .sheet-head h2 {
-  margin: 0;
-  font-size: var(--t-md);
-  font-weight: var(--w-reg);
-  letter-spacing: 0.06em;
-  text-transform: lowercase;
+  color: var(--text);
+  font-size: var(--t-lg);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .sheet-chips {
@@ -1165,63 +1189,60 @@ body.fullscreen-mode .indicator {
   align-items: center;
   min-height: var(--tap);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--paper);
-  color: var(--ink);
-  border: var(--border-thin);
-  border-radius: var(--r-pill);
-  font-family: inherit;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: var(--border);
+  border-radius: 999px;
+  font-family: var(--font);
   font-size: var(--t-sm);
-  font-weight: var(--w-reg);
-  text-transform: lowercase;
+  font-weight: var(--w-bold);
+  letter-spacing: 0.02em;
   cursor: pointer;
   touch-action: manipulation;
+  transition: color 0.14s ease, background 0.14s ease;
 }
 
 .chip.active {
-  background: var(--accent-wash);
-  color: var(--ink);
-  border-color: var(--accent-line);
-  box-shadow: inset 0 -3px 0 var(--coral);
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .sheet-field {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: var(--sp-2);
 }
 
 .sheet-field span {
   color: var(--muted);
   font-size: var(--t-xs);
-  font-weight: var(--w-reg);
-  letter-spacing: 0.05em;
-  text-transform: lowercase;
+  font-weight: var(--w-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .sheet-input {
   width: 100%;
   min-height: var(--tap);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--paper);
-  color: var(--ink);
-  border: var(--border-thin);
-  border-radius: var(--r-sm);
-  /* Machine-readable fields get the monospace face: a 32-char key is read
-     character by character, not as prose. */
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
   font-size: var(--t-sm);
 }
 
 .sheet-input:focus {
-  outline: 2px solid var(--coral);
-  outline-offset: 1px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .sheet-note {
-  margin: 0;
   color: var(--muted);
   font-size: var(--t-sm);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .sheet-actions {
@@ -1230,67 +1251,56 @@ body.fullscreen-mode .indicator {
   justify-content: flex-end;
 }
 
-/* The primary action gets the wider, easier-to-reach half of the row. */
 .sheet-actions .btn:last-child { flex: 1 1 auto; }
 
 /* --------------------------------------------------------- tight layouts */
 
-/* One-row desk on phones: mark, live count, quality, backlight. */
 @media (max-width: 559px) {
-  .nav { padding: var(--sp-1) var(--sp-2); gap: var(--sp-1); }
-  .brand { gap: var(--sp-2); }
-  .brand-mark { width: 30px; height: 30px; }
+  .page { padding: var(--sp-2); }
+  .nav { gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); }
+  .brand-mark { width: 34px; height: 34px; }
   .desk-actions { gap: var(--sp-1); }
-  .seg-btn { min-width: 34px; padding: var(--sp-1) var(--sp-2); }
+  .seg { padding: 3px; }
+  .seg-label { display: none; }
+  .seg-btn { min-width: 38px; }
+  .status { padding: var(--sp-1) var(--sp-2); }
+}
+
+@media (max-width: 479px) {
+  .brand-copy p { display: none; }
+  .live-tag { display: none; }
 }
 
 @media (max-width: 359px) {
-  .live-tag { display: none; }
-  .seg-btn { min-width: 30px; padding: var(--sp-1); }
+  h1 { font-size: var(--t-md); }
+  .seg-btn { min-width: 34px; padding: 0 var(--sp-1); }
+  .status .btn-icon { width: 42px; height: 42px; }
 }
 
-/* Phone-sized cards keep their rack strips; only the chrome gets thinner.
-   Kept last so it also wins over the focus-mode rules above. */
+/* Phone-sized cards keep their lanes; only the chrome gets thinner. */
 @media (max-width: 520px), (max-height: 520px) {
-  .cam-card { --key: 30px; }
-  .cam-card:first-child { --key: 34px; }
-  .cam-top { min-height: 24px; padding: var(--sp-1) var(--sp-2); gap: var(--sp-1); }
-  .cam-num { min-width: 20px; }
+  .cam-card { --key: 36px; }
+  .cam-card:first-child { --key: 40px; }
+  .cam-top { min-height: 30px; }
   .live-badge { display: none; }
-  .tally { padding: var(--sp-1) var(--sp-2); }
+  .tally { padding: 4px 7px; }
   .tally-label { display: none; }
-
-  .cam-actions { min-height: calc(var(--key) + 8px); padding: var(--sp-1) var(--sp-2); gap: 0; }
-  .cam-actions .btn-icon {
-    border: 0;
-    border-radius: 5px;
-    background: transparent;
-    box-shadow: none;
-  }
+  .cam-actions { min-height: calc(var(--key) + 8px); }
   .cam-actions .btn-icon svg { width: 18px; height: 18px; }
-  .cam-actions .btn-icon.active {
-    background: var(--accent-wash);
-    color: var(--ink);
-    border-color: var(--accent-line);
-    box-shadow: inset 0 -3px 0 var(--coral);
-  }
-  .cam-actions .record-btn.recording { background: var(--rec); }
 
   .focus-mode .grid { align-items: stretch; }
   .focus-mode .cam-card { height: 100%; }
   .focus-mode .video-wrap {
-    aspect-ratio: auto;
-    max-height: none;
     width: auto;
     height: auto;
+    max-height: none;
+    aspect-ratio: auto;
     margin: 0;
   }
 }
 
-/* On the narrowest cards the expanded targets would touch, so step the
-   horizontal edge back rather than let a tap land on the wrong key. */
 @media (max-width: 359px) {
-  .cam-actions .btn-icon::after { inset: -7px -3px; }
+  .cam-actions .btn-icon::after { inset: -6px -3px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

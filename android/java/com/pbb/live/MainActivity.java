@@ -120,9 +120,9 @@ public class MainActivity extends Activity {
     // started together, so recording all three is one tap and one dialog.
     private final ArrayList<Integer> pendingRecordIndices = new ArrayList<Integer>();
     private final ArrayList<String> pendingRecordLabels = new ArrayList<String>();
-    // The gallery's light switch: the page owns the choice, the shell follows
+    // The gallery opens after hours: the page owns the choice, the shell follows
     // it so the window behind the WebView and the system bar icons match.
-    private boolean darkTheme = false;
+    private boolean darkTheme = true;
     private float appVolumeLevel = -1f;
     private float appBrightnessLevel = -1f;
     private int savedSystemVolume = -1;
@@ -625,8 +625,8 @@ public class MainActivity extends Activity {
     }
 
     // The bars sit over the desk, so the icon glyphs have to fight whatever
-    // the page is painted: dark glyphs on the cream day desk, pale glyphs on
-    // the charcoal night one.
+    // the page is painted: dark glyphs on the daylight desk, pale glyphs on
+    // the near-black night one.
     private void applyBarIconAppearance() {
         View decor = getWindow().getDecorView();
         boolean dark = darkTheme;
@@ -651,7 +651,7 @@ public class MainActivity extends Activity {
     // there is no pale flash before the first frame of a dark gallery.
     private void applyTheme(boolean dark) {
         darkTheme = dark;
-        int background = dark ? 0xFF171310 : 0xFFFAFADF;
+        int background = dark ? 0xFF070A0F : 0xFFECE9E2;
         if (rootView != null) {
             rootView.setBackgroundColor(background);
         }

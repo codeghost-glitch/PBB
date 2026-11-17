@@ -310,7 +310,7 @@ public class RecordService extends Service {
                 session = new Session(index, mpdUrl, key,
                     name == null ? "PBB_recording.mp4" : name,
                     streamName == null ? "camera " + (index + 1) : streamName,
-                    quality == null ? "auto" : quality);
+                    quality == null ? "hd" : quality);
                 sessions.put(index, session);
             }
         }
@@ -789,12 +789,9 @@ public class RecordService extends Service {
     /**
      * The recorder cannot adapt the way the page does, so it picks one
      * representation and sticks to it. The rules are the page's rules: hd is
-     * the tallest variant the feed publishes, sd is the shortest. auto takes
-     * the tallest variant that is at most 1280 wide, so a recording that
-     * cannot adapt still keeps a sane file size.
+     * the tallest variant the feed publishes, sd is the shortest.
      */
     static Track pickVideo(List<Track> tracks, String quality, long liveStart) {
-        int ceiling = "auto".equals(quality) ? 1280 : Integer.MAX_VALUE;
         Track best = null;
         Track fallback = null;
         Track smallest = null;
@@ -811,9 +808,6 @@ public class RecordService extends Service {
             if (smallest == null || t.width < smallest.width
                 || (t.width == smallest.width && t.bandwidth < smallest.bandwidth)) {
                 smallest = t;
-            }
-            if (t.width > 0 && t.width > ceiling) {
-                continue;
             }
             if (best == null || t.width > best.width
                 || (t.width == best.width && t.bandwidth > best.bandwidth)) {

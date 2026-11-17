@@ -126,9 +126,9 @@ public final class RecorderLogicTest {
         // sd is the shortest one.
         check("sd pick", "v360-$Number$.m4s",
             RecordService.pickVideo(tracks, "sd", 5).media);
-        // auto cannot adapt, so it takes the tallest variant up to 1280 wide.
-        check("auto pick", "v720-$Number$.m4s",
-            RecordService.pickVideo(tracks, "auto", 5).media);
+        // Unknown values migrate to hd, which picks the tallest variant.
+        check("unknown quality falls back to hd", "v1080-$Number$.m4s",
+            RecordService.pickVideo(tracks, "4k", 5).media);
         check("missing edge falls back", "v1080-$Number$.m4s",
             RecordService.pickVideo(tracks, "hd", 99).media);
     }
