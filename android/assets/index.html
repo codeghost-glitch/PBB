@@ -75,9 +75,27 @@
         <button id="sourceClose" class="btn btn-ghost btn-icon" type="button" aria-label="close servers"></button>
       </div>
       <div class="sheet-chips" id="serverChips" role="group" aria-label="stream server">
-        <button class="chip" type="button" data-server="s1">server 1</button>
-        <button class="chip" type="button" data-server="s2">server 2</button>
-        <button class="chip" type="button" data-server="s3">server 3</button>
+        <button class="chip" type="button" data-server="s1">
+          <span class="chip-key" aria-hidden="true">01</span>
+          <span class="chip-copy">
+            <span class="chip-name">main server</span>
+            <span class="chip-desc">straight from the cdn</span>
+          </span>
+        </button>
+        <button class="chip" type="button" data-server="s2">
+          <span class="chip-key" aria-hidden="true">02</span>
+          <span class="chip-copy">
+            <span class="chip-name">backup server</span>
+            <span class="chip-desc">through the site proxy</span>
+          </span>
+        </button>
+        <button class="chip" type="button" data-server="s3">
+          <span class="chip-key" aria-hidden="true">03</span>
+          <span class="chip-copy">
+            <span class="chip-name">mirror server</span>
+            <span class="chip-desc">the pbb3collablive route</span>
+          </span>
+        </button>
       </div>
       <p class="sheet-note" id="sourceNote"></p>
     </div>

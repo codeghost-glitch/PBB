@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.join(HERE, "..", "assets", "app.js");
 const CSS = path.join(HERE, "..", "assets", "styles.css");
+const HTML = path.join(HERE, "..", "assets", "index.html");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
 
@@ -653,6 +654,32 @@ function controlRoomStructure() {
     && /\.cam-actions \{[^}]*border-top: var\(--border\)/s.test(css));
 }
 
+function designSystemHoldsTheLine() {
+  const css = fs.readFileSync(CSS, "utf8");
+  const html = fs.readFileSync(HTML, "utf8");
+  // The skill's rules, kept as a build-time guard: four sizes, two weights,
+  // spacing on a 4px grid, and a picker that reads as rows of servers.
+  check("four type sizes, two weights", true,
+    (css.match(/--t-(?:xs|sm|md|lg):/g) || []).length === 4
+    && (css.match(/--w-(?:reg|bold):/g) || []).length === 2);
+  check("every spacing token is on the 4px grid", true,
+    Array.from(css.matchAll(/--sp-[a-z0-9]+: (\d+)px/g))
+      .every((match) => Number(match[1]) % 4 === 0));
+  check("the picker lists routes as rows", true,
+    /\.chip \{[^}]*min-height: 64px/s.test(css)
+    && /\.chip-name \{[^}]*--w-bold/s.test(css)
+    && /\.chip-desc \{[^}]*--t-xs/s.test(css)
+    && (html.match(/data-server="/g) || []).length === 3
+    && (html.match(/chip-desc/g) || []).length === 3);
+  check("the chosen route is tinted, not flooded", true,
+    /\.chip\.active \{[^}]*background: var\(--accent-soft\)/s.test(css));
+  check("only the program card wears the accent number", true,
+    /\.cam-num \{[^}]*background: var\(--surface-2\)/s.test(css)
+    && /\.cam-card:first-child \.cam-num \{[^}]*background: var\(--accent\)/s.test(css));
+  check("the chosen quality is tinted, not filled", true,
+    /\.seg-btn\.active \{[^}]*color: var\(--accent\);\s*background: var\(--accent-soft\)/s.test(css));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -671,6 +698,7 @@ const tests = [
   channelSourceContract,
   stitchAndServerContract,
   playbackAndRecorderFixes,
+  designSystemHoldsTheLine,
 ];
 
 for (const test of tests) {
