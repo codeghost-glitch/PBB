@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon layer: one colour, with the iris and pupil cut as holes so the
-     eye still reads when the launcher tints the silhouette. -->
+<!-- Themed icon: an outlined eye with a solid iris, both cut from one colour. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -9,8 +8,8 @@
     <path
         android:fillColor="#000000"
         android:fillType="evenOdd"
-        android:pathData="M22,55 C36,36.5 72,36.5 86,55 C72,73.5 36,73.5 22,55 Z M46.2,55 a7.8,7.8 0 1,0 15.6,0 a7.8,7.8 0 1,0 -15.6,0 Z M50,55 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
+        android:pathData="M24,54 C36,38 72,38 84,54 C72,70 36,70 24,54 Z M30,54 C40,44 68,44 78,54 C68,64 40,64 30,54 Z" />
     <path
         android:fillColor="#000000"
-        android:pathData="M67.2,37 a4.8,4.8 0 1,0 9.6,0 a4.8,4.8 0 1,0 -9.6,0 Z" />
+        android:pathData="M46,54 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0 Z" />
 </vector>

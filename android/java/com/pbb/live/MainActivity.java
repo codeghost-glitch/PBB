@@ -98,7 +98,6 @@ public class MainActivity extends Activity {
     private final ArrayList<String> pendingRecordLabels = new ArrayList<String>();
     // The gallery opens after hours: the page owns the choice, the shell follows
     // it so the window behind the WebView and the system bar icons match.
-    private boolean darkTheme = true;
     private float appVolumeLevel = -1f;
     private float appBrightnessLevel = -1f;
     private int savedSystemVolume = -1;
@@ -156,7 +155,7 @@ public class MainActivity extends Activity {
         // of the WebView: a child is laid out inside its parent's padding, and
         // padding on a WebView itself does not shrink what it renders.
         rootView = new FrameLayout(this);
-        rootView.setBackgroundColor(0xFF070A0F);
+        rootView.setBackgroundColor(0xFF0E0E0F);
         applyBarIconAppearance();
         rootView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override
@@ -176,7 +175,7 @@ public class MainActivity extends Activity {
                 0, dimension("status_bar_height"), 0, dimension("navigation_bar_height"));
             rootView.requestApplyInsets();
         }
-        webView.setBackgroundColor(0xFF070A0F);
+        webView.setBackgroundColor(0xFF0E0E0F);
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setVerticalScrollBarEnabled(false);
@@ -793,41 +792,21 @@ public class MainActivity extends Activity {
         applyBarIconAppearance();
     }
 
-    // The bars sit over the desk, so the icon glyphs have to fight whatever
-    // the page is painted: dark glyphs on the daylight desk, pale glyphs on
-    // the near-black night one.
+    // The bars sit over the near-black wall, so their glyphs stay pale.
     private void applyBarIconAppearance() {
         View decor = getWindow().getDecorView();
-        boolean dark = darkTheme;
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = decor.getWindowInsetsController();
             if (controller != null) {
                 int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                     | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                controller.setSystemBarsAppearance(dark ? 0 : light, light);
+                controller.setSystemBarsAppearance(0, light);
             }
             return;
         }
         int flags = decor.getSystemUiVisibility();
         flags &= ~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        if (!dark) {
-            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-        }
         decor.setSystemUiVisibility(flags);
-    }
-
-    // Paints the shell behind the page in the same colour as the desk, so
-    // there is no pale flash before the first frame of a dark gallery.
-    private void applyTheme(boolean dark) {
-        darkTheme = dark;
-        int background = dark ? 0xFF070A0F : 0xFFECE9E2;
-        if (rootView != null) {
-            rootView.setBackgroundColor(background);
-        }
-        if (webView != null) {
-            webView.setBackgroundColor(background);
-        }
-        applyBarIconAppearance();
     }
 
     /**
@@ -1200,17 +1179,6 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     applyBrightness(value, persist);
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void setTheme(final String name) {
-            final boolean dark = "dark".equals(name);
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    applyTheme(dark);
                 }
             });
         }

@@ -1,26 +1,13 @@
 <!doctype html>
-<html lang="en" data-type="software">
+<html lang="en" data-type="software" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="page-type" content="software">
   <meta name="site-kind" content="software">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="dark light">
-  <meta name="theme-color" content="#0A0B0D" id="themeColor">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0E0E0F" id="themeColor">
   <title>PBB live</title>
-  <script>
-    // The gallery opens after hours. A stored choice wins; otherwise the
-    // monitor wall stays dark until the operator switches the lights on.
-    (function () {
-      var theme;
-      try {
-        theme = localStorage.getItem("pbb-theme");
-      } catch (e) {
-        theme = null;
-      }
-      document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
-    })();
-  </script>
   <link rel="stylesheet" href="styles.css">
   <script src="shaka-player.compiled.min.js"></script>
 </head>
@@ -30,9 +17,9 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-            <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="currentColor" stroke-width="1.8"></path>
-            <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="currentColor" stroke-width="1.8"></circle>
-            <circle cx="16" cy="16" r="1.9" fill="#14110C"></circle>
+            <path d="M3 16 C7 9 25 9 29 16 C25 23 7 23 3 16 Z" fill="none" stroke="currentColor" stroke-width="1.8"></path>
+            <circle cx="16" cy="16" r="4.6" fill="#E8B44A"></circle>
+            <circle cx="16" cy="16" r="1.8" fill="#0E0E0F"></circle>
           </svg>
         </div>
         <div class="brand-copy">
@@ -41,10 +28,9 @@
       </div>
       <div class="desk-actions">
         <div class="seg" role="group" aria-label="default quality">
-          <button class="seg-btn" type="button" data-quality="hd">1080</button>
-          <button class="seg-btn" type="button" data-quality="sd">480</button>
+          <button class="seg-btn" type="button" data-quality="hd">high</button>
+          <button class="seg-btn" type="button" data-quality="sd">normal</button>
         </div>
-        <button id="themeBtn" class="desk-key" type="button" aria-label="switch to dark theme"></button>
       </div>
     </header>
 
@@ -76,24 +62,15 @@
       <div class="sheet-chips" id="serverChips" role="group" aria-label="stream server">
         <button class="chip" type="button" data-server="s1">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-copy">
-            <span class="chip-name">main server</span>
-            <span class="chip-desc">straight from the cdn</span>
-          </span>
+          <span class="chip-name">main server</span>
         </button>
         <button class="chip" type="button" data-server="s2">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-copy">
-            <span class="chip-name">backup server</span>
-            <span class="chip-desc">through the site proxy</span>
-          </span>
+          <span class="chip-name">backup server</span>
         </button>
         <button class="chip" type="button" data-server="s3">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-copy">
-            <span class="chip-name">mirror server</span>
-            <span class="chip-desc">the pbb3collablive route</span>
-          </span>
+          <span class="chip-name">mirror server</span>
         </button>
       </div>
       <p class="sheet-note" id="sourceNote"></p>

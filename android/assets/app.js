@@ -828,16 +828,25 @@ function qualityHeights(tracks) {
 }
 
 // The buttons say what will actually be played, not what was asked for.
+const QUALITY_LABELS = { hd: "high", sd: "normal" };
+
 function updateQualityLabels(tracks) {
   const heights = qualityHeights(tracks);
   if (!heights) {
     return;
   }
   for (const btn of qualityButtons) {
-    const height = heights[btn.dataset.quality];
-    if (height) {
-      btn.textContent = String(height);
+    const quality = btn.dataset.quality;
+    const height = heights[quality];
+    if (!height) {
+      continue;
     }
+    // The word is what the operator chooses; the exact rendition stays in
+    // the tooltip and the accessible name.
+    btn.textContent = QUALITY_LABELS[quality] || quality;
+    const detail = QUALITY_LABELS[quality] + " quality, " + height + "p";
+    btn.title = detail;
+    btn.setAttribute("aria-label", detail);
   }
 }
 
@@ -954,65 +963,14 @@ function updateDeckControls() {
 
 // m:ss, or h:mm:ss once a recording passes the hour. Tabular figures in the
 // stylesheet keep the tally from jittering as the digits change.
-// The gallery opens after hours. A stored choice wins; otherwise the
-// broadcast desk stays dark until the operator switches the lights on.
-const THEME_KEY = "pbb-theme";
-const THEME_COLORS = { light: "#ECE9E2", dark: "#070A0F" };
-
-function defaultTheme() {
-  return "dark";
-}
-
-function storedTheme() {
-  try {
-    const value = localStorage.getItem(THEME_KEY);
-    return value === "dark" || value === "light" ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function applyTheme(theme, persist) {
-  const name = theme === "dark" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", name);
-  if (persist) {
-    try {
-      localStorage.setItem(THEME_KEY, name);
-    } catch {
-      // Blocked storage still leaves the desk switched for this session.
-    }
-  }
+// One grade, after hours. There is no light theme and no toggle: the app is
+// a monitor wall and the room stays dark.
+function applyDarkShell() {
+  document.documentElement.setAttribute("data-theme", "dark");
   const meta = document.getElementById("themeColor");
   if (meta) {
-    meta.setAttribute("content", THEME_COLORS[name]);
+    meta.setAttribute("content", "#0E0E0F");
   }
-  if (window.Pbb && typeof Pbb.setTheme === "function") {
-    Pbb.setTheme(name);
-  }
-  updateThemeKey();
-}
-
-function updateThemeKey() {
-  const btn = document.getElementById("themeBtn");
-  if (!btn) {
-    return;
-  }
-  const dark = document.documentElement.getAttribute("data-theme") === "dark";
-  mountIcon(btn, dark ? "sun" : "moon");
-  const label = dark ? "switch to light theme" : "switch to dark theme";
-  btn.setAttribute("aria-label", label);
-  btn.title = label;
-}
-
-function wireTheme() {
-  const btn = document.getElementById("themeBtn");
-  if (btn) {
-    btn.addEventListener("click", () => {
-      const dark = document.documentElement.getAttribute("data-theme") === "dark";
-      applyTheme(dark ? "light" : "dark", true);
-    });
-  }
-  applyTheme(storedTheme() || defaultTheme(), false);
 }
 
 function formatClock(totalSeconds) {
@@ -1523,9 +1481,9 @@ const serverSheet = { server: "s1" };
 const SERVERS = ["s1", "s2", "s3"];
 
 const SERVER_NOTE = {
-  s1: "server 1 is on - the main feed",
-  s2: "server 2 is on - the backup feed",
-  s3: "server 3 is on - the mirror feed",
+  s1: "server 1 is on",
+  s2: "server 2 is on",
+  s3: "server 3 is on",
 };
 
 function sourceField(id) {
@@ -1660,8 +1618,7 @@ function boot() {
 
   document.addEventListener("keydown", () => document.body.classList.add("keyboard-focus"), true);
   document.addEventListener("pointerdown", () => document.body.classList.remove("keyboard-focus"), true);
-
-  wireTheme();
+  applyDarkShell();
 
   if (!window.Pbb) {
     setStatusText("android bridge missing");

@@ -16,6 +16,8 @@ const CSS = path.join(HERE, "..", "assets", "styles.css");
 const HTML = path.join(HERE, "..", "assets", "index.html");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
+const ICON_BG = path.join(HERE, "..", "res", "values", "colors.xml");
+const ICON_FG = path.join(HERE, "..", "res", "drawable", "ic_launcher_foreground.xml");
 
 let failures = 0;
 
@@ -417,13 +419,13 @@ function serverSheetFollowsTheApp() {
   check("the active chip is marked", true,
     page.fields.serverChips.children[1].classList.contains("active")
     && !page.fields.serverChips.children[0].classList.contains("active"));
-  check("the note names the backup", true,
-    /backup/.test(page.fields.sourceNote.textContent));
+  check("the note names the server", true,
+    /server 2 is on/.test(page.fields.sourceNote.textContent));
   page.selectServer("s3");
   page.openSourceSheet();
   check("the sheet opens on the third server", "s3", page.serverSheet.server);
-  check("the note names the mirror", true,
-    /mirror/.test(page.fields.sourceNote.textContent));
+  check("the note names the server", true,
+    /server 3 is on/.test(page.fields.sourceNote.textContent));
   check("the third chip is the marked one", true,
     page.fields.serverChips.children[2].classList.contains("active"));
 }
@@ -431,10 +433,13 @@ function serverSheetFollowsTheApp() {
 function fullscreenKeepsThePictureWhole() {
   const app = fs.readFileSync(APP, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
-  check("the keypad sits in the top-right corner", true,
-    /\.fs-controls \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css));
-  check("the mini monitor sits in the bottom-right corner", true,
-    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*bottom: max\(12px, env\(safe-area-inset-bottom\)\)/s.test(css));
+  const html = fs.readFileSync(HTML, "utf8");
+  check("the controls sit in one dock in the thumb zone", true,
+    /\.fs-controls \{[^}]*bottom: 0;/s.test(css)
+    && /\.fs-deck \{[^}]*flex-direction: row/s.test(css)
+    && /\.fs-deck \{[^}]*max-width: 640px/s.test(css));
+  check("the mini monitor sits clear of the dock", true,
+    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css));
   check("the picture never gives up a lane", true,
     /pip-mode \.video-wrap,\s*body\.fullscreen-mode \.video-wrap \{[^}]*inset: 0;/s.test(css));
   check("no dock or reserved lane is left behind", false,
@@ -444,10 +449,14 @@ function fullscreenKeepsThePictureWhole() {
   check("the deck is a quiet solid panel", true,
     /\.fs-deck \{[^}]*background: var\(--surface\)/s.test(css)
     && !css.includes("backdrop-filter"));
-  check("fullscreen chrome follows the desk theme", true,
-    /html\[data-theme="dark"\] \{[^}]*--surface:/s.test(css));
+  check("the app is dark only", true,
+    html.includes('data-theme="dark"')
+    && /color-scheme: dark/.test(css)
+    && !/color-scheme: dark light/.test(html)
+    && !/themeBtn/.test(html));
   check("keys stay compact but keep a 44px target", true,
-    /\.fs-keys \{[^}]*grid-template-columns: repeat\(2, var\(--tap\)\)/s.test(css));
+    /\.fs-keys \{[^}]*display: flex/s.test(css)
+    && /\.fs-key \{[^}]*min-height: var\(--tap\)/s.test(css));
   check("the redundant controls button is gone", false,
     css.includes(".fs-launcher") || app.includes("fsLauncher"));
   check("the mini number badge is gone", false,
@@ -611,9 +620,10 @@ function playbackAndRecorderFixes() {
   check("sd never falls to the half-height renditions", true,
     /SD_MIN_HEIGHT = 480/.test(app)
     && /heights\.filter\(\(h\) => h >= SD_MIN_HEIGHT\)\[0\]/.test(app));
-  check("the buttons show what will actually be played", true,
-    /function updateQualityLabels\(tracks\)/.test(app)
-    && /btn\.textContent = String\(height\)/.test(app));
+  check("the buttons use plain words with the rendition in the tooltip", true,
+    /QUALITY_LABELS = \{ hd: "high", sd: "normal" \}/.test(app)
+    && /btn\.title = detail/.test(app)
+    && /data-quality="hd">high/.test(html));
   const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
   check("every feed keeps decoding so mini opens on a live frame", true,
     !/\.pause\(\)/s.test(app) &&
@@ -687,9 +697,8 @@ function designSystemHoldsTheLine() {
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && /\.chip-desc \{[^}]*--t-label/s.test(css)
     && (html.match(/data-server="/g) || []).length === 3
-    && (html.match(/chip-desc/g) || []).length === 3);
+    && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
     /\.chip\.active \.chip-key \{[^}]*background: var\(--ink\)/s.test(css));
   check("the program feed is marked by a hairline, not a number", true,
@@ -708,6 +717,13 @@ function designSystemHoldsTheLine() {
     /\.cam-card\.rec \.cam-live \{ display: none; \}/.test(css)
     && /top\.appendChild\(tally\)/.test(app)
     && !/\.cam-num/.test(css));
+  const titleRule = /\.cam-title \{[^}]*\}/s.exec(css);
+  const statusRule = /#statusText \{[^}]*\}/s.exec(css);
+  check("feed names and status wrap instead of being cut", true,
+    Boolean(titleRule) && /white-space: normal/.test(titleRule[0])
+    && !/text-overflow/.test(titleRule[0])
+    && Boolean(statusRule) && /white-space: normal/.test(statusRule[0])
+    && !/text-overflow/.test(statusRule[0]));
 }
 
 function liveWindowAndBackupRoute() {
@@ -764,6 +780,21 @@ function soundSwitchDoesNotRebuildTheAudioRenderer() {
     !/function ensureSound[\s\S]{0,400}video\.play\(/.test(app));
 }
 
+function launcherIconFollowsTheSystem() {
+  const bg = fs.readFileSync(ICON_BG, "utf8");
+  const fg = fs.readFileSync(ICON_FG, "utf8");
+  // The icon keeps the eye, drops the tally: red means recording inside the
+  // app, so the mark uses one accent over a neutral ground.
+  check("the icon uses the neutral ground and one accent", true,
+    bg.includes('#101214')
+    && fg.includes('#F1F1EE')
+    && fg.includes('#E8B44A')
+    && !/#E93B2F|#E8635A/.test(fg));
+  check("the themed icon is one colour", true,
+    fs.readFileSync(path.join(HERE, "..", "res", "drawable", "ic_launcher_monochrome.xml"), "utf8")
+      .split("fillColor").length === 3);
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -786,6 +817,7 @@ const tests = [
   liveWindowAndBackupRoute,
   startupDoesNotReloadTheGrid,
   soundSwitchDoesNotRebuildTheAudioRenderer,
+  launcherIconFollowsTheSystem,
 ];
 
 for (const test of tests) {
