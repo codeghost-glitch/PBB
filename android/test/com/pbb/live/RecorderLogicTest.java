@@ -140,8 +140,8 @@ public final class RecorderLogicTest {
         // hd is the tallest variant the feed publishes, like on the page.
         check("hd pick", "v1080-$Number$.m4s",
             RecordService.pickVideo(tracks, "hd", 5).media);
-        // sd is the shortest one.
-        check("sd pick", "v360-$Number$.m4s",
+        // sd is the smallest one that is at least 480 lines, like on the page.
+        check("sd pick", "v720-$Number$.m4s",
             RecordService.pickVideo(tracks, "sd", 5).media);
         // Unknown values migrate to hd, which picks the tallest variant.
         check("unknown quality falls back to hd", "v1080-$Number$.m4s",

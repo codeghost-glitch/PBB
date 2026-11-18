@@ -67,7 +67,10 @@ import java.util.regex.Pattern;
  * (Android 14+ rejects writable dynamic code).
  */
 public class RecordService extends Service {
-    public static final String ACTION_START = "com.pbb.live.RECORD_START";
+    // sd asks for 480 lines; a 16:9 frame of that is 854 px wide.
+private static final int SD_MIN_WIDTH = 854;
+
+public static final String ACTION_START = "com.pbb.live.RECORD_START";
     public static final String ACTION_STOP = "com.pbb.live.RECORD_STOP";
     public static final String ACTION_STATUS = "com.pbb.live.RECORD_STATUS";
     public static final String EXTRA_MPD_URL = "mpd_url";
@@ -827,7 +830,8 @@ public class RecordService extends Service {
     /**
      * The recorder cannot adapt the way the page does, so it picks one
      * representation and sticks to it. The rules are the page's rules: hd is
-     * the tallest variant the feed publishes, sd is the shortest.
+     * the tallest variant the feed publishes, sd is the smallest one that is
+     * at least 480 lines wide (854 px at 16:9), never the half-height ones.
      */
     static Track pickVideo(List<Track> tracks, String quality, long liveStart) {
         Track best = null;
@@ -853,7 +857,20 @@ public class RecordService extends Service {
             }
         }
         if ("sd".equals(quality)) {
-            return smallest != null ? smallest : fallback;
+            Track sd = null;
+            for (Track t : tracks) {
+                if (t.seconds <= 0 || t.startNumber != liveStart || t.media == null) {
+                    continue;
+                }
+                if (t.width < SD_MIN_WIDTH) {
+                    continue;
+                }
+                if (sd == null || t.width < sd.width
+                    || (t.width == sd.width && t.bandwidth < sd.bandwidth)) {
+                    sd = t;
+                }
+            }
+            return sd != null ? sd : (smallest != null ? smallest : fallback);
         }
         return best == null ? fallback : best;
     }

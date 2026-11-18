@@ -604,7 +604,15 @@ function playbackAndRecorderFixes() {
   page.applyQuality(fakePlayer, "hd");
   check("hd takes the 1080p rendition", 1080, fakePlayer.picked);
   page.applyQuality(fakePlayer, "sd");
-  check("sd is watchable at 360p, not 180p", 360, fakePlayer.picked);
+  // sd asks for 480 lines; the origin's ladder tops out below that, so the
+  // rule takes the smallest rendition of at least 480 lines - 720p here.
+  check("sd takes the smallest rendition of at least 480 lines", 720, fakePlayer.picked);
+  check("sd never falls to the half-height renditions", true,
+    /SD_MIN_HEIGHT = 480/.test(app)
+    && /heights\.filter\(\(h\) => h >= SD_MIN_HEIGHT\)\[0\]/.test(app));
+  check("the buttons show what will actually be played", true,
+    /function updateQualityLabels\(tracks\)/.test(app)
+    && /btn\.textContent = String\(height\)/.test(app));
   const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
   check("every feed keeps decoding so mini opens on a live frame", true,
     !/\.pause\(\)/s.test(app) &&

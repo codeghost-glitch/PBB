@@ -806,6 +806,37 @@ function applyAllQualities() {
   }
 }
 
+// sd asks for 480 lines. The origin publishes 1080, 720, 360 and 180, so the
+// rule takes the smallest rendition that is at least 480 lines - 720p here -
+// and never falls to the half-height ones.
+const SD_MIN_HEIGHT = 480;
+
+function qualityHeights(tracks) {
+  const heights = tracks.filter((track) => track.height > 0).map((track) => track.height);
+  heights.sort((a, b) => a - b);
+  if (!heights.length) {
+    return null;
+  }
+  return {
+    hd: heights[heights.length - 1],
+    sd: heights.filter((h) => h >= SD_MIN_HEIGHT)[0] || heights[0],
+  };
+}
+
+// The buttons say what will actually be played, not what was asked for.
+function updateQualityLabels(tracks) {
+  const heights = qualityHeights(tracks);
+  if (!heights) {
+    return;
+  }
+  for (const btn of qualityButtons) {
+    const height = heights[btn.dataset.quality];
+    if (height) {
+      btn.textContent = String(height);
+    }
+  }
+}
+
 function applyQuality(player, quality) {
   if (!player) {
     return;
@@ -815,12 +846,14 @@ function applyQuality(player, quality) {
   if (!tracks.length) {
     return;
   }
+  updateQualityLabels(tracks);
   // hd takes the top rendition the feed offers - 1080p when the origin has
-  // one - and sd stays at 360p so two of them can still be watched at once.
+  // one - and sd takes the smallest one that is at least 480 lines.
+  const heights = qualityHeights(tracks);
   const chosen = quality === "hd"
     ? tracks.filter((t) => t.height <= 1080).sort((a, b) => b.height - a.height)[0]
       || tracks.sort((a, b) => b.height - a.height)[0]
-    : tracks.filter((t) => t.height >= 360).sort((a, b) => a.height - b.height)[0]
+    : tracks.filter((t) => t.height === heights.sd).sort((a, b) => a.bandwidth - b.bandwidth)[0]
       || tracks.sort((a, b) => a.height - b.height)[0];
   // Keep the buffer on the rare case the variant does change (the operator
   // picks a different default quality); clearBuffer = true threw it away and
