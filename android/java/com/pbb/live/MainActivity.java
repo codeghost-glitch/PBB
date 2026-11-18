@@ -24,6 +24,8 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -37,11 +39,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -103,6 +108,15 @@ public class MainActivity extends Activity {
     private volatile String streamConfigJson;
     // The site runs the cameras off a main server and a backup one.
     private volatile String streamServer = "s1";
+    // The site's segment route only answers its own page: a file:// WebView
+    // asking for it is "cross-site stream hotlinking". The cookie and the
+    // origin for that hop are kept here.
+    private volatile String sessionCookie = "";
+    private volatile String sessionClient = "v3";
+    // The page boots once. Handing it a cached config while the launch
+    // handshake is still running is what made every tile load twice.
+    private final Object configLock = new Object();
+    private volatile boolean configFresh = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -126,6 +140,9 @@ public class MainActivity extends Activity {
         streamConfigJson = streamConfig();
         streamServer = loadServer();
         loadCachedKeys();
+        // Start the handshake before the page exists, so the config the page
+        // asks for on boot is the fresh one.
+        refreshKeys();
         setupWebView();
         applyOrientation();
         registerStatusReceiver();
@@ -192,6 +209,18 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 refreshKeys();
             }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(
+                WebView view, WebResourceRequest request) {
+                // Only server 2's segments need the app to make the hop; the
+                // main server is a plain CDN origin and the mirror is open.
+                String url = request.getUrl().toString();
+                if ("s2".equals(streamServer) && url.startsWith(SITE + "/stream/")) {
+                    return proxyStream(url, request.getRequestHeaders());
+                }
+                return null;
+            }
         });
         webView.addJavascriptInterface(new PbbBridge(), "Pbb");
         webView.loadUrl("file:///android_asset/index.html");
@@ -233,17 +262,23 @@ public class MainActivity extends Activity {
             public void run() {
                 final String json = publishedConfig();
                 if (json == null) {
+                    // Nothing to wait for: the page keeps the cached config.
+                    markConfigFresh();
                     reportKeys(rotationReport());
                     return;
                 }
                 streamConfigJson = json;
+                markConfigFresh();
                 final String quoted = JSONObject.quote(json);
                 writeKeysCache(json);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        webView.evaluateJavascript(
-                            "window.onStreamConfig && window.onStreamConfig(" + quoted + ")", null);
+                        if (webView != null) {
+                            webView.evaluateJavascript(
+                                "window.onStreamConfig && window.onStreamConfig(" + quoted + ")",
+                                null);
+                        }
                     }
                 });
             }
@@ -319,10 +354,85 @@ public class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                webView.evaluateJavascript(
-                    "window.onKeysMessage && window.onKeysMessage(" + JSONObject.quote(message) + ")", null);
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                        "window.onKeysMessage && window.onKeysMessage("
+                            + JSONObject.quote(message) + ")", null);
+                }
             }
         });
+    }
+
+    /**
+     * Server 2 exists so a blocked CDN can still be watched, but the site's
+     * proxy answers its own Origin only. A WebView page is a different one, so
+     * the bytes are fetched here - session cookie, client tag, site Origin -
+     * and handed back with a permissive CORS header. Streaming straight from
+     * the connection keeps a segment out of memory and passes Range through.
+     */
+    private WebResourceResponse proxyStream(String url, Map<String, String> asked) {
+        HttpURLConnection conn = null;
+        try {
+            conn = Http.open(url, 5000, 20000);
+            conn.setRequestProperty("Cookie", sessionCookie);
+            conn.setRequestProperty("X-PBB-Client", sessionClient);
+            conn.setRequestProperty("Origin", SITE);
+            conn.setRequestProperty("Referer", SITE + "/");
+            // The bytes go straight to the media stack, so no transcoding layer.
+            conn.setRequestProperty("Accept-Encoding", "identity");
+            if (asked != null && asked.get("Range") != null) {
+                conn.setRequestProperty("Range", asked.get("Range"));
+            }
+            int status = conn.getResponseCode();
+            if (status < 200 || status >= 300) {
+                conn.disconnect();
+                return null;
+            }
+            Map<String, String> out = new HashMap<String, String>();
+            out.put("Access-Control-Allow-Origin", "*");
+            out.put("Access-Control-Allow-Headers", "*");
+            out.put("Access-Control-Expose-Headers", "Content-Length,Content-Range");
+            out.put("Cache-Control", "no-store");
+            String type = conn.getContentType();
+            return new WebResourceResponse(
+                type == null ? "video/mp4" : type,
+                null,
+                status,
+                status == 206 ? "Partial Content" : "OK",
+                out,
+                conn.getInputStream());
+        } catch (Exception e) {
+            if (conn != null) {
+                conn.disconnect();
+            }
+            return null;
+        }
+    }
+
+    /** Waits for the launch handshake, then falls back to whatever is cached. */
+    private void waitForFreshConfig(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        synchronized (configLock) {
+            while (!configFresh) {
+                long left = deadline - System.currentTimeMillis();
+                if (left <= 0) {
+                    return;
+                }
+                try {
+                    configLock.wait(left);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    private void markConfigFresh() {
+        synchronized (configLock) {
+            configFresh = true;
+            configLock.notifyAll();
+        }
     }
 
     /**
@@ -439,6 +549,7 @@ public class MainActivity extends Activity {
         try {
             JSONObject reply = new JSONObject(handshake.body);
             String nonce = reply.getString("nonce");
+            sessionCookie = handshake.cookie == null ? "" : handshake.cookie;
             JSONObject cams = reply.getJSONObject("streams");
             for (int i = 0; i < CAM_IDS.length; i++) {
                 JSONObject cam = cams.getJSONObject(CAM_IDS[i]);
@@ -986,6 +1097,7 @@ public class MainActivity extends Activity {
     public class PbbBridge {
         @JavascriptInterface
         public String getConfig() {
+            waitForFreshConfig(8000);
             return streamConfigJson;
         }
 

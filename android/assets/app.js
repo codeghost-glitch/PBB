@@ -709,18 +709,23 @@ async function initPlayer(entry, index) {
       clearKeys,
     },
     streaming: {
-      // Live streams need real headroom. The defaults are conservative and
-      // with three players on one radio they rebuffer constantly.
+      // The live window is only ~40s wide. Asking for 30s of buffer and
+      // holding 30s behind pushed the readers right up to the edge, where the
+      // next segment is not published yet - that was the connect-disconnect
+      // loop. Half a window of buffer, a small ring behind, and let the shared
+      // presentation delay keep the three feeds together.
       lowLatencyMode: false,
-      bufferingGoal: 30,
+      bufferingGoal: 20,
       rebufferingGoal: 8,
-      bufferBehind: 30,
+      bufferBehind: 12,
       retryParameters: retry(),
     },
     manifest: {
       // Same delay for every feed: that is what makes three independent
-      // players line up, rather than each chasing its own live edge.
-      defaultPresentationDelay: 8,
+      // players line up, rather than each chasing its own live edge. 14s also
+      // absorbs device clock skew, which at 8s had Shaka asking for segments
+      // the origin had not written yet.
+      defaultPresentationDelay: 14,
       dash: { ignoreSuggestedPresentationDelay: true },
       retryParameters: retry(),
     },

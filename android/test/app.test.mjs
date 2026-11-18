@@ -570,11 +570,13 @@ function playbackAndRecorderFixes() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(
     path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
+  const delays = app.match(/defaultPresentationDelay: \d+/g) || [];
   check("all players use one shared presentation delay", true,
-    /defaultPresentationDelay: 8/s.test(app) && /ignoreSuggestedPresentationDelay: true/s.test(app));
+    delays.length === 1 && /ignoreSuggestedPresentationDelay: true/s.test(app));
   check("live low-latency mode is off", true, /lowLatencyMode: false/s.test(app));
+  const goal = Number((/bufferingGoal: (\d+)/.exec(app) || [])[1]);
   check("buffering has real headroom", true,
-    /bufferingGoal: 30/s.test(app) && /rebufferingGoal: 8/s.test(app));
+    goal >= 12 && goal <= 30 && /rebufferingGoal: 8/s.test(app));
   check("startup waits for all three loads", true,
     /setTimeout\(startGridTogether, 5000\)/s.test(app));
   check("no per-load live-edge seek", false,
@@ -678,6 +680,31 @@ function designSystemHoldsTheLine() {
     && /\.cam-card:first-child \.cam-num \{[^}]*background: var\(--accent\)/s.test(css));
   check("the chosen quality is tinted, not filled", true,
     /\.seg-btn\.active \{[^}]*color: var\(--accent\);\s*background: var\(--accent-soft\)/s.test(css));
+  check("preview strips are name-first", true,
+    /\.cam-card:not\(:first-child\) \.cam-num \{ display: none; \}/.test(css)
+    && /\.cam-card\.rec \.tally \{[^}]*position: absolute/s.test(css));
+}
+
+function liveWindowAndBackupRoute() {
+  const app = fs.readFileSync(APP, "utf8");
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  // The site's proxy answers its own Origin only, so the page cannot fetch
+  // server 2's segments itself. The app makes that hop and hands them over.
+  check("server 2 hops through the app, with the site's origin", true,
+    /shouldInterceptRequest\(/.test(java)
+    && java.includes('"s2".equals(streamServer)')
+    && java.includes('setRequestProperty("Origin", SITE)')
+    && java.includes('setRequestProperty("Cookie", sessionCookie)')
+    && java.includes('"Access-Control-Allow-Origin", "*"'));
+  check("the page waits for the launch handshake before it builds tiles", true,
+    /public String getConfig\(\) \{\s*waitForFreshConfig\(\d+\);/.test(java)
+    && java.includes("markConfigFresh();"));
+  // A 40 second window, three players: the delay plus the ring behind has to
+  // stay inside it or the readers ask for segments that were never written.
+  const delay = Number((/defaultPresentationDelay: (\d+)/.exec(app) || [])[1]);
+  const behind = Number((/bufferBehind: (\d+)/.exec(app) || [])[1]);
+  check("the live buffer stays inside the 40s window", true,
+    delay > 8 && delay + behind <= 40);
 }
 
 const tests = [
@@ -699,6 +726,7 @@ const tests = [
   stitchAndServerContract,
   playbackAndRecorderFixes,
   designSystemHoldsTheLine,
+  liveWindowAndBackupRoute,
 ];
 
 for (const test of tests) {

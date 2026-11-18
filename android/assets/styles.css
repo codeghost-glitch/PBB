@@ -462,7 +462,7 @@ h1 {
   font-size: var(--t-sm);
   font-weight: var(--w-reg);
   line-height: 1.2;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1342,9 +1342,19 @@ body.fullscreen-mode .indicator {
   .live-badge { display: none; }
   .tally { gap: 4px; padding: 4px 6px; }
   .tally-label { display: none; }
-  /* On a narrow card the running time wins the strip; the tally ring and the
-     red key already say the feed is recording. */
+  /* Two name cells share the width of a phone: a number chip would take a
+     third of "PBB External Den" with it, so previews are name-only. */
+  .cam-card:not(:first-child) .cam-num { display: none; }
+  /* The clock moves onto the picture on a narrow card: the strip belongs to
+     the feed name, and a burn-in is where a running time usually lives. */
   .cam-card.rec .cam-num { display: none; }
+  .cam-card.rec .tally {
+    position: absolute;
+    top: 44px;
+    right: var(--sp-2);
+    z-index: 4;
+    padding: 3px var(--sp-2);
+  }
   .status .btn-icon { width: var(--tap-min); height: var(--tap-min); }
   .cam-actions { min-height: calc(var(--key) + 8px); }
   .cam-actions .btn-icon svg { width: 18px; height: 18px; }
