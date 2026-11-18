@@ -434,12 +434,12 @@ function fullscreenKeepsThePictureWhole() {
   const app = fs.readFileSync(APP, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
   const html = fs.readFileSync(HTML, "utf8");
-  check("the controls sit in one dock in the thumb zone", true,
-    /\.fs-controls \{[^}]*bottom: 0;/s.test(css)
-    && /\.fs-deck \{[^}]*flex-direction: row/s.test(css)
-    && /\.fs-deck \{[^}]*max-width: 640px/s.test(css));
-  check("the mini monitor sits clear of the dock", true,
-    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css));
+  check("the controls sit in the top-right corner", true,
+    /\.fs-controls \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css)
+    && /\.fs-controls \{[^}]*right: max\(12px, env\(safe-area-inset-right\)\)/s.test(css)
+    && /\.fs-deck \{[^}]*flex-direction: column/s.test(css));
+  check("the mini monitor sits bottom-right", true,
+    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*bottom: max\(12px, env\(safe-area-inset-bottom\)\)/s.test(css));
   check("the picture never gives up a lane", true,
     /pip-mode \.video-wrap,\s*body\.fullscreen-mode \.video-wrap \{[^}]*inset: 0;/s.test(css));
   check("no dock or reserved lane is left behind", false,
@@ -455,7 +455,7 @@ function fullscreenKeepsThePictureWhole() {
     && !/color-scheme: dark light/.test(html)
     && !/themeBtn/.test(html));
   check("keys stay compact but keep a 44px target", true,
-    /\.fs-keys \{[^}]*display: flex/s.test(css)
+    /\.fs-keys \{[^}]*grid-template-columns: repeat\(2, var\(--tap\)\)/s.test(css)
     && /\.fs-key \{[^}]*min-height: var\(--tap\)/s.test(css));
   check("the redundant controls button is gone", false,
     css.includes(".fs-launcher") || app.includes("fsLauncher"));
@@ -620,10 +620,10 @@ function playbackAndRecorderFixes() {
   check("sd never falls to the half-height renditions", true,
     /SD_MIN_HEIGHT = 480/.test(app)
     && /heights\.filter\(\(h\) => h >= SD_MIN_HEIGHT\)\[0\]/.test(app));
-  check("the buttons use plain words with the rendition in the tooltip", true,
-    /QUALITY_LABELS = \{ hd: "high", sd: "normal" \}/.test(app)
+  check("the buttons read HD and SD with the rendition in the tooltip", true,
+    /QUALITY_LABELS = \{ hd: "HD", sd: "SD" \}/.test(app)
     && /btn\.title = detail/.test(app)
-    && /data-quality="hd">high/.test(html));
+    && /data-quality="hd">HD/.test(html));
   const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
   check("every feed keeps decoding so mini opens on a live frame", true,
     !/\.pause\(\)/s.test(app) &&

@@ -828,7 +828,7 @@ function qualityHeights(tracks) {
 }
 
 // The buttons say what will actually be played, not what was asked for.
-const QUALITY_LABELS = { hd: "high", sd: "normal" };
+const QUALITY_LABELS = { hd: "HD", sd: "SD" };
 
 function updateQualityLabels(tracks) {
   const heights = qualityHeights(tracks);

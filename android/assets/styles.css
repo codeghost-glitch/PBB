@@ -633,27 +633,20 @@ body.fullscreen-mode .video-wrap video {
 
 .fs-controls {
   position: fixed;
-  top: auto;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
   z-index: 90;
   display: none;
-  padding: var(--s-3) var(--gut);
-  padding-bottom: max(var(--s-3), env(safe-area-inset-bottom));
 }
 
-/* One dock, in the thumb zone. The feed is still the whole screen; this is
-   the only panel, and it never carries a second border or a glow. */
+/* One small deck in the top-right corner. The feed is still the whole screen;
+   this is the only panel, and it never carries a second border or a glow. */
 .fs-deck {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--s-3);
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: var(--s-2) var(--s-3);
+  flex-direction: column;
+  gap: var(--s-1);
+  width: max-content;
+  padding: var(--s-2);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -661,11 +654,10 @@ body.fullscreen-mode .video-wrap video {
 
 .fs-head {
   display: flex;
-  flex: 1 1 auto;
   align-items: center;
-  min-width: 0;
-  padding-right: var(--s-3);
-  border-right: 1px solid var(--line);
+  justify-content: center;
+  padding: var(--s-1) var(--s-2) var(--s-2);
+  border-bottom: 1px solid var(--line);
 }
 
 .fs-air {
@@ -689,9 +681,8 @@ body.fullscreen-mode .video-wrap video {
 }
 
 .fs-keys {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, var(--tap));
   gap: var(--s-1);
 }
 
@@ -728,7 +719,8 @@ body.fullscreen-mode .video-wrap video {
 .fs-key:disabled { opacity: 0.4; cursor: default; }
 
 .fs-exit {
-  width: 56px;
+  grid-column: 1 / -1;
+  width: auto;
   color: var(--paper);
   background: var(--ink);
   border-color: var(--ink);
@@ -745,7 +737,7 @@ body.fullscreen-mode .fs-controls {
   display: flex;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(6px);
+  transform: translate(6px, -6px);
   pointer-events: none;
   transition: opacity var(--m-out) var(--ease), transform var(--m-out) var(--ease), visibility 0s linear var(--m-out);
 }
@@ -773,7 +765,7 @@ body.fullscreen-mode .cam-card.focused .stream-status.bad {
 
 body.locked .fs-head,
 body.locked .fs-key:not(.lock-btn) { display: none; }
-body.locked .fs-keys { justify-content: center; }
+body.locked .fs-keys { grid-template-columns: var(--tap); }
 body.locked .lock-btn {
   color: var(--paper);
   background: var(--ink);
@@ -785,9 +777,8 @@ body.fullscreen-mode .cam-card.mini {
   opacity: 1;
   position: fixed;
   top: auto;
-  top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
-  bottom: auto;
+  bottom: max(12px, env(safe-area-inset-bottom));
   left: auto;
   z-index: 60;
   width: 26vw;
@@ -996,11 +987,6 @@ body.fullscreen-mode .indicator {
   .cam-actions .btn-icon { width: 36px; height: 36px; }
   .cam-actions .btn-icon::after { inset: -4px; }
   .cam-actions .btn-icon svg { width: 18px; height: 18px; }
-}
-
-@media (max-width: 400px) {
-  .fs-head { display: none; }
-  .fs-deck { justify-content: center; }
 }
 
 @media (max-height: 320px) {
