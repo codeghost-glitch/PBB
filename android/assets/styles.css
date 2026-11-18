@@ -43,7 +43,6 @@
   --wash-live: rgba(14, 140, 115, 0.06);
   --inner-line: rgba(255, 255, 255, 0.72);
   --border: 1px solid var(--line);
-  --console-rule: 1px solid var(--line-strong);
   --fs-glass: rgba(255, 255, 255, 0.82);
   --fs-key: rgba(255, 255, 255, 0.72);
   --fs-key-hi: rgba(255, 255, 255, 0.94);
@@ -76,6 +75,17 @@
   --radius: 16px;
   --radius-sm: 10px;
   --radius-lg: 24px;
+  --radius-card: 20px;
+
+  /* Chrome over a picture is its own surface: light text, dark glass, and a
+     scrim instead of a border, because a border would cut the frame. */
+  --on-video: #FFFFFF;
+  --on-video-muted: rgba(255, 255, 255, 0.8);
+  --on-video-line: rgba(255, 255, 255, 0.24);
+  --on-video-glass: rgba(10, 14, 20, 0.42);
+  --on-video-top: linear-gradient(180deg, rgba(6, 10, 16, 0.84) 0%, rgba(6, 10, 16, 0.42) 58%, rgba(6, 10, 16, 0) 100%);
+  --on-video-bottom: linear-gradient(0deg, rgba(6, 10, 16, 0.86) 0%, rgba(6, 10, 16, 0.44) 58%, rgba(6, 10, 16, 0) 100%);
+  --live-on-video: #74F0D4;
 
   --blur: 12px;
   --dur-1: 0.12s;
@@ -196,9 +206,8 @@ body.keyboard-focus :focus-visible {
   min-height: 64px;
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface);
-  border: 0;
-  border-bottom: var(--console-rule);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border: var(--border);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
   -webkit-backdrop-filter: blur(var(--blur));
   backdrop-filter: blur(var(--blur));
@@ -219,7 +228,7 @@ body.keyboard-focus :focus-visible {
   height: 40px;
   flex: 0 0 auto;
   color: var(--accent);
-  background: var(--accent-soft);
+  background: linear-gradient(160deg, var(--accent-soft), var(--surface-2));
   border: var(--border);
   border-radius: 12px;
   box-shadow: inset 0 1px 0 var(--inner-line);
@@ -389,9 +398,9 @@ h1 {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--surface-solid);
+  background: #000;
   border: var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-soft);
   contain: paint;
   transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
@@ -425,11 +434,16 @@ h1 {
   align-items: center;
   gap: var(--sp-2);
   flex: 0 0 auto;
-  min-height: 40px;
-  padding: var(--sp-1) var(--sp-2);
-  background: linear-gradient(180deg, var(--surface-2), transparent);
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-h);
+  background: var(--on-video-top);
   border: 0;
-  border-bottom: var(--border);
+  pointer-events: none;
 }
 
 .cam-num {
@@ -438,10 +452,10 @@ h1 {
   min-width: 28px;
   height: 24px;
   padding: 0 6px;
-  color: var(--muted);
-  background: var(--surface-2);
+  color: var(--on-video);
+  background: var(--on-video-glass);
   border-radius: 8px;
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: inset 0 0 0 1px var(--on-video-line);
   font-family: var(--mono);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
@@ -454,14 +468,21 @@ h1 {
   box-shadow: none;
 }
 
+.cam-top .live-badge {
+  color: var(--live-on-video);
+  background: rgba(10, 14, 20, 0.42);
+  border-color: rgba(116, 240, 212, 0.34);
+}
+
 .cam-title {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--text);
+  color: var(--on-video);
   font-size: var(--t-sm);
   font-weight: var(--w-reg);
   line-height: 1.2;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   letter-spacing: 0.02em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -508,15 +529,6 @@ h1 {
   overflow: hidden;
   background: #000;
   contain: paint;
-}
-
-.video-wrap::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.24));
 }
 
 .video-wrap video {
@@ -607,11 +619,15 @@ h1 {
   justify-content: space-around;
   gap: var(--sp-1);
   flex: 0 0 auto;
-  min-height: calc(var(--key) + var(--sp-2));
-  padding: 2px var(--sp-2);
-  background: linear-gradient(0deg, var(--surface-2), transparent);
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  min-height: calc(var(--key) + var(--sp-3));
+  padding: var(--sp-2) var(--sp-h) var(--sp-2);
+  background: var(--on-video-bottom);
   border: 0;
-  border-top: var(--border);
 }
 
 /* --------------------------------------------------------------- buttons */
@@ -664,12 +680,14 @@ h1 {
   width: var(--key);
   height: var(--key);
   padding: 0;
-  color: var(--muted);
-  background: transparent;
+  color: var(--on-video-muted);
+  background: rgba(255, 255, 255, 0.1);
   border: 0;
-  border-radius: 10px;
-  box-shadow: none;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
+
+.cam-actions .btn-icon:active { background: rgba(255, 255, 255, 0.2); }
 
 .cam-actions .btn-icon svg { width: 19px; height: 19px; }
 
@@ -681,11 +699,16 @@ h1 {
 }
 
 .cam-actions .btn-icon.active {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: none;
 }
 
-.cam-actions .record-btn { color: var(--rec); }
+.cam-actions .record-btn {
+  color: var(--rec);
+  background: rgba(255, 77, 94, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 77, 94, 0.34);
+}
 .cam-actions .record-btn svg circle,
 .cam-actions .record-btn svg rect { fill: currentColor; }
 
@@ -708,10 +731,9 @@ h1 {
   margin-top: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface);
-  border: 0;
-  border-top: var(--console-rule);
-  border-radius: 0 0 var(--radius) var(--radius);
-  box-shadow: var(--shadow-soft);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft), 0 1px 0 var(--inner-line) inset;
   -webkit-backdrop-filter: blur(var(--blur));
   backdrop-filter: blur(var(--blur));
 }
@@ -1301,6 +1323,16 @@ body.fullscreen-mode .indicator {
   border-color: var(--accent);
 }
 
+.chip.active::after {
+  content: "in use";
+  margin-left: auto;
+  color: var(--accent);
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .sheet-note {
   color: var(--muted);
   font-size: var(--t-sm);
@@ -1336,10 +1368,12 @@ body.fullscreen-mode .indicator {
 
 /* Phone-sized cards keep their lanes; only the chrome gets thinner. */
 @media (max-width: 520px), (max-height: 520px) {
-  .cam-card { --key: 36px; }
+  .cam-card { --key: 34px; }
   .cam-card:first-child { --key: 40px; }
-  .cam-top { min-height: 30px; }
-  .live-badge { display: none; }
+  .cam-actions { justify-content: space-between; }
+  .cam-top { min-height: 38px; padding: var(--sp-2) var(--sp-h); }
+  /* The program strip has room for the tally; the preview strips do not. */
+  .cam-card:not(:first-child) .live-badge { display: none; }
   .tally { gap: 4px; padding: 4px 6px; }
   .tally-label { display: none; }
   /* Two name cells share the width of a phone: a number chip would take a
@@ -1356,7 +1390,7 @@ body.fullscreen-mode .indicator {
     padding: 3px var(--sp-2);
   }
   .status .btn-icon { width: var(--tap-min); height: var(--tap-min); }
-  .cam-actions { min-height: calc(var(--key) + 8px); }
+  .cam-actions { min-height: calc(var(--key) + var(--sp-2)); padding: 6px var(--sp-2); }
   .cam-actions .btn-icon svg { width: 18px; height: 18px; }
 
   .focus-mode .grid { align-items: stretch; }

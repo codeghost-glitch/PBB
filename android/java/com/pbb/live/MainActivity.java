@@ -207,7 +207,13 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                refreshKeys();
+                // The launch handshake already ran and the page booted on it.
+                // A second one here handed the page a manifest whose publish
+                // time had moved, which read as "keys changed" and reloaded
+                // every tile right after start-up.
+                if (!configFresh) {
+                    refreshKeys();
+                }
             }
 
             @Override
@@ -554,16 +560,20 @@ public class MainActivity extends Activity {
             for (int i = 0; i < CAM_IDS.length; i++) {
                 JSONObject cam = cams.getJSONObject(CAM_IDS[i]);
                 String[] pair = sessionToken(cam.getString("token"), nonce);
-                String xml = Http.getText(SITE + cam.getString("endpoint"), 5000, 8000,
+                String endpoint = cam.getString("endpoint");
+                String xml = Http.getText(SITE + endpoint, 5000, 8000,
                     handshake.cookie, CLIENT);
                 if (xml == null) {
                     return null;
                 }
+                String base = siteBase(xml, endpoint, i);
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
+                // The manifest body moves its publishTime on every handshake, so
+                // the page treats this base plus the key pair as the identity.
+                stream.put("base", base);
                 stream.put("url", DATA_MPD + Base64.encodeToString(
-                    siteMpd(xml, cam.getString("endpoint"), i).getBytes("UTF-8"),
-                    Base64.NO_WRAP));
+                    siteMpd(xml, base).getBytes("UTF-8"), Base64.NO_WRAP));
                 stream.put("kid", pair[0]);
                 stream.put("key", pair[1]);
                 streams.put(stream);
@@ -596,20 +606,25 @@ public class MainActivity extends Activity {
      * numbers through the pbb3collablive.xyz mirror. All three end up with one
      * BaseURL and relative names - the shape the page and the recorder join.
      */
-    private String siteMpd(String xml, String endpoint, int index) {
-        Matcher media = Pattern.compile("media=\"(https://[^\"]*/)").matcher(xml);
-        String hoisted = media.find() ? media.group(1) : null;
-        if (hoisted != null) {
-            xml = xml.replace("media=\"" + hoisted, "media=\"");
-        }
-        String base;
+    private String siteBase(String xml, String endpoint, int index) {
         if ("s3".equals(streamServer)) {
-            base = MIRROR + CAM_MIRROR[index] + "/";
-        } else if (hoisted != null) {
-            base = hoisted;
-        } else {
-            base = SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
+            return MIRROR + CAM_MIRROR[index] + "/";
         }
+        Matcher media = Pattern.compile("media=\"(https://[^\"]*/)").matcher(xml);
+        if (media.find()) {
+            return media.group(1);
+        }
+        return SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
+    }
+
+    private String siteMpd(String xml, String base) {
+        Matcher media = Pattern.compile("media=\"(https://[^\"]*/)").matcher(xml);
+        if (media.find()) {
+            xml = xml.replace("media=\"" + media.group(1), "media=\"");
+        }
+        // A baked copy cannot publish updates. Leaving this in makes the player
+        // re-poll the same static window every 30s for nothing.
+        xml = xml.replaceAll("\\s+minimumUpdatePeriod=\"[^\"]*\"", "");
         int head = xml.indexOf("<MPD");
         int end = head < 0 ? -1 : xml.indexOf('>', head);
         if (end < 0) {

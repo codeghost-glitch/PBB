@@ -1394,6 +1394,10 @@ async function resyncStreams() {
 
 // Pushed by Java after the live stream config is fetched. Rebuild the Shaka
 // players so both playback and the recorder use the current clear keys.
+function segmentBase(stream) {
+  return (stream && (stream.base || stream.url)) || "";
+}
+
 window.onStreamConfig = async (raw) => {
   let cfg;
   try {
@@ -1413,7 +1417,10 @@ window.onStreamConfig = async (raw) => {
   let changed = false;
   for (const [i, s] of streams.entries()) {
     const cur = players[i].stream;
-    if (cur.url !== s.url || cur.kid !== s.kid || cur.key !== s.key) {
+    // The site rewrites publishTime on every handshake, so the encoded
+    // manifest is different every time even when nothing else is. Identity is
+    // the key pair plus where the segments come from.
+    if (cur.kid !== s.kid || cur.key !== s.key || segmentBase(cur) !== segmentBase(s)) {
       changed = true;
     }
   }

@@ -647,13 +647,14 @@ function controlRoomStructure() {
   check("each card has a key strip", true, app.includes('"cam-actions"'));
   check("the old floating rack is gone", false,
     app.includes('"cam-rack"') || css.includes(".cam-rack"));
-  check("the program rail is a flat strip", true,
-    /\.nav \{[^}]*border-bottom: var\(--console-rule\)/s.test(css));
-  check("the status ticker is a flat strip", true,
-    /\.status \{[^}]*border-top: var\(--console-rule\)/s.test(css));
-  check("camera chrome owns its own lanes", true,
-    /\.cam-top \{[^}]*border-bottom: var\(--border\)/s.test(css)
-    && /\.cam-actions \{[^}]*border-top: var\(--border\)/s.test(css));
+  check("the header and the status deck float as panels", true,
+    /\.nav \{[^}]*border-radius: var\(--radius\)/s.test(css)
+    && /\.status \{[^}]*border-radius: var\(--radius\)/s.test(css)
+    && !/\.nav \{[^}]*border-bottom: var\(--console-rule\)/s.test(css));
+  check("camera chrome floats over the picture", true,
+    /\.cam-top \{[^}]*position: absolute/s.test(css)
+    && /\.cam-actions \{[^}]*position: absolute/s.test(css)
+    && /--on-video-top: linear-gradient/.test(css));
 }
 
 function designSystemHoldsTheLine() {
@@ -676,7 +677,7 @@ function designSystemHoldsTheLine() {
   check("the chosen route is tinted, not flooded", true,
     /\.chip\.active \{[^}]*background: var\(--accent-soft\)/s.test(css));
   check("only the program card wears the accent number", true,
-    /\.cam-num \{[^}]*background: var\(--surface-2\)/s.test(css)
+    /\.cam-num \{[^}]*background: var\(--on-video-glass\)/s.test(css)
     && /\.cam-card:first-child \.cam-num \{[^}]*background: var\(--accent\)/s.test(css));
   check("the chosen quality is tinted, not filled", true,
     /\.seg-btn\.active \{[^}]*color: var\(--accent\);\s*background: var\(--accent-soft\)/s.test(css));
@@ -707,6 +708,23 @@ function liveWindowAndBackupRoute() {
     delay > 8 && delay + behind <= 40);
 }
 
+function startupDoesNotReloadTheGrid() {
+  const app = fs.readFileSync(APP, "utf8");
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  // Each handshake rewrites publishTime, so the encoded manifest differs even
+  // when nothing the player cares about has moved. Keying identity off it made
+  // every tile reload right after boot.
+  check("identity is the key pair plus the segment base", true,
+    /cur\.kid !== s\.kid \|\| cur\.key !== s\.key \|\| segmentBase\(cur\) !== segmentBase\(s\)/.test(app)
+    && /function segmentBase\(stream\)/.test(app));
+  check("the site hands the base over once", true,
+    java.includes('stream.put("base", base)'));
+  check("the launch handshake is not repeated", true,
+    /if \(!configFresh\) \{\s*refreshKeys\(\);/.test(java));
+  check("a baked manifest is not polled every 30s", true,
+    java.includes("minimumUpdatePeriod"));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -727,6 +745,7 @@ const tests = [
   playbackAndRecorderFixes,
   designSystemHoldsTheLine,
   liveWindowAndBackupRoute,
+  startupDoesNotReloadTheGrid,
 ];
 
 for (const test of tests) {
