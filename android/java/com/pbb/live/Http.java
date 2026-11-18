@@ -38,8 +38,14 @@ final class Http {
         return out.toByteArray();
     }
 
+    static byte[] getBytes(String url, int connectMs, int readMs, String referer)
+            throws IOException {
+        return getBytes(url, connectMs, readMs, referer, null, null);
+    }
+
     /** Returns null when the server answered anything but 200. */
-    static byte[] getBytes(String url, int connectMs, int readMs, String referer) throws IOException {
+    static byte[] getBytes(String url, int connectMs, int readMs, String referer, String cookie,
+            String client) throws IOException {
         String prefix = "data:application/dash+xml;base64,";
         if (url.startsWith(prefix)) {
             try {
@@ -51,6 +57,12 @@ final class Http {
         HttpURLConnection conn = open(url, connectMs, readMs);
         if (referer != null) {
             conn.setRequestProperty("Referer", referer);
+        }
+        if (cookie != null) {
+            conn.setRequestProperty("Cookie", cookie);
+        }
+        if (client != null) {
+            conn.setRequestProperty("X-PBB-Client", client);
         }
         try {
             if (conn.getResponseCode() != 200) {
@@ -90,5 +102,57 @@ final class Http {
 
     static String getText(String url, int connectMs, int readMs) throws IOException {
         return getText(url, connectMs, readMs, null);
+    }
+
+    static String getText(String url, int connectMs, int readMs, String cookie, String client)
+            throws IOException {
+        byte[] body = getBytes(url, connectMs, readMs, null, cookie, client);
+        return body == null ? null : new String(body, "UTF-8");
+    }
+
+    /** A POST reply plus the session cookie the server set, if any. */
+    static final class Reply {
+        final String body;
+        final String cookie;
+
+        Reply(String body, String cookie) {
+            this.body = body;
+            this.cookie = cookie;
+        }
+    }
+
+    /** Posts a JSON body. Returns null when the server answered anything but 200. */
+    static Reply postJson(String url, String body, String client, int connectMs, int readMs)
+            throws IOException {
+        byte[] payload = body.getBytes("UTF-8");
+        HttpURLConnection conn = open(url, connectMs, readMs);
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setRequestProperty("Content-Type", "application/json");
+        if (client != null) {
+            conn.setRequestProperty("X-PBB-Client", client);
+        }
+        try {
+            java.io.OutputStream out = conn.getOutputStream();
+            try {
+                out.write(payload);
+            } finally {
+                out.close();
+            }
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            InputStream in = conn.getInputStream();
+            String cookie = conn.getHeaderField("Set-Cookie");
+            try {
+                int end = cookie == null ? -1 : cookie.indexOf(';');
+                return new Reply(new String(readAll(in), "UTF-8"),
+                    end > 0 ? cookie.substring(0, end).trim() : null);
+            } finally {
+                in.close();
+            }
+        } finally {
+            conn.disconnect();
+        }
     }
 }

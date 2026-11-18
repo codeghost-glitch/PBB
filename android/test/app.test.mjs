@@ -519,25 +519,24 @@ function channelSourceContract() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
   const http = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
-  check("the pbb-v2 site is the source", true,
-    java.includes('V2_SITE = "https://pbb-v2.pages.dev"')
-    && java.includes('live-stream4\\\\.js\\\\?v='));
+  check("the pbbcollab.live site is the source", true,
+    java.includes('SITE = "https://www.pbbcollab.live"')
+    && java.includes('/api/streams/session'));
   check("all three cameras have an id", true,
-    ['"1"', '"2"', '"3"'].every((id) => java.includes(id)));
-  check("the site's sealed key vault is decoded", true,
-    java.includes('SEALED_VAULT_PAYLOAD') && java.includes('unrot'));
-  check("the live period is probed from a segment", true,
-    java.includes('probeSidx') && java.includes('manifest_360p_')
-    && java.includes('lastModified'));
-  check("the MPD is generated locally and inlined", true,
+    ['"all"', '"din"', '"ext"'].every((id) => java.includes(id)));
+  check("the handshake is the randomised payload the site posts", true,
+    java.includes('SecureRandom') && java.includes('0x3c')
+    && java.includes('postJson(SITE + "/api/streams/session"'));
+  check("a camera token is unsealed with the handshake nonce", true,
+    java.includes('sessionToken') && java.includes('^ 0x5a ^'));
+  check("the manifests are read with the session cookie", true,
+    java.includes('handshake.cookie') && http.includes('X-PBB-Client')
+    && http.includes('setRequestProperty("Cookie"'));
+  check("the site's MPD is inlined as a data URL", true,
     java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
-    && /Base64\.encodeToString\(mpd/.test(java));
-  check("the generated MPD uses the site's live window", true,
-    java.includes('timeShiftBufferDepth=\\\"PT120S\\\"')
-    && java.includes('urn:mpeg:dash:utc:direct:2014'));
-  check("the generated MPD includes ClearKey init data", true,
-    java.includes('clearKeyPssh') && java.includes('<cenc:pssh>')
-    && java.includes('urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e'));
+    && java.includes('Base64.encodeToString(siteMpd(xml)'));
+  check("the site's segment base is hoisted into BaseURL", true,
+    java.includes('"<BaseURL>" + base + "</BaseURL>"'));
   check("Http decodes inlined MPDs and reads Last-Modified", true,
     /Base64\.getDecoder\(\)\.decode/.test(http)
     && /getLastModified\(\)/.test(http));
