@@ -1,3 +1,4 @@
+/* global Pbb, shaka */
 const state = {
   quality: "hd",
   focused: -1,
@@ -591,6 +592,7 @@ function createCard(stream, index) {
   liveMark.appendChild(document.createTextNode("live"));
   top.appendChild(liveMark);
 
+  const bar = el("div", "cam-bar", null, null);
   const actions = el("div", "cam-actions", null, null);
   const fsBtn = makeIconButton("btn btn-ghost btn-icon", "fs");
   const soundBtn = makeIconButton("btn btn-ghost btn-icon", "sound");
@@ -601,9 +603,11 @@ function createCard(stream, index) {
   actions.appendChild(pipBtn);
   actions.appendChild(recordBtn);
 
+  // The strip sits under the picture, never on it: the feed is the image.
+  bar.appendChild(top);
+  bar.appendChild(actions);
   card.appendChild(videoWrap);
-  card.appendChild(top);
-  card.appendChild(actions);
+  card.appendChild(bar);
 
   card.addEventListener("click", (event) => {
     if (event.target.closest("button") || suppressTap) {

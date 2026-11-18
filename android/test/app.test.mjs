@@ -432,19 +432,20 @@ function fullscreenKeepsThePictureWhole() {
   const app = fs.readFileSync(APP, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
   check("the keypad sits in the top-right corner", true,
-    /\.fs-controls \{[^}]*top: max\(10px, env\(safe-area-inset-top\)\)/s.test(css));
+    /\.fs-controls \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css));
   check("the mini monitor sits in the bottom-right corner", true,
-    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*bottom: max\(10px, env\(safe-area-inset-bottom\)\)/s.test(css));
+    /body\.fullscreen-mode \.cam-card\.mini \{[^}]*bottom: max\(12px, env\(safe-area-inset-bottom\)\)/s.test(css));
   check("the picture never gives up a lane", true,
-    /pip-mode \.video-wrap,\s*body\.fullscreen-mode \.video-wrap \{[^}]*top: 0;[^}]*bottom: 0;/s.test(css));
+    /pip-mode \.video-wrap,\s*body\.fullscreen-mode \.video-wrap \{[^}]*inset: 0;/s.test(css));
   check("no dock or reserved lane is left behind", false,
     css.includes("--fs-rail") || css.includes("--fs-dock") || css.includes(".fs-dock"));
   // Fullscreen chrome follows the desk theme, stays compact, and still speaks
   // when a feed is connecting or has dropped.
-  check("the deck is translucent over the picture", true,
-    /\.fs-deck \{[^}]*backdrop-filter: blur/s.test(css));
+  check("the deck is a quiet solid panel", true,
+    /\.fs-deck \{[^}]*background: var\(--surface\)/s.test(css)
+    && !css.includes("backdrop-filter"));
   check("fullscreen chrome follows the desk theme", true,
-    /html\[data-theme="dark"\] \{[^}]*--fs-glass/s.test(css));
+    /html\[data-theme="dark"\] \{[^}]*--surface:/s.test(css));
   check("keys stay compact but keep a 44px target", true,
     /\.fs-keys \{[^}]*grid-template-columns: repeat\(2, var\(--tap\)\)/s.test(css));
   check("the redundant controls button is gone", false,
@@ -456,7 +457,7 @@ function fullscreenKeepsThePictureWhole() {
   check("the old blanket status hide is gone", false,
     css.includes("body.fullscreen-mode .stream-status { display: none"));
   check("the feed name is a corner channel bug", true,
-    /body\.fullscreen-mode \.indicator \{[^}]*top: max\(10px, env\(safe-area-inset-top\)\)/s.test(css));
+    /body\.fullscreen-mode \.indicator \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css));
   check("fullscreen does not open the keypad on entry", false,
     /if \(state\.fullscreen && players\[state\.focused\]\) \{[^}]*showControls\(\)/s.test(app));
 }
@@ -658,39 +659,51 @@ function controlRoomStructure() {
   check("the header and the status deck are bars", true,
     /\.nav \{[^}]*border-bottom: 1px solid var\(--line\)/s.test(css)
     && /\.status \{[^}]*border-top: 1px solid var\(--line\)/s.test(css));
-  check("camera chrome floats over the picture", true,
-    /\.cam-top \{[^}]*position: absolute/s.test(css)
-    && /\.cam-actions \{[^}]*position: absolute/s.test(css)
-    && /--on-video-top: linear-gradient/.test(css));
-  check("the frames are square, like a multiviewer", true,
-    /\.cam-card \{[^}]*border-radius: 2px/s.test(css));
+  check("camera chrome sits in a strip under the picture", true,
+    /\.cam-bar \{[^}]*border-top: 1px solid var\(--line\)/s.test(css)
+    && /bar\.appendChild\(top\)/.test(app)
+    && /bar\.appendChild\(actions\)/.test(app)
+    && !/--on-video-top/.test(css));
+  check("no words or scrims sit on the video", true,
+    !/\.cam-card::before/.test(css) && !/\.cam-card::after/.test(css)
+    && !/video-wrap::before/.test(css));
+  check("a preview gives its name the whole strip", true,
+    /\.grid \.cam-card:not\(:first-child\) \.cam-bar \{[^}]*flex-direction: column/s.test(css));
 }
 
 function designSystemHoldsTheLine() {
   const css = fs.readFileSync(CSS, "utf8");
   const html = fs.readFileSync(HTML, "utf8");
   const app = fs.readFileSync(APP, "utf8");
-  // The skill's rules, kept as a build-time guard: four sizes, two weights,
-  // spacing on a 4px grid, and a picker that reads as rows of servers.
-  check("four type sizes, two weights", true,
-    (css.match(/--t-(?:xs|sm|md|lg):/g) || []).length === 4
-    && (css.match(/--w-(?:reg|bold):/g) || []).length === 2);
+  // The taste skill's rules, kept as a build-time guard: one type scale, two
+  // weights, 4px-grid spacing, a neutral interface and one filled control.
+  check("one type scale, two weights", true,
+    (css.match(/--t-(?:label|body|card|lead|h1|h2|stat):/g) || []).length === 7
+    && (css.match(/--w-(?:reg|bold):/g) || []).length === 2
+    && !/--t-xs|--t-md|--t-lg/.test(css));
   check("every spacing token is on the 4px grid", true,
-    Array.from(css.matchAll(/--sp-[a-z0-9]+: (\d+)px/g))
+    Array.from(css.matchAll(/--s-[0-9]+: (\d+)px/g))
       .every((match) => Number(match[1]) % 4 === 0));
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && /\.chip-desc \{[^}]*--t-xs/s.test(css)
+    && /\.chip-desc \{[^}]*--t-label/s.test(css)
     && (html.match(/data-server="/g) || []).length === 3
     && (html.match(/chip-desc/g) || []).length === 3);
   check("the chosen route is marked with a filled dot", true,
-    /\.chip\.active \.chip-key \{[^}]*background: var\(--accent\)/s.test(css));
-  check("the program feed is marked by an edge, not a number", true,
-    /\.cam-card:first-child \{[^}]*box-shadow: inset 2px 0 0 var\(--text\)/s.test(css)
+    /\.chip\.active \.chip-key \{[^}]*background: var\(--ink\)/s.test(css));
+  check("the program feed is marked by a hairline, not a number", true,
+    /\.cam-card:first-child \{ border-color: var\(--line-strong\)/s.test(css)
     && !/\.cam-num/.test(css));
-  check("the chosen quality is a filled chip", true,
-    /\.seg-btn\.active \{[^}]*background: var\(--accent\)/s.test(css));
+  check("the one filled control is the chosen quality", true,
+    /\.seg-btn\.active \{[^}]*background: var\(--ink\)/s.test(css));
+  check("the interface stays neutral", true,
+    !css.includes("backdrop-filter")
+    && !/\.cam-card \{[^}]*box-shadow/s.test(css)
+    && !/\.fs-deck \{[^}]*box-shadow/s.test(css)
+    && !/\.sheet-panel \{[^}]*box-shadow/s.test(css));
+  check("the page declares itself as software", true,
+    html.includes('data-type="software"') && html.includes('name="page-type" content="software"'));
   check("the running time sits in the top strip", true,
     /\.cam-card\.rec \.cam-live \{ display: none; \}/.test(css)
     && /top\.appendChild\(tally\)/.test(app)
@@ -702,9 +715,11 @@ function liveWindowAndBackupRoute() {
   const java = fs.readFileSync(ACTIVITY, "utf8");
   // The site's proxy answers its own Origin only, so the page cannot fetch
   // server 2's segments itself. The app makes that hop and hands them over.
-  check("server 2 hops through the app, with the site's origin", true,
+  check("every media hop goes through the app", true,
     /shouldInterceptRequest\(/.test(java)
-    && java.includes('"s2".equals(streamServer)')
+    && java.includes('url.startsWith(SITE + "/stream/")')
+    && java.includes('url.startsWith("https://absp-live.akamaized.net/")')
+    && java.includes('url.startsWith(MIRROR)')
     && java.includes('setRequestProperty("Origin", SITE)')
     && java.includes('setRequestProperty("Cookie", sessionCookie)')
     && java.includes('"Access-Control-Allow-Origin", "*"'));

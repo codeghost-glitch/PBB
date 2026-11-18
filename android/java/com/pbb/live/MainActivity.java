@@ -219,10 +219,16 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(
                 WebView view, WebResourceRequest request) {
-                // Only server 2's segments need the app to make the hop; the
-                // main server is a plain CDN origin and the mirror is open.
+                // The site publishes its segment names as relative paths now,
+                // so even server 1 lands on the site's proxy. That proxy
+                // rejects a file:// page as cross-site hotlinking and the CDN
+                // is not always reachable. Route every media hop through here:
+                // the app can send the right Origin for each host and hand the
+                // WebView a plain CORS-clean response.
                 String url = request.getUrl().toString();
-                if ("s2".equals(streamServer) && url.startsWith(SITE + "/stream/")) {
+                if (url.startsWith(SITE + "/stream/")
+                    || url.startsWith("https://absp-live.akamaized.net/")
+                    || url.startsWith(MIRROR)) {
                     return proxyStream(url, request.getRequestHeaders());
                 }
                 return null;
@@ -382,8 +388,13 @@ public class MainActivity extends Activity {
             conn = Http.open(url, 5000, 20000);
             conn.setRequestProperty("Cookie", sessionCookie);
             conn.setRequestProperty("X-PBB-Client", sessionClient);
-            conn.setRequestProperty("Origin", SITE);
-            conn.setRequestProperty("Referer", SITE + "/");
+            // Only the site's own proxy cares about the Origin. The CDN and
+            // the mirror allow anyone; sending them the site's Origin would
+            // just advertise where the request came from.
+            if (url.startsWith(SITE + "/")) {
+                conn.setRequestProperty("Origin", SITE);
+                conn.setRequestProperty("Referer", SITE + "/");
+            }
             // The bytes go straight to the media stack, so no transcoding layer.
             conn.setRequestProperty("Accept-Encoding", "identity");
             if (asked != null && asked.get("Range") != null) {
