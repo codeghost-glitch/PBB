@@ -53,6 +53,14 @@ public class MainActivity extends Activity {
     // The site carries four cameras; the grid is drawn for three, so the
     // official broadcast feed stays on the web player.
     private static final String[] CAM_IDS = {"all", "din", "ext"};
+    // Server 3 plays the same feeds through the pbb3collablive.xyz mirror, so
+    // its segment route is a third way in when the CDN is blocked.
+    private static final String MIRROR = "https://pbb3collablive.xyz/api/proxy/stream/";
+    private static final String[] CAM_MIRROR = {
+        "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
+        "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
+        "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
+    };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
@@ -60,6 +68,7 @@ public class MainActivity extends Activity {
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
     private static final String KEYS_CACHE = "streams.json";
+    private static final String SERVER_FILE = "stream_server.txt";
 
     static {
         System.loadLibrary("pbb");
@@ -92,6 +101,8 @@ public class MainActivity extends Activity {
     // the system volume when the activity goes away.
     private int appliedVolume = -1;
     private volatile String streamConfigJson;
+    // The site runs the cameras off a main server and a backup one.
+    private volatile String streamServer = "s1";
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -113,6 +124,7 @@ public class MainActivity extends Activity {
         appVolumeLevel = appVolume(filesDir);
         appBrightnessLevel = appBrightness(filesDir);
         streamConfigJson = streamConfig();
+        streamServer = loadServer();
         loadCachedKeys();
         setupWebView();
         applyOrientation();
@@ -258,47 +270,48 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * Stores a new source for one channel: the manifest link, the kid and the
-     * key. The config goes to filesDir/streams.json, so the source survives a
-     * restart, and it is pushed to the page like a fetched config, so the
-     * players pick it up without a restart.
-     */
-    private String setSource(int index, String url, String kid, String key) {
-        String cleanUrl = url == null ? "" : url.trim();
-        String cleanKid = kid == null ? "" : kid.replace("-", "").toLowerCase();
-        String cleanKey = key == null ? "" : key.replace("-", "").toLowerCase();
-        if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith(DATA_MPD)) {
-            return "the manifest link has to be https";
-        }
-        if (!cleanKid.matches("[0-9a-f]{32}") || !cleanKey.matches("[0-9a-f]{32}")) {
-            return "the kid and the key are 32 hex characters";
-        }
-        String json;
+    /** s1 or s2, whichever the operator picked last. */
+    private String loadServer() {
         try {
-            JSONObject config = new JSONObject(streamConfigJson);
-            JSONArray streams = config.getJSONArray("streams");
-            if (index < 0 || index >= streams.length()) {
-                return "no such channel";
+            FileInputStream in = new FileInputStream(new File(getFilesDir(), SERVER_FILE));
+            String raw;
+            try {
+                raw = new String(Http.readAll(in), "UTF-8").trim();
+            } finally {
+                in.close();
             }
-            JSONObject stream = streams.getJSONObject(index);
-            stream.put("url", cleanUrl);
-            stream.put("kid", cleanKid);
-            stream.put("key", cleanKey);
-            json = config.toString();
+            return "s2".equals(raw) || "s3".equals(raw) ? raw : "s1";
         } catch (Exception e) {
-            return "could not store the source";
+            return "s1";
         }
-        streamConfigJson = json;
-        writeKeysCache(json);
-        final String quoted = JSONObject.quote(json);
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                webView.evaluateJavascript(
-                    "window.onStreamConfig && window.onStreamConfig(" + quoted + ")", null);
+    }
+
+    private void storeServer(String server) {
+        try {
+            FileOutputStream out = new FileOutputStream(new File(getFilesDir(), SERVER_FILE));
+            try {
+                out.write(server.getBytes("UTF-8"));
+            } finally {
+                out.close();
             }
-        });
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Switches the feed between the main server and the backup one and pulls
+     * a fresh config from it. Returns an empty string when the pick was taken.
+     */
+    private String setStreamServer(String server) {
+        if (!"s1".equals(server) && !"s2".equals(server) && !"s3".equals(server)) {
+            return "pick server 1, 2 or 3";
+        }
+        if (server.equals(streamServer)) {
+            return "";
+        }
+        streamServer = server;
+        storeServer(server);
+        refreshKeys();
         return "";
     }
 
@@ -377,7 +390,7 @@ public class MainActivity extends Activity {
      * The site hands out one short lived token per camera and serves the
      * manifests only to the cookie that handshake sets.
      */
-    private static String publishedConfig() {
+    private String publishedConfig() {
         Http.Reply handshake = handshake();
         if (handshake == null) {
             return null;
@@ -395,7 +408,7 @@ public class MainActivity extends Activity {
     }
 
     /** The randomised handshake the site's own page posts before it plays. */
-    private static Http.Reply handshake() {
+    private Http.Reply handshake() {
         try {
             byte[] seed = new byte[13];
             new SecureRandom().nextBytes(seed);
@@ -403,8 +416,10 @@ public class MainActivity extends Activity {
             for (int i = 0; i < 12; i++) {
                 key.append(String.format(Locale.US, "%02x", seed[i] & 0xff));
             }
+            // The tag byte's low bit names the server: 0 main, 1 backup.
+            int modeBit = "s2".equals(streamServer) ? 1 : 0;
             String plain = String.format(Locale.US, "%02x:%s:%04x",
-                (seed[12] & 0xfe) | (seed[0] & 0x01), key.substring(0, 8),
+                (seed[12] & 0xfe) | (modeBit ^ (seed[0] & 0x01)), key.substring(0, 8),
                 System.currentTimeMillis() & 0xffffL);
             byte[] sealed = new byte[plain.length()];
             for (int i = 0; i < plain.length(); i++) {
@@ -419,7 +434,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static JSONArray siteStreams(Http.Reply handshake) {
+    private JSONArray siteStreams(Http.Reply handshake) {
         JSONArray streams = new JSONArray();
         try {
             JSONObject reply = new JSONObject(handshake.body);
@@ -435,7 +450,8 @@ public class MainActivity extends Activity {
                 }
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
-                stream.put("url", DATA_MPD + Base64.encodeToString(siteMpd(xml).getBytes("UTF-8"),
+                stream.put("url", DATA_MPD + Base64.encodeToString(
+                    siteMpd(xml, cam.getString("endpoint"), i).getBytes("UTF-8"),
                     Base64.NO_WRAP));
                 stream.put("kid", pair[0]);
                 stream.put("key", pair[1]);
@@ -463,24 +479,33 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * The site names its segments with absolute URLs but leaves the init names
-     * relative. Hoisting the media directory into BaseURL gives both the page
-     * and the recorder one base to join against, which is the shape every other
-     * manifest in this app already has.
+     * Server 1 names its segments absolutely, straight off the CDN; server 2
+     * leaves them relative because they come back through the site's own
+     * proxy; server 3 keeps the live manifest and plays the same segment
+     * numbers through the pbb3collablive.xyz mirror. All three end up with one
+     * BaseURL and relative names - the shape the page and the recorder join.
      */
-    private static String siteMpd(String xml) {
+    private String siteMpd(String xml, String endpoint, int index) {
         Matcher media = Pattern.compile("media=\"(https://[^\"]*/)").matcher(xml);
-        if (!media.find()) {
-            return xml;
+        String hoisted = media.find() ? media.group(1) : null;
+        if (hoisted != null) {
+            xml = xml.replace("media=\"" + hoisted, "media=\"");
         }
-        String base = media.group(1);
+        String base;
+        if ("s3".equals(streamServer)) {
+            base = MIRROR + CAM_MIRROR[index] + "/";
+        } else if (hoisted != null) {
+            base = hoisted;
+        } else {
+            base = SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
+        }
         int head = xml.indexOf("<MPD");
         int end = head < 0 ? -1 : xml.indexOf('>', head);
         if (end < 0) {
             return xml;
         }
         return xml.substring(0, end + 1) + "<BaseURL>" + base + "</BaseURL>"
-            + xml.substring(end + 1).replace("media=\"" + base, "media=\"");
+            + xml.substring(end + 1);
     }
 
     private static JSONArray validKeys(String json) {
@@ -969,10 +994,16 @@ public class MainActivity extends Activity {
             MainActivity.this.refreshKeys();
         }
 
-        /** Returns an empty string when the source was stored. */
+        /** s1 or s2. */
         @JavascriptInterface
-        public String setSource(int index, String url, String kid, String key) {
-            return MainActivity.this.setSource(index, url, kid, key);
+        public String getStreamServer() {
+            return streamServer;
+        }
+
+        /** Returns an empty string when the pick was stored. */
+        @JavascriptInterface
+        public String setStreamServer(String server) {
+            return MainActivity.this.setStreamServer(server);
         }
 
         @JavascriptInterface

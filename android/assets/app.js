@@ -12,6 +12,9 @@ const state = {
   volume: 1,
   brightness: 0.5,
   keysStale: false,
+  // One automatic re-handshake per rotation; a second failure leaves the
+  // message on the strip instead of hammering the site.
+  keyRetry: false,
   mini: -1,
 };
 
@@ -79,7 +82,7 @@ function uuidKid(kid) {
   return kid.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-$3-$4-$5");
 }
 
-const IDLE_HINT = "tap refresh or open sources for the stream keys";
+const IDLE_HINT = "tap refresh or open servers to switch";
 
 function defaultStatus() {
   const count = state.recording.size;
@@ -440,6 +443,12 @@ const ICONS = {
     ["path", { d: "M6 6l12 12" }],
     ["path", { d: "M18 6 6 18" }],
   ],
+  server: [
+    ["rect", { x: 3, y: 4, width: 18, height: 7, rx: 1.5 }],
+    ["rect", { x: 3, y: 13, width: 18, height: 7, rx: 1.5 }],
+    ["path", { d: "M7 7.5h.01" }],
+    ["path", { d: "M7 16.5h.01" }],
+  ],
   sliders: [
     ["path", { d: "M4 7h9" }],
     ["path", { d: "M18 7h2" }],
@@ -724,7 +733,15 @@ async function initPlayer(entry, index) {
     if (Number(detail.code) === 4012) {
       state.keysStale = true;
       setStreamStatus(entry, "keys rotated", true);
-      setStatusText("keys rotated - open sources to paste the new key");
+      // The keys come from the site's handshake, so ask it for fresh ones
+      // before asking the operator to do anything.
+      if (!state.keyRetry && window.Pbb && typeof Pbb.refreshKeys === "function") {
+        state.keyRetry = true;
+        refreshKeysFromUi();
+        setStatusText("keys rotated - fetching fresh keys");
+      } else {
+        setStatusText("keys rotated - open servers to switch");
+      }
       return;
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
@@ -1077,7 +1094,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText(state.keysStale ? "keys rotated - open sources to paste the new key" : "");
+  setStatusText(state.keysStale ? "keys rotated - open servers to switch" : "");
   updateControls();
   return true;
 }
@@ -1244,7 +1261,7 @@ function toggleRecord(index) {
   } else if (state.keysStale) {
     // The keys already rotated, so a recording now would be remuxed with the
     // wrong key and land in Movies/PBB as a file that will not play.
-    setStatusText("keys rotated - open sources before recording");
+    setStatusText("keys rotated - open servers before recording");
   } else {
     Pbb.markStackPair(-1, -1);
     setStatusText(`starting ${entry.stream.name}`);
@@ -1397,45 +1414,48 @@ window.onStreamConfig = async (raw) => {
   }
   if (!changed) {
     if (manualKeyRefresh) {
+      manualKeyRefresh = false;
+      if (state.keyRetry) {
+        // The site still serves the key that just failed, so stop asking.
+        state.keyRetry = false;
+        setStatusText("keys rotated - open servers to switch");
+        return;
+      }
       // Keys are current. Seeking every feed to the live edge here froze all
       // three tiles for a couple of seconds; the startup gate and shared
       // presentation delay already keep them together, so leave playback be.
-      manualKeyRefresh = false;
       setTransientStatus("streams already in sync");
     }
     return;
   }
   manualKeyRefresh = false;
   state.keysStale = false;
+  // A fresh rotation gets its own automatic retry.
+  state.keyRetry = false;
   for (const [i, s] of streams.entries()) {
     players[i].stream = s;
-  }
-  if (!sourceField("sourceSheet").classList.contains("hidden")) {
-    selectSourceChannel(sourceSheet.index);
   }
   await resyncStreams();
   setStatusText("keys refreshed - reconnecting streams");
 };
 
-// ------------------------------------------------------------------- sources
+// ------------------------------------------------------------------- servers
 
-// The broadcaster rotates the manifest and the clear key every few days. This
-// sheet is the Auto License Tool the web site has, in the app: a link, a
-// kid:key line or a blob of notes goes in, and the boxes it understands come
-// out filled. A new source is a paste, not a new build.
-const sourceSheet = { index: 0 };
+// The same cameras come in over three routes: 1 is the main one, 2 the backup
+// that answers when 1 does not, and 3 the mirror. The app stores the pick, so
+// the next launch starts on the same one.
+const serverSheet = { server: "s1" };
 
-const HEX32 = /^[0-9a-f]{32}$/i;
+const SERVERS = ["s1", "s2", "s3"];
+
+const SERVER_NOTE = {
+  s1: "server 1 is on - the main feed",
+  s2: "server 2 is on - the backup feed",
+  s3: "server 3 is on - the mirror feed",
+};
 
 function sourceField(id) {
   return document.getElementById(id);
-}
-
-function setSourceField(id, value) {
-  const field = sourceField(id);
-  if (field) {
-    field.value = value;
-  }
 }
 
 function setSourceNote(message) {
@@ -1445,99 +1465,27 @@ function setSourceNote(message) {
   }
 }
 
-function normalizeHex(value) {
-  return String(value || "").replace(/-/g, "").trim().toLowerCase();
-}
-
-// Pulls a manifest link and a kid:key pair out of whatever was pasted: a
-// forum line, a note, a json blob.
-function parseSourceText(text) {
-  const blob = String(text || "");
-  const found = { url: "", kid: "", key: "" };
-  const urls = blob.match(/https?:\/\/[^\s"'<>\\]+/gi) || [];
-  const manifest = urls.find((u) => /\.mpd(\?|$)/i.test(u))
-    || urls.find((u) => !/licen|widevine|drm/i.test(u));
-  if (manifest) {
-    // A forum line ends the link with a comma or a full stop.
-    found.url = manifest.replace(/[),.;:]+$/, "");
-  }
-  const withoutUrls = blob.replace(/https?:\/\/[^\s"'<>\\]+/gi, " ");
-  const pair = withoutUrls.match(/([0-9a-f-]{32,36})\s*[:=]\s*([0-9a-f-]{32,36})/i);
-  if (pair) {
-    found.kid = normalizeHex(pair[1]);
-    found.key = normalizeHex(pair[2]);
-    return found;
-  }
-  try {
-    const json = JSON.parse(blob);
-    const keys = Array.isArray(json) ? json : (json && json.keys);
-    if (Array.isArray(keys) && keys.length) {
-      const entry = keys[0] || {};
-      found.kid = normalizeHex(entry.kid || "");
-      found.key = normalizeHex(entry.k || entry.key || "");
-    }
-  } catch {
-    // not json, the loose scan below still gets a look
-  }
-  const loose = (withoutUrls.match(/[0-9a-f-]{32,36}/gi) || [])
-    .map(normalizeHex)
-    .filter((value) => HEX32.test(value));
-  if (!found.kid && loose.length >= 2) {
-    found.kid = loose[0];
-    found.key = loose[1];
-  }
-  return found;
-}
-
-function sourceStreams() {
-  return players.map((entry) => entry.stream).filter(Boolean);
-}
-
-function selectSourceChannel(index) {
-  const stream = sourceStreams()[index];
-  if (!stream) {
+function markServerChoice() {
+  const row = sourceField("serverChips");
+  if (!row) {
     return;
   }
-  sourceSheet.index = index;
-  const chips = document.querySelectorAll("#sourceChips .chip");
-  for (const chip of chips) {
-    chip.classList.toggle("active", Number(chip.dataset.index) === index);
+  for (const chip of row.children) {
+    chip.classList.toggle("active", chip.dataset.server === serverSheet.server);
   }
-  setSourceField("sourceUrl", stream.url || "");
-  setSourceField("sourceKid", stream.kid || "");
-  setSourceField("sourceKey", stream.key || "");
-  setSourceNote("paste a manifest link or a kid:key line into any box - it fills the rest");
 }
 
-function openSourceSheet(index) {
+function openSourceSheet() {
   const sheet = sourceField("sourceSheet");
   if (!sheet) {
     return;
   }
-  const list = sourceStreams();
-  if (!list.length) {
-    setTransientStatus("no channels yet");
-    return;
+  if (window.Pbb && typeof Pbb.getStreamServer === "function") {
+    const stored = Pbb.getStreamServer();
+    serverSheet.server = SERVERS.includes(stored) ? stored : "s1";
   }
-  const row = sourceField("sourceChips");
-  if (row) {
-    if (row.childElementCount !== list.length) {
-      row.replaceChildren();
-      list.forEach((stream, i) => {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.dataset.index = String(i);
-        chip.textContent = (stream.name || "channel " + (i + 1)).toLowerCase();
-        chip.addEventListener("click", () => selectSourceChannel(i));
-        row.appendChild(chip);
-      });
-    }
-    list.forEach((stream, i) => {
-      row.children[i].textContent = (stream.name || "channel " + (i + 1)).toLowerCase();
-    });
-  }
-  selectSourceChannel(Math.max(0, Math.min(list.length - 1, index)));
+  markServerChoice();
+  setSourceNote(SERVER_NOTE[serverSheet.server]);
   sheet.classList.remove("hidden");
 }
 
@@ -1548,91 +1496,21 @@ function closeSourceSheet() {
   }
 }
 
-// A paste into any box fills the boxes it understands: a link goes to the
-// manifest, a kid:key pair goes to the kid and the key.
-function onSourcePaste(event) {
-  const target = event.target;
-  const text = event.clipboardData ? event.clipboardData.getData("text") : "";
-  if (!text) {
-    return;
-  }
-  const found = parseSourceText(text);
-  const hex = normalizeHex(text.trim());
-  if (target && target.id === "sourceKey" && HEX32.test(hex)) {
-    event.preventDefault();
-    setSourceField("sourceKey", hex);
-    return;
-  }
-  if (target && target.id === "sourceKid" && HEX32.test(hex)) {
-    event.preventDefault();
-    setSourceField("sourceKid", hex);
-    return;
-  }
-  if (!found.url && !found.kid && !found.key) {
-    return;
-  }
-  event.preventDefault();
-  if (found.url) {
-    setSourceField("sourceUrl", found.url);
-  } else if (target && target.id === "sourceUrl") {
-    // Nothing usable in the paste, so the link box keeps no rubbish either.
-    setSourceField("sourceUrl", "");
-  }
-  if (found.kid) {
-    setSourceField("sourceKid", found.kid);
-  }
-  if (found.key) {
-    setSourceField("sourceKey", found.key);
-  }
-  setSourceNote("read the paste - check the boxes and apply");
-}
-
-// The manifest carries the kid, so a link alone is enough to fill that box.
-async function detectSourceKid() {
-  const field = sourceField("sourceUrl");
-  const url = (field && field.value.trim()) || "";
-  if (!url) {
-    setSourceNote("no manifest link to inspect");
-    return;
-  }
-  setSourceNote("reading the manifest...");
-  try {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("http " + response.status);
-    }
-    const xml = await response.text();
-    const hit = xml.match(/default_KID="([0-9a-fA-F-]{32,36})"/);
-    const kid = hit ? normalizeHex(hit[1]) : "";
-    if (!HEX32.test(kid)) {
-      setSourceNote("no kid in that manifest");
-      return;
-    }
-    setSourceField("sourceKid", kid);
-    setSourceNote("kid detected - add the key and apply");
-  } catch (error) {
-    setSourceNote("could not read the manifest: " + error.message);
-  }
-}
-
-function applySource() {
-  const urlField = sourceField("sourceUrl");
-  const kidField = sourceField("sourceKid");
-  const keyField = sourceField("sourceKey");
-  const url = (urlField && urlField.value.trim()) || "";
-  const kid = normalizeHex((kidField && kidField.value) || "");
-  const key = normalizeHex((keyField && keyField.value) || "");
-  if (!window.Pbb || typeof Pbb.setSource !== "function") {
+function selectServer(server) {
+  const pick = SERVERS.includes(server) ? server : "s1";
+  if (!window.Pbb || typeof Pbb.setStreamServer !== "function") {
     setSourceNote("android bridge missing");
     return;
   }
-  const error = Pbb.setSource(sourceSheet.index, url, kid, key);
+  const error = Pbb.setStreamServer(pick);
   if (error) {
     setSourceNote(error);
     return;
   }
+  serverSheet.server = pick;
+  markServerChoice();
   closeSourceSheet();
-  setTransientStatus("source updated - reconnecting");
+  setTransientStatus("server " + pick.slice(1) + " - reconnecting");
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
@@ -1662,7 +1540,7 @@ function toggleStitch() {
     }
     setTransientStatus("saving main + dining");
   } else if (state.keysStale) {
-    setTransientStatus("keys rotated - open sources before recording");
+    setTransientStatus("keys rotated - open servers before recording");
   } else {
     stitch.active = true;
     Pbb.markStackPair(STITCH_FEEDS[0], STITCH_FEEDS[1]);
@@ -1679,7 +1557,6 @@ function wireSourceSheet() {
   if (!sheet) {
     return;
   }
-  sheet.addEventListener("paste", onSourcePaste);
   sheet.addEventListener("click", (event) => {
     if (event.target === sheet) {
       closeSourceSheet();
@@ -1687,16 +1564,14 @@ function wireSourceSheet() {
   });
   const close = sourceField("sourceClose");
   if (close) {
-    setIcon(close, "close", "close sources");
+    setIcon(close, "close", "close servers");
     close.addEventListener("click", closeSourceSheet);
   }
-  const detect = sourceField("sourceDetect");
-  if (detect) {
-    detect.addEventListener("click", detectSourceKid);
-  }
-  const apply = sourceField("sourceApply");
-  if (apply) {
-    apply.addEventListener("click", applySource);
+  const row = sourceField("serverChips");
+  if (row) {
+    for (const chip of Array.from(row.children)) {
+      chip.addEventListener("click", () => selectServer(chip.dataset.server));
+    }
   }
 }
 
@@ -1765,8 +1640,8 @@ function boot() {
   }
   const sourceBtn = document.getElementById("sourceBtn");
   if (sourceBtn) {
-    setIcon(sourceBtn, "sliders", "edit stream source");
-    sourceBtn.addEventListener("click", () => openSourceSheet(sourceSheet.index));
+    setIcon(sourceBtn, "server", "choose stream server");
+    sourceBtn.addEventListener("click", openSourceSheet);
   }
   const stitchBtn = document.getElementById("stitchBtn");
   if (stitchBtn) {

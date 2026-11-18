@@ -117,6 +117,7 @@ function makePlayer(index, name) {
 
 function loadPage() {
   const calls = [];
+  const serverPick = { server: "s1" };
   const Pbb = {
     setVolume: (value, persist) => calls.push(["setVolume", value, persist]),
     setBrightness: (value, persist) => calls.push(["setBrightness", value, persist]),
@@ -129,28 +130,29 @@ function loadPage() {
     setOrientation: (mode) => calls.push(["setOrientation", mode]),
     setTheme: (name) => calls.push(["setTheme", name]),
     enterPip: () => calls.push(["enterPip"]),
-    setSource: (index, url, kid, key) => {
-      calls.push(["setSource", index, url, kid, key]);
+    getStreamServer: () => serverPick.server,
+    setStreamServer: (server) => {
+      calls.push(["setStreamServer", server]);
+      serverPick.server = server;
       return "";
     },
   };
 
   const statusText = makeElement("span");
   const backBtn = makeElement("button");
-  const sourceUrl = makeElement("input");
-  const sourceKid = makeElement("input");
-  const sourceKey = makeElement("input");
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
-  const sourceChips = makeElement("div");
+  const serverChips = makeElement("div");
+  for (const id of ["s1", "s2", "s3"]) {
+    const chip = makeElement("button");
+    chip.dataset.server = id;
+    serverChips.appendChild(chip);
+  }
   const fields = {
     statusText,
-    sourceUrl,
-    sourceKid,
-    sourceKey,
     sourceNote,
     sourceSheet,
-    sourceChips,
+    serverChips,
   };
   const windowStub = {
     Pbb,
@@ -206,10 +208,9 @@ function loadPage() {
   state,
   players,
   gesture,
-  sourceSheet,
-  parseSourceText,
+  serverSheet,
+  selectServer,
   openSourceSheet,
-  applySource,
   focusStream,
   toggleRecord,
   applyGestureValue,
@@ -398,57 +399,32 @@ function channelListContract() {
   }
 }
 
-function sourceTextIsRead() {
+function serverPickIsStored() {
   const page = loadPage();
-  const found = page.parseSourceText(
-    "PBB ALL ACCESS\nhttps://absp-live.akamaized.net/dash/live/2099522/x/manifest.mpd\n"
-    + "8150b74d-1632-4bb4-b2ff-62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5");
-  check("the manifest link is read",
-    "https://absp-live.akamaized.net/dash/live/2099522/x/manifest.mpd", found.url);
-  check("the kid is read without dashes", "8150b74d16324bb4b2ff62e3e202fc7a", found.kid);
-  check("the key is read", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", found.key);
+  page.selectServer("s2");
+  const call = page.calls.find((entry) => entry[0] === "setStreamServer");
+  check("the pick reaches the app", "s2", call && call[1]);
+  check("the sheet closes after a pick", true, page.fields.sourceSheet.classList.contains("hidden"));
+  check("the sheet remembers the pick", "s2", page.serverSheet.server);
 }
 
-function sourceTextPrefersTheManifest() {
+function serverSheetFollowsTheApp() {
   const page = loadPage();
-  const found = page.parseSourceText(
-    "license https://license.example.invalid/widevine\nstream https://cdn.example.invalid/manifest.mpd?x=1");
-  check("the manifest wins over the license link",
-    "https://cdn.example.invalid/manifest.mpd?x=1", found.url);
-}
-
-function sourceTextDropsTheFullStop() {
-  const page = loadPage();
-  const found = page.parseSourceText(
-    "see https://cdn.example.invalid/manifest.mpd, then the key");
-  check("the link keeps no full stop",
-    "https://cdn.example.invalid/manifest.mpd", found.url);
-}
-
-function sourceJsonIsRead() {
-  const page = loadPage();
-  const found = page.parseSourceText(
-    '{"keys":[{"kid":"8150b74d16324bb4b2ff62e3e202fc7a","k":"0c5ed4f9db9d4ee61bbc91b3a51ef8b5"}]}');
-  check("the kid is read from json", "8150b74d16324bb4b2ff62e3e202fc7a", found.kid);
-  check("the key is read from json", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", found.key);
-}
-
-function sourceApplyStoresTheChannel() {
-  const page = loadPage();
-  page.fields.sourceUrl.value = "https://cdn.example.invalid/manifest.mpd";
-  page.fields.sourceKid.value = "8150b74d-1632-4bb4-b2ff-62e3e202fc7a";
-  page.fields.sourceKey.value = "0c5ed4f9db9d4ee61bbc91b3a51ef8b5";
-  page.sourceSheet.index = 1;
-  page.applySource();
-  const call = page.calls.find((entry) => entry[0] === "setSource");
-  check("the source is stored", true, Boolean(call));
-  if (call) {
-    check("the channel is stored", 1, call[1]);
-    check("the manifest is stored", "https://cdn.example.invalid/manifest.mpd", call[2]);
-    check("the kid is stored without dashes", "8150b74d16324bb4b2ff62e3e202fc7a", call[3]);
-    check("the key is stored", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", call[4]);
-  }
-  check("the sheet closes after a store", true, page.fields.sourceSheet.classList.contains("hidden"));
+  page.selectServer("s2");
+  page.openSourceSheet();
+  check("the sheet opens on the stored server", "s2", page.serverSheet.server);
+  check("the active chip is marked", true,
+    page.fields.serverChips.children[1].classList.contains("active")
+    && !page.fields.serverChips.children[0].classList.contains("active"));
+  check("the note names the backup", true,
+    /backup/.test(page.fields.sourceNote.textContent));
+  page.selectServer("s3");
+  page.openSourceSheet();
+  check("the sheet opens on the third server", "s3", page.serverSheet.server);
+  check("the note names the mirror", true,
+    /mirror/.test(page.fields.sourceNote.textContent));
+  check("the third chip is the marked one", true,
+    page.fields.serverChips.children[2].classList.contains("active"));
 }
 
 function fullscreenKeepsThePictureWhole() {
@@ -510,6 +486,9 @@ function refreshResyncsAllStreams() {
     /manualKeyRefresh[\s\S]{0,320}await resyncStreams\(\)/s.test(app));
   check("all players reload in the same tick", true,
     /for \(const \[i\] of players\.entries\(\)\) \{[\s\S]{0,120}initPlayer\(players\[i\], i\)/s.test(app));
+  check("a rotated key is re-fetched once, then explained", true,
+    /=== 4012[\s\S]{0,500}state\.keyRetry = true;[\s\S]{0,120}refreshKeysFromUi\(\)/.test(app)
+    && /state\.keyRetry = false;/.test(app));
   check("an unchanged-key refresh never seeks the live feeds", true,
     !/\.currentTime = /s.test(app) && !/goToLive\(\)/s.test(app) &&
     /setTransientStatus\("streams already in sync"\)/s.test(app));
@@ -534,7 +513,7 @@ function channelSourceContract() {
     && http.includes('setRequestProperty("Cookie"'));
   check("the site's MPD is inlined as a data URL", true,
     java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
-    && java.includes('Base64.encodeToString(siteMpd(xml)'));
+    && /Base64\.encodeToString\(\s*siteMpd\(xml,/.test(java));
   check("the site's segment base is hoisted into BaseURL", true,
     java.includes('"<BaseURL>" + base + "</BaseURL>"'));
   check("Http decodes inlined MPDs and reads Last-Modified", true,
@@ -547,12 +526,13 @@ function channelSourceContract() {
     path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
   check("recording uses the generated MPD's BaseURL", true,
     /plan\.baseUrl = baseEnd > baseStart/.test(recorder));
-  check("the dead pbb3 source is gone", false,
-    /pbb3collablive|PBB3_M3U|api\.Config/.test(java));
+  check("the dead pbb3 bundle reader is gone", false,
+    /PBB3_M3U|api\.Config|SEALED_VAULT|live-stream4/.test(java));
   check("no reachability gate rejects the generated manifests", false,
     /reachable\(/.test(java));
-  check("an open sources sheet follows the refreshed config", true,
-    /sourceField\("sourceSheet"\)\.classList\.contains\("hidden"\)[\s\S]{0,160}selectSourceChannel\(sourceSheet\.index\)/.test(app));
+  check("the sheet is a server picker, not a source editor", true,
+    /Pbb\.getStreamServer\(\)/.test(app) && /Pbb\.setStreamServer\(pick\)/.test(app)
+    && !/parseSourceText|applySource|selectSourceChannel/.test(app));
   check("the web-player channels keep their names", true,
     java.includes("CHANNEL_NAMES"));
   check("the old JSON shapes are gone", false, /mpdUrl|servers\.getJSONObject/.test(java));
@@ -572,10 +552,17 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sources sheet has no server picker", false,
-    /serverChips|data-source=/.test(html) || /serverChips|selectServer/.test(app));
-  check("the bridge has no server setter", false,
-    /setChannelSource/.test(java));
+  check("the sheet lists the three servers", true,
+    /id="serverChips"/.test(html) && /data-server="s1"/.test(html)
+    && /data-server="s2"/.test(html) && /data-server="s3"/.test(html)
+    && /selectServer/.test(app));
+  check("the third server is the mirror route", true,
+    /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java)
+    && /CAM_MIRROR/.test(java));
+  check("the bridge stores the pick", true,
+    /setStreamServer/.test(java) && /getStreamServer/.test(java));
+  check("the manifest and key boxes are gone", false,
+    /sourceUrl|sourceKid|sourceKey|sourceDetect|sourceApply/.test(html + app));
 }
 
 function playbackAndRecorderFixes() {
@@ -675,11 +662,8 @@ const tests = [
   sliderLevelIsSavedOnce,
   bridgeContract,
   channelListContract,
-  sourceTextIsRead,
-  sourceTextPrefersTheManifest,
-  sourceTextDropsTheFullStop,
-  sourceJsonIsRead,
-  sourceApplyStoresTheChannel,
+  serverPickIsStored,
+  serverSheetFollowsTheApp,
   fullscreenKeepsThePictureWhole,
   controlRoomStructure,
   stopNoticeClearsTheTallyButKeepsTheKey,
