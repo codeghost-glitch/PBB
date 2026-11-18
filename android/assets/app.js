@@ -556,15 +556,20 @@ function createCard(stream, index) {
   const video = el("video", null, "video", null);
   video.setAttribute("playsinline", "");
   video.setAttribute("webkit-playsinline", "");
-  video.muted = true;
+  // The element stays unmuted for its whole life and is played silent with
+  // the level at zero. Toggling "muted" tears the audio renderer down and
+  // builds it again, and that is what made the picture stutter every time
+  // the sound was switched.
+  video.muted = false;
+  video.volume = 0;
   video.autoplay = true;
   video.preload = "auto";
   video.controls = false;
   video.setAttribute("aria-label", `${stream.name} live video`);
   const statusEl = el("div", "stream-status", "status", "connecting...");
-  // The tally light lives in the card's top strip, with the running time,
-  // instead of floating over the picture or hiding in a toolbar.
-  const tally = el("div", "tally", "tally", null);
+  // The running time is a burn-in over the picture, the way a recorder puts
+  // it there, so the strip on top stays free for the name.
+  const tally = el("div", "tally cam-tally", null, null);
   tally.setAttribute("aria-hidden", "true");
   tally.appendChild(el("span", "tally-dot", null, null));
   tally.appendChild(el("span", "tally-label", null, "rec"));
@@ -574,13 +579,17 @@ function createCard(stream, index) {
   videoWrap.appendChild(statusEl);
 
   const top = el("div", "cam-top", null, null);
-  top.appendChild(el("span", "cam-num", null, `0${index + 1}`));
   top.appendChild(el("span", "cam-title", "name", stream.name));
-  const liveBadge = el("span", "live-badge", "badge", null);
-  liveBadge.appendChild(el("span", "live-pip", null, null));
-  liveBadge.appendChild(document.createTextNode("live"));
-  top.appendChild(liveBadge);
+  if (index === 0) {
+    top.appendChild(el("span", "cam-role", null, "program"));
+  }
+  // While a feed records, the tally takes the place of the live mark: both
+  // would not fit on a preview strip, and the red one says more.
   top.appendChild(tally);
+  const liveMark = el("span", "cam-live", null, null);
+  liveMark.appendChild(el("span", "cam-live-dot", null, null));
+  liveMark.appendChild(document.createTextNode("live"));
+  top.appendChild(liveMark);
 
   const actions = el("div", "cam-actions", null, null);
   const fsBtn = makeIconButton("btn btn-ghost btn-icon", "fs");
@@ -592,8 +601,8 @@ function createCard(stream, index) {
   actions.appendChild(pipBtn);
   actions.appendChild(recordBtn);
 
-  card.appendChild(top);
   card.appendChild(videoWrap);
+  card.appendChild(top);
   card.appendChild(actions);
 
   card.addEventListener("click", (event) => {
@@ -617,7 +626,10 @@ function createCard(stream, index) {
   recordBtn.addEventListener("click", () => toggleRecord(index));
 
   grid.appendChild(card);
-  players.push({ video, player: null, stream, statusEl, card, tally, tallyTime, loaded: false });
+  players.push({
+    video, player: null, stream, statusEl, card, tally, tallyTime, loaded: false,
+    audioBlocked: false,
+  });
 }
 
 // 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT are transient on live
@@ -653,6 +665,9 @@ let gridStartTimer = null;
 
 function playEntry(entry) {
   entry.video.play().catch(() => {
+    // Some devices refuse to start a feed with sound. Fall back to a muted
+    // element for that feed and keep the level routing for the rest.
+    entry.audioBlocked = true;
     entry.video.muted = true;
     if (state.sound === players.indexOf(entry)) {
       state.sound = -1;
@@ -800,11 +815,11 @@ function applyQuality(player, quality) {
   if (!tracks.length) {
     return;
   }
-  // Cap hd at 720p: on a 720-line screen a 1080p variant is decoded and then
-  // scaled down, costing more than it shows. Lift sd to 360p so it is watchable.
+  // hd takes the top rendition the feed offers - 1080p when the origin has
+  // one - and sd stays at 360p so two of them can still be watched at once.
   const chosen = quality === "hd"
-    ? tracks.filter((t) => t.height <= 720).sort((a, b) => b.height - a.height)[0]
-      || tracks.sort((a, b) => a.height - b.height)[0]
+    ? tracks.filter((t) => t.height <= 1080).sort((a, b) => b.height - a.height)[0]
+      || tracks.sort((a, b) => b.height - a.height)[0]
     : tracks.filter((t) => t.height >= 360).sort((a, b) => a.height - b.height)[0]
       || tracks.sort((a, b) => a.height - b.height)[0];
   // Keep the buffer on the rare case the variant does change (the operator
@@ -1007,9 +1022,21 @@ function updateTimers() {
 
 // The focused feed carries the sound, and the mini tile is audible over it, so
 // you can hear both cameras at once. Nothing is audible when sound is muted.
+//
+// The level is what changes, never the muted flag: a browser builds the audio
+// renderer when an element is unmuted and drops it again when it is muted, and
+// that rebuild is what the picture waited for - the feed visibly stalled
+// every time the sound was switched. A feed that could not start with sound
+// at all keeps the old way round.
 function applyAudio() {
   for (const [i, entry] of players.entries()) {
-    entry.video.muted = !(i === state.sound || (i === state.mini && state.sound >= 0));
+    const audible = i === state.sound || (i === state.mini && state.sound >= 0);
+    if (!entry.audioBlocked) {
+      entry.video.muted = false;
+    } else {
+      entry.video.muted = !audible;
+    }
+    entry.video.volume = audible ? 1 : 0;
   }
 }
 
@@ -1019,8 +1046,6 @@ function ensureSound(index) {
   }
   state.sound = index;
   applyAudio();
-  players[index].video.volume = 1;
-  players[index].video.play().catch(() => {});
   updateControls();
 }
 

@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
-  <meta name="theme-color" content="#070A0F" id="themeColor">
+  <meta name="theme-color" content="#0A0B0D" id="themeColor">
   <title>PBB live</title>
   <script>
     // The gallery opens after hours. A stored choice wins; otherwise the
-    // broadcast desk stays dark until the operator switches the lights on.
+    // monitor wall stays dark until the operator switches the lights on.
     (function () {
       var theme;
       try {
@@ -27,23 +27,20 @@
     <header class="nav">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
             <path d="M2.5 16 C6 9.5, 26 9.5, 29.5 16 C26 22.5, 6 22.5, 2.5 16 Z" fill="#FFE566" stroke="currentColor" stroke-width="1.8"></path>
             <circle cx="16" cy="16" r="4.6" fill="#E8635A" stroke="currentColor" stroke-width="1.8"></circle>
             <circle cx="16" cy="16" r="1.9" fill="#14110C"></circle>
           </svg>
         </div>
         <div class="brand-copy">
-          <h1>pbb live</h1>
-          <p>studio control &middot; three cameras</p>
+          <h1>PBB live</h1>
         </div>
       </div>
       <div class="desk-actions">
-        <span class="live-tag"><span class="live-pip" aria-hidden="true"></span>3 feeds live</span>
         <div class="seg" role="group" aria-label="default quality">
-          <span class="seg-label">quality</span>
-          <button class="seg-btn" type="button" data-quality="hd">hd</button>
-          <button class="seg-btn" type="button" data-quality="sd">sd</button>
+          <button class="seg-btn" type="button" data-quality="hd">1080</button>
+          <button class="seg-btn" type="button" data-quality="sd">360</button>
         </div>
         <button id="themeBtn" class="desk-key" type="button" aria-label="switch to dark theme"></button>
       </div>
@@ -76,21 +73,21 @@
       </div>
       <div class="sheet-chips" id="serverChips" role="group" aria-label="stream server">
         <button class="chip" type="button" data-server="s1">
-          <span class="chip-key" aria-hidden="true">01</span>
+          <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-copy">
             <span class="chip-name">main server</span>
             <span class="chip-desc">straight from the cdn</span>
           </span>
         </button>
         <button class="chip" type="button" data-server="s2">
-          <span class="chip-key" aria-hidden="true">02</span>
+          <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-copy">
             <span class="chip-name">backup server</span>
             <span class="chip-desc">through the site proxy</span>
           </span>
         </button>
         <button class="chip" type="button" data-server="s3">
-          <span class="chip-key" aria-hidden="true">03</span>
+          <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-copy">
             <span class="chip-name">mirror server</span>
             <span class="chip-desc">the pbb3collablive route</span>

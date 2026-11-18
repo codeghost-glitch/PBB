@@ -602,7 +602,7 @@ function playbackAndRecorderFixes() {
     selectVariantTrack(track) { fakePlayer.picked = track.height; },
   };
   page.applyQuality(fakePlayer, "hd");
-  check("hd caps at 720p on a 720-line screen", 720, fakePlayer.picked);
+  check("hd takes the 1080p rendition", 1080, fakePlayer.picked);
   page.applyQuality(fakePlayer, "sd");
   check("sd is watchable at 360p, not 180p", 360, fakePlayer.picked);
   const css = fs.readFileSync(path.join(HERE, "..", "assets", "styles.css"), "utf8");
@@ -647,19 +647,21 @@ function controlRoomStructure() {
   check("each card has a key strip", true, app.includes('"cam-actions"'));
   check("the old floating rack is gone", false,
     app.includes('"cam-rack"') || css.includes(".cam-rack"));
-  check("the header and the status deck float as panels", true,
-    /\.nav \{[^}]*border-radius: var\(--radius\)/s.test(css)
-    && /\.status \{[^}]*border-radius: var\(--radius\)/s.test(css)
-    && !/\.nav \{[^}]*border-bottom: var\(--console-rule\)/s.test(css));
+  check("the header and the status deck are bars", true,
+    /\.nav \{[^}]*border-bottom: 1px solid var\(--line\)/s.test(css)
+    && /\.status \{[^}]*border-top: 1px solid var\(--line\)/s.test(css));
   check("camera chrome floats over the picture", true,
     /\.cam-top \{[^}]*position: absolute/s.test(css)
     && /\.cam-actions \{[^}]*position: absolute/s.test(css)
     && /--on-video-top: linear-gradient/.test(css));
+  check("the frames are square, like a multiviewer", true,
+    /\.cam-card \{[^}]*border-radius: 2px/s.test(css));
 }
 
 function designSystemHoldsTheLine() {
   const css = fs.readFileSync(CSS, "utf8");
   const html = fs.readFileSync(HTML, "utf8");
+  const app = fs.readFileSync(APP, "utf8");
   // The skill's rules, kept as a build-time guard: four sizes, two weights,
   // spacing on a 4px grid, and a picker that reads as rows of servers.
   check("four type sizes, two weights", true,
@@ -674,16 +676,17 @@ function designSystemHoldsTheLine() {
     && /\.chip-desc \{[^}]*--t-xs/s.test(css)
     && (html.match(/data-server="/g) || []).length === 3
     && (html.match(/chip-desc/g) || []).length === 3);
-  check("the chosen route is tinted, not flooded", true,
-    /\.chip\.active \{[^}]*background: var\(--accent-soft\)/s.test(css));
-  check("only the program card wears the accent number", true,
-    /\.cam-num \{[^}]*background: var\(--on-video-glass\)/s.test(css)
-    && /\.cam-card:first-child \.cam-num \{[^}]*background: var\(--accent\)/s.test(css));
-  check("the chosen quality is tinted, not filled", true,
-    /\.seg-btn\.active \{[^}]*color: var\(--accent\);\s*background: var\(--accent-soft\)/s.test(css));
-  check("preview strips are name-first", true,
-    /\.cam-card:not\(:first-child\) \.cam-num \{ display: none; \}/.test(css)
-    && /\.cam-card\.rec \.tally \{[^}]*position: absolute/s.test(css));
+  check("the chosen route is marked with a filled dot", true,
+    /\.chip\.active \.chip-key \{[^}]*background: var\(--accent\)/s.test(css));
+  check("the program feed is marked by an edge, not a number", true,
+    /\.cam-card:first-child \{[^}]*box-shadow: inset 2px 0 0 var\(--text\)/s.test(css)
+    && !/\.cam-num/.test(css));
+  check("the chosen quality is a filled chip", true,
+    /\.seg-btn\.active \{[^}]*background: var\(--accent\)/s.test(css));
+  check("the running time sits in the top strip", true,
+    /\.cam-card\.rec \.cam-live \{ display: none; \}/.test(css)
+    && /top\.appendChild\(tally\)/.test(app)
+    && !/\.cam-num/.test(css));
 }
 
 function liveWindowAndBackupRoute() {
@@ -725,6 +728,19 @@ function startupDoesNotReloadTheGrid() {
     java.includes("minimumUpdatePeriod"));
 }
 
+function soundSwitchDoesNotRebuildTheAudioRenderer() {
+  const app = fs.readFileSync(APP, "utf8");
+  // A browser builds the audio renderer when an element is unmuted and drops
+  // it again when it is muted; that rebuild is what the picture waited for.
+  check("the feeds are unmuted from the start", true,
+    /video\.muted = false;\s*video\.volume = 0;/.test(app));
+  check("the level decides what is audible", true,
+    /entry\.video\.volume = audible \? 1 : 0;/.test(app)
+    && !/entry\.video\.muted = !\(i === state\.sound/.test(app));
+  check("switching the sound does not touch playback", true,
+    !/function ensureSound[\s\S]{0,400}video\.play\(/.test(app));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -746,6 +762,7 @@ const tests = [
   designSystemHoldsTheLine,
   liveWindowAndBackupRoute,
   startupDoesNotReloadTheGrid,
+  soundSwitchDoesNotRebuildTheAudioRenderer,
 ];
 
 for (const test of tests) {

@@ -6,63 +6,54 @@
   font-display: swap;
 }
 
-/* Cinematic broadcast: black glass, amber signal, red only when recording.
-   The video is the light source; every surface around it stays quiet.
-   Four type sizes, two weights, an 8-point rhythm, one accent doing the
-   pointing and decorative tint tokens per theme so the daylight palette
-   glows warm instead of neon. */
+/* A multiviewer, not a dashboard: square frames edge to edge, monochrome
+   chrome, and colour only where something is true (live green, record red).
+   The pictures are the colour; everything around them stays quiet.
+   Four type sizes, two weights, spacing on a 4px grid. */
 :root {
   color-scheme: light;
 
-  --bg: #ECE9E2;
-  --bg-2: #F7F5F0;
-  --surface: rgba(255, 255, 255, 0.86);
+  --bg: #E9EAEC;
+  --bg-2: #E2E4E7;
+  --surface: #FFFFFF;
   --surface-solid: #FFFFFF;
-  --surface-2: #F1EEE7;
-  --line: rgba(20, 26, 35, 0.12);
-  --line-strong: rgba(20, 26, 35, 0.2);
-  --text: #151A21;
-  --muted: #66707E;
-  --accent: #C47719;
-  --accent-soft: rgba(196, 119, 25, 0.14);
+  --surface-2: #F1F2F4;
+  --line: rgba(12, 14, 18, 0.1);
+  --line-strong: rgba(12, 14, 18, 0.18);
+  --text: #101216;
+  --muted: rgba(16, 18, 22, 0.62);
+  --ink-3: rgba(16, 18, 22, 0.38);
+  --accent: #15171B;
+  --accent-soft: rgba(15, 17, 20, 0.07);
   --accent-ink: #FFFFFF;
-  --live: #0E8C73;
-  --rec: #E23B4C;
-  --rec-soft: rgba(226, 59, 76, 0.14);
-  --focus: #3E63DD;
-  --shadow: 0 18px 44px rgba(28, 34, 46, 0.16);
-  --shadow-soft: 0 8px 24px rgba(28, 34, 46, 0.1);
-  --glow: 0 0 0 1px rgba(196, 119, 25, 0.16), 0 0 36px rgba(196, 119, 25, 0.12);
-  --accent-line: rgba(196, 119, 25, 0.34);
-  --accent-glow: rgba(196, 119, 25, 0.2);
-  --live-tint: rgba(14, 140, 115, 0.1);
-  --live-line: rgba(14, 140, 115, 0.26);
-  --live-glow: rgba(14, 140, 115, 0.13);
-  --rec-glow: rgba(226, 59, 76, 0.26);
-  --wash-accent: rgba(196, 119, 25, 0.1);
-  --wash-live: rgba(14, 140, 115, 0.06);
-  --inner-line: rgba(255, 255, 255, 0.72);
+  --accent-line: rgba(15, 17, 20, 0.16);
+  --live: #0F7A52;
+  --rec: #CE2F35;
+  --rec-soft: rgba(206, 47, 53, 0.12);
+  --focus: #2F62F0;
+  --shadow: 0 1px 2px rgba(12, 14, 18, 0.08);
+  --shadow-soft: 0 1px 2px rgba(12, 14, 18, 0.06);
+  --glow: 0 0 0 0 transparent;
   --border: 1px solid var(--line);
-  --fs-glass: rgba(255, 255, 255, 0.82);
-  --fs-key: rgba(255, 255, 255, 0.72);
-  --fs-key-hi: rgba(255, 255, 255, 0.94);
-  --fs-line: rgba(20, 26, 35, 0.16);
-  --fs-text: #151A21;
-  --fs-muted: rgba(21, 26, 33, 0.62);
-  --fs-shade: rgba(28, 34, 46, 0.26);
-  --fs-accent: #C47719;
-  --fs-accent-wash: rgba(196, 119, 25, 0.16);
-  --fs-frame: rgba(255, 255, 255, 0.9);
+  --fs-glass: rgba(255, 255, 255, 0.88);
+  --fs-key: rgba(255, 255, 255, 0.1);
+  --fs-key-hi: rgba(255, 255, 255, 0.2);
+  --fs-line: rgba(12, 14, 18, 0.12);
+  --fs-text: #101216;
+  --fs-muted: rgba(16, 18, 22, 0.6);
+  --fs-shade: rgba(12, 14, 18, 0.2);
+  --fs-accent: #15171B;
+  --fs-accent-wash: rgba(15, 17, 20, 0.08);
+  --fs-frame: rgba(255, 255, 255, 0.92);
 
   --font: 'DM Sans', system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --t-xs: 0.6875rem;
   --t-sm: 0.8125rem;
   --t-md: 0.9375rem;
-  --t-lg: 1.125rem;
-  --w-reg: 600;
-  --w-bold: 800;
-  --track: 0.14em;
+  --t-lg: 1.0625rem;
+  --w-reg: 500;
+  --w-bold: 700;
 
   --sp-1: 4px;
   --sp-2: 8px;
@@ -72,87 +63,75 @@
   --sp-5: 32px;
   --tap: 48px;
   --tap-min: 44px;
-  --radius: 16px;
+  --radius: 12px;
   --radius-sm: 10px;
   --radius-lg: 24px;
-  --radius-card: 20px;
-
-  /* Chrome over a picture is its own surface: light text, dark glass, and a
-     scrim instead of a border, because a border would cut the frame. */
-  --on-video: #FFFFFF;
-  --on-video-muted: rgba(255, 255, 255, 0.8);
-  --on-video-line: rgba(255, 255, 255, 0.24);
-  --on-video-glass: rgba(10, 14, 20, 0.42);
-  --on-video-top: linear-gradient(180deg, rgba(6, 10, 16, 0.84) 0%, rgba(6, 10, 16, 0.42) 58%, rgba(6, 10, 16, 0) 100%);
-  --on-video-bottom: linear-gradient(0deg, rgba(6, 10, 16, 0.86) 0%, rgba(6, 10, 16, 0.44) 58%, rgba(6, 10, 16, 0) 100%);
-  --live-on-video: #74F0D4;
 
   --blur: 12px;
   --dur-1: 0.12s;
   --dur-2: 0.2s;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* Chrome over a picture is light type on a scrim, never a panel. */
+  --on-video: #FFFFFF;
+  --on-video-muted: rgba(255, 255, 255, 0.66);
+  --on-video-top: linear-gradient(180deg, rgba(6, 8, 12, 0.68) 0%, rgba(6, 8, 12, 0.22) 62%, rgba(6, 8, 12, 0) 100%);
+  --on-video-bottom: linear-gradient(0deg, rgba(6, 8, 12, 0.76) 0%, rgba(6, 8, 12, 0.24) 64%, rgba(6, 8, 12, 0) 100%);
+  --on-video-line: rgba(255, 255, 255, 0.16);
 }
 
-/* Default first impression: the gallery after hours. Keep the alert red and
-   the live teal unchanged; only the room goes dark. */
+/* The gallery opens after hours. Only the room goes dark; the red and the
+   green keep their meaning in both palettes. */
 html[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #070A0F;
-  --bg-2: #0D1118;
-  --surface: rgba(18, 23, 32, 0.88);
-  --surface-solid: #11161E;
-  --surface-2: #171D27;
-  --line: rgba(226, 235, 245, 0.1);
-  --line-strong: rgba(226, 235, 245, 0.18);
-  --text: #F2F5F8;
-  --muted: #8C99AA;
-  --accent: #FFB454;
-  --accent-soft: rgba(255, 180, 84, 0.14);
-  --accent-ink: #0A0C10;
-  --live: #57DCC0;
-  --rec: #FF4D5E;
-  --rec-soft: rgba(255, 77, 94, 0.16);
+  --bg: #0A0B0D;
+  --bg-2: #0E1013;
+  --surface: #111317;
+  --surface-solid: #111317;
+  --surface-2: #171A1F;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.17);
+  --text: #F1F2F4;
+  --muted: rgba(241, 242, 244, 0.6);
+  --ink-3: rgba(241, 242, 244, 0.34);
+  --accent: #FFFFFF;
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --accent-ink: #0B0C0E;
+  --accent-line: rgba(255, 255, 255, 0.22);
+  --live: #4CC38A;
+  --rec: #E5484D;
+  --rec-soft: rgba(229, 72, 77, 0.14);
   --focus: #8FA8FF;
-  --shadow: 0 20px 56px rgba(0, 0, 0, 0.52);
-  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.38);
-  --glow: 0 0 0 1px rgba(255, 180, 84, 0.16), 0 0 48px rgba(255, 180, 84, 0.1);
-  --accent-line: rgba(255, 180, 84, 0.34);
-  --accent-glow: rgba(255, 180, 84, 0.24);
-  --live-tint: rgba(87, 220, 192, 0.1);
-  --live-line: rgba(87, 220, 192, 0.26);
-  --live-glow: rgba(87, 220, 192, 0.14);
-  --rec-glow: rgba(255, 77, 94, 0.28);
-  --wash-accent: rgba(255, 180, 84, 0.1);
-  --wash-live: rgba(87, 220, 192, 0.06);
-  --inner-line: rgba(255, 255, 255, 0.14);
-  --fs-glass: rgba(11, 15, 21, 0.78);
-  --fs-key: rgba(235, 242, 250, 0.08);
-  --fs-key-hi: rgba(235, 242, 250, 0.16);
-  --fs-line: rgba(235, 242, 250, 0.14);
-  --fs-text: #F2F5F8;
-  --fs-muted: rgba(242, 245, 248, 0.6);
-  --fs-shade: rgba(0, 0, 0, 0.55);
-  --fs-accent: #FFB454;
-  --fs-accent-wash: rgba(255, 180, 84, 0.2);
-  --fs-frame: rgba(242, 245, 248, 0.82);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --glow: 0 0 0 0 transparent;
+  --fs-glass: rgba(12, 14, 18, 0.86);
+  --fs-key: rgba(255, 255, 255, 0.1);
+  --fs-key-hi: rgba(255, 255, 255, 0.2);
+  --fs-line: rgba(255, 255, 255, 0.14);
+  --fs-text: #F1F2F4;
+  --fs-muted: rgba(241, 242, 244, 0.6);
+  --fs-shade: rgba(0, 0, 0, 0.5);
+  --fs-accent: #FFFFFF;
+  --fs-accent-wash: rgba(255, 255, 255, 0.16);
+  --fs-frame: rgba(255, 255, 255, 0.88);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-html,
+
+
+html {
+  height: 100%;
+}
+
 body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-}
-
-body {
   margin: 0;
   color: var(--text);
   background-color: var(--bg);
-  background-image:
-    radial-gradient(circle at 12% -12%, var(--wash-accent), transparent 38%),
-    radial-gradient(circle at 92% 8%, var(--wash-live), transparent 32%);
   font-family: var(--font);
   font-size: var(--t-md);
   font-weight: var(--w-reg);
@@ -179,20 +158,13 @@ body.keyboard-focus :focus-visible {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: var(--sp-3);
+  max-width: none;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
 }
 
-.page::before {
-  content: "";
-  position: absolute;
-  inset: 64px 0 72px;
-  background: radial-gradient(ellipse at 50% 8%, var(--wash-accent), transparent 58%);
-  opacity: 0.55;
-  pointer-events: none;
-}
+
 
 /* ---------------------------------------------------------------- header */
 
@@ -203,14 +175,11 @@ body.keyboard-focus :focus-visible {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 64px;
-  padding: var(--sp-2) var(--sp-3);
+  height: 56px;
+  padding: 0 var(--sp-4);
   background: var(--surface);
-  border: var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-soft);
-  -webkit-backdrop-filter: blur(var(--blur));
-  backdrop-filter: blur(var(--blur));
+  border: 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .brand {
@@ -224,14 +193,13 @@ body.keyboard-focus :focus-visible {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
-  color: var(--accent);
-  background: linear-gradient(160deg, var(--accent-soft), var(--surface-2));
-  border: var(--border);
-  border-radius: 12px;
-  box-shadow: inset 0 1px 0 var(--inner-line);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 9px;
 }
 
 .brand-mark svg { width: 24px; height: 24px; display: block; }
@@ -242,24 +210,14 @@ body.keyboard-focus :focus-visible {
   min-width: 0;
 }
 
-.brand-copy p {
-  order: -1;
-  color: var(--muted);
-  font-size: var(--t-xs);
-  font-weight: var(--w-bold);
-  letter-spacing: var(--track);
-  line-height: 1.2;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
+
 
 h1 {
   color: var(--text);
   font-size: var(--t-lg);
   font-weight: var(--w-bold);
   line-height: 1.1;
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
@@ -270,26 +228,10 @@ h1 {
   margin-left: auto;
 }
 
-.live-tag,
-.live-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  color: var(--live);
-  background: var(--live-tint);
-  border: 1px solid var(--live-line);
-  border-radius: 999px;
-  font-size: var(--t-xs);
-  font-weight: var(--w-bold);
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 
-.live-tag { padding: 8px 10px; }
-.live-badge { padding: 5px 8px; }
+
+
+
 
 .live-pip {
   width: 6px;
@@ -306,62 +248,57 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 12px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
 }
 
-.seg-label {
-  padding: 0 6px;
-  color: var(--muted);
-  font-size: var(--t-xs);
-  font-weight: var(--w-bold);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+
 
 .seg-btn {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 40px;
+  min-height: 34px;
   padding: 0 var(--sp-2);
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   font-family: var(--font);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: color 0.14s ease, background 0.14s ease;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
 /* The chosen default is a state, not a call to action: tint, not fill. */
 .seg-btn.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: none;
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 .desk-key {
   display: grid;
   place-items: center;
-  width: var(--tap);
-  height: var(--tap);
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   padding: 0;
   color: var(--text);
-  background: var(--surface-2);
-  border: var(--border);
-  border-radius: 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 11px;
   cursor: pointer;
   transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
 .desk-key svg { width: 20px; height: 20px; display: block; }
-.desk-key:active { transform: scale(0.94); }
+.desk-key:active {
+  transform: scale(0.94);
+  background: var(--surface-2);
+}
 
 /* ----------------------------------------------------------------- stage */
 
@@ -370,14 +307,14 @@ h1 {
   z-index: 1;
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: var(--sp-2);
+  padding: var(--sp-2);
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--sp-2);
+  gap: 2px;
   height: 100%;
 }
 
@@ -399,11 +336,16 @@ h1 {
   min-height: 0;
   overflow: hidden;
   background: #000;
-  border: var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
+  border: 0;
+  border-radius: 2px;
   contain: paint;
-  transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+  transition: box-shadow var(--dur-2) var(--ease);
+}
+
+/* The program feed is marked with an edge, not a glow. */
+.cam-card:first-child {
+  --key: 44px;
+  box-shadow: inset 2px 0 0 var(--text);
 }
 
 .cam-card:first-child {
@@ -413,8 +355,7 @@ h1 {
 }
 
 .cam-card.rec {
-  border-color: var(--rec);
-  box-shadow: var(--shadow), 0 0 0 1px var(--rec), 0 0 30px var(--rec-glow);
+  box-shadow: inset 0 0 0 2px var(--rec);
   animation: tally-on 0.5s var(--ease);
 }
 
@@ -429,50 +370,82 @@ h1 {
   to   { transform: scale(1); opacity: 1; }
 }
 
+.cam-card::before,
+.cam-card::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cam-card::before {
+  top: 0;
+  height: 30%;
+  background: var(--on-video-top);
+}
+
+.cam-card::after {
+  bottom: 0;
+  height: 42%;
+  background: var(--on-video-bottom);
+}
+
 .cam-top {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex: 0 0 auto;
   position: absolute;
   top: 0;
   right: 0;
   left: 0;
   z-index: 3;
-  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-h);
-  background: var(--on-video-top);
+  background: transparent;
   border: 0;
   pointer-events: none;
 }
 
-.cam-num {
-  display: grid;
-  place-items: center;
-  min-width: 28px;
-  height: 24px;
-  padding: 0 6px;
-  color: var(--on-video);
-  background: var(--on-video-glass);
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px var(--on-video-line);
-  font-family: var(--mono);
+.cam-role {
+  color: var(--on-video-muted);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
+  letter-spacing: 0.12em;
   line-height: 1;
+  text-transform: uppercase;
 }
 
-.cam-card:first-child .cam-num {
-  color: var(--accent-ink);
-  background: var(--accent);
-  box-shadow: none;
+.cam-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--on-video-muted);
+  font-size: var(--t-xs);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
-.cam-top .live-badge {
-  color: var(--live-on-video);
-  background: rgba(10, 14, 20, 0.42);
-  border-color: rgba(116, 240, 212, 0.34);
+.cam-card.rec .cam-live { display: none; }
+
+.cam-live-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 0 3px rgba(76, 195, 138, 0.16);
+  animation: signal 2.4s ease-out infinite;
 }
+
+
+
+
+
+
 
 .cam-title {
   min-width: 0;
@@ -480,31 +453,32 @@ h1 {
   overflow: hidden;
   color: var(--on-video);
   font-size: var(--t-sm);
-  font-weight: var(--w-reg);
+  font-weight: var(--w-bold);
   line-height: 1.2;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  letter-spacing: 0.02em;
+  letter-spacing: -0.005em;
   text-overflow: ellipsis;
-  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
 }
+
+.cam-card:first-child .cam-title { font-size: var(--t-md); }
 
 /* Weight, not size, says which feed is on air. */
 .cam-card:first-child .cam-title { font-weight: var(--w-bold); }
 
-.live-badge { margin-left: auto; }
+
 
 .tally {
   display: none;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
+  gap: 5px;
+  padding: 4px 7px;
   color: #fff;
   background: var(--rec);
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -614,19 +588,15 @@ h1 {
 }
 
 .cam-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  gap: var(--sp-1);
-  flex: 0 0 auto;
   position: absolute;
   right: 0;
   bottom: 0;
-  left: 0;
   z-index: 3;
-  min-height: calc(var(--key) + var(--sp-3));
-  padding: var(--sp-2) var(--sp-h) var(--sp-2);
-  background: var(--on-video-bottom);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-2);
+  background: transparent;
   border: 0;
 }
 
@@ -680,14 +650,15 @@ h1 {
   width: var(--key);
   height: var(--key);
   padding: 0;
-  color: var(--on-video-muted);
-  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  background: transparent;
   border: 0;
-  border-radius: 12px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: none;
+  transition: color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
 
-.cam-actions .btn-icon:active { background: rgba(255, 255, 255, 0.2); }
+.cam-actions .btn-icon:active { color: #fff; }
 
 .cam-actions .btn-icon svg { width: 19px; height: 19px; }
 
@@ -699,23 +670,17 @@ h1 {
 }
 
 .cam-actions .btn-icon.active {
-  color: var(--accent-ink);
-  background: var(--accent);
-  box-shadow: none;
+  color: var(--on-video);
 }
 
-.cam-actions .record-btn {
-  color: var(--rec);
-  background: rgba(255, 77, 94, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(255, 77, 94, 0.34);
-}
+.cam-actions .record-btn { color: var(--rec); }
 .cam-actions .record-btn svg circle,
 .cam-actions .record-btn svg rect { fill: currentColor; }
 
 .cam-actions .record-btn.recording {
   color: #fff;
   background: var(--rec);
-  box-shadow: 0 0 20px var(--rec-glow);
+  box-shadow: none;
 }
 
 /* ---------------------------------------------------------------- footer */
@@ -725,26 +690,21 @@ h1 {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-h);
   flex: 0 0 auto;
-  min-height: 64px;
-  margin-top: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
+  height: 56px;
+  padding: 0 var(--sp-4);
   background: var(--surface);
-  border: var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-soft), 0 1px 0 var(--inner-line) inset;
-  -webkit-backdrop-filter: blur(var(--blur));
-  backdrop-filter: blur(var(--blur));
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 .status-led {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   flex: none;
   border-radius: 50%;
   background: var(--live);
-  box-shadow: 0 0 0 4px var(--live-glow);
 }
 
 .recording .status-led {
@@ -775,10 +735,10 @@ h1 {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  padding: 6px 10px;
+  padding: 5px 9px;
   color: #fff;
   background: var(--rec);
-  border-radius: 999px;
+  border-radius: 7px;
   font-family: var(--mono);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
@@ -803,16 +763,21 @@ h1 {
 }
 
 .status .btn-icon {
-  width: var(--tap);
-  height: var(--tap);
-  color: var(--muted);
-  background: var(--surface-2);
-  border: var(--border);
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 11px;
   box-shadow: none;
 }
 
-.status .btn-icon.active { color: var(--accent); }
+.status .btn-icon:active { background: var(--surface-2); }
+
+.status .btn-icon.active {
+  color: var(--text);
+  background: var(--surface-2);
+}
 .status .btn-icon svg { width: 19px; height: 19px; }
 
 .hidden { display: none !important; }
@@ -871,6 +836,13 @@ body.fullscreen-mode .nav,
 body.fullscreen-mode .status,
 body.fullscreen-mode .cam-top,
 body.fullscreen-mode .cam-actions { display: none !important; }
+
+/* The scrims belong to the gallery chrome. Fullscreen shows the picture
+   alone, so they come off with the rest of it. */
+.pip-mode .cam-card::before,
+.pip-mode .cam-card::after,
+body.fullscreen-mode .cam-card::before,
+body.fullscreen-mode .cam-card::after { display: none; }
 
 .pip-mode .grid,
 body.fullscreen-mode .grid {
@@ -1196,10 +1168,10 @@ body.fullscreen-mode .indicator {
   padding-bottom: max(var(--sp-4), env(safe-area-inset-bottom));
   color: var(--text);
   background: var(--surface-solid);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-bottom: 0;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: var(--shadow);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.28);
   animation: sheet-in var(--dur-2) var(--ease);
 }
 
@@ -1247,7 +1219,6 @@ body.fullscreen-mode .indicator {
 .sheet-chips {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
 }
 
 /* One route per row: number, what it is, where it comes from. The selected
@@ -1258,34 +1229,43 @@ body.fullscreen-mode .indicator {
   gap: var(--sp-h);
   width: 100%;
   min-height: 64px;
-  padding: var(--sp-2) var(--sp-h);
+  padding: var(--sp-2) 0;
   color: var(--text);
-  background: var(--surface-2);
-  border: var(--border);
-  border-radius: var(--radius);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
   font-family: var(--font);
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
-  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
-    transform var(--dur-1) var(--ease);
+  transition: color var(--dur-1) var(--ease);
 }
+
+.chip:last-child { border-bottom: 0; }
 
 .chip:active { transform: scale(0.99); }
 
 .chip-key {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
+  position: relative;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
-  color: var(--muted);
-  background: var(--surface-solid);
-  border: var(--border);
-  border-radius: 8px;
-  font-family: var(--mono);
-  font-size: var(--t-xs);
-  line-height: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+
+.chip.active .chip-key {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.chip.active .chip-key::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--accent-ink);
 }
 
 .chip-copy {
@@ -1298,7 +1278,7 @@ body.fullscreen-mode .indicator {
 .chip-name {
   font-size: var(--t-md);
   font-weight: var(--w-bold);
-  letter-spacing: 0.01em;
+  letter-spacing: -0.005em;
   line-height: 1.2;
 }
 
@@ -1312,10 +1292,7 @@ body.fullscreen-mode .indicator {
   white-space: nowrap;
 }
 
-.chip.active {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-}
+.chip.active { color: var(--text); }
 
 .chip.active .chip-key {
   color: var(--accent-ink);
@@ -1326,7 +1303,7 @@ body.fullscreen-mode .indicator {
 .chip.active::after {
   content: "in use";
   margin-left: auto;
-  color: var(--accent);
+  color: var(--muted);
   font-size: var(--t-xs);
   font-weight: var(--w-bold);
   letter-spacing: 0.1em;
@@ -1368,29 +1345,16 @@ body.fullscreen-mode .indicator {
 
 /* Phone-sized cards keep their lanes; only the chrome gets thinner. */
 @media (max-width: 520px), (max-height: 520px) {
-  .cam-card { --key: 34px; }
-  .cam-card:first-child { --key: 40px; }
-  .cam-actions { justify-content: space-between; }
-  .cam-top { min-height: 38px; padding: var(--sp-2) var(--sp-h); }
-  /* The program strip has room for the tally; the preview strips do not. */
-  .cam-card:not(:first-child) .live-badge { display: none; }
+  .cam-card { --key: 32px; }
+  .cam-card:first-child { --key: 38px; }
+  .cam-title { font-size: var(--t-xs); }
+  .cam-card:first-child .cam-title { font-size: var(--t-sm); }
+  .cam-role { display: none; }
+  .cam-top { padding: 6px var(--sp-2); }
   .tally { gap: 4px; padding: 4px 6px; }
   .tally-label { display: none; }
-  /* Two name cells share the width of a phone: a number chip would take a
-     third of "PBB External Den" with it, so previews are name-only. */
-  .cam-card:not(:first-child) .cam-num { display: none; }
-  /* The clock moves onto the picture on a narrow card: the strip belongs to
-     the feed name, and a burn-in is where a running time usually lives. */
-  .cam-card.rec .cam-num { display: none; }
-  .cam-card.rec .tally {
-    position: absolute;
-    top: 44px;
-    right: var(--sp-2);
-    z-index: 4;
-    padding: 3px var(--sp-2);
-  }
   .status .btn-icon { width: var(--tap-min); height: var(--tap-min); }
-  .cam-actions { min-height: calc(var(--key) + var(--sp-2)); padding: 6px var(--sp-2); }
+  .cam-actions { padding: 6px; }
   .cam-actions .btn-icon svg { width: 18px; height: 18px; }
 
   .focus-mode .grid { align-items: stretch; }
