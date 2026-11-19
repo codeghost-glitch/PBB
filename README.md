@@ -8,11 +8,11 @@ The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup a
 
 - Three feeds in one portrait screen: one large program feed and two previews.
 - Fullscreen and picture-in-picture on any feed. The fullscreen keys sit top-right; the mini feed sits bottom-right.
-- A server sheet with main, backup and mirror routes. The choice is stored on the phone.
+- A server sheet with main, backup and mirror routes. The choice is stored on the phone. The footer status has its own row on a phone, so a long message wraps without fighting the keys.
 - HD and SD quality buttons. HD uses the tallest rendition; SD uses the smallest rendition at least 480 lines tall.
 - Record one, two or three cameras at once. Each recording gets its own notification and stop action.
 - Stitch button: records Main Access and Dining Area, then joins them into one stacked MP4.
-- Dark-only, one type system, one hairline, 44 px touch targets.
+- Dark-only in a lifted graphite grade with quiet depth. One type system, one hairline, 44 px touch targets.
 
 ## Build
 

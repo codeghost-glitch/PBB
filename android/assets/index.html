@@ -39,18 +39,22 @@
     </main>
 
     <footer class="status" id="statusBar">
-      <span class="status-led" aria-hidden="true"></span>
-      <span id="statusText" role="status" aria-atomic="true">connecting feeds...</span>
-      <span class="rec-badge hidden" id="recBadge" aria-hidden="true">
-        <span class="rec-badge-dot" aria-hidden="true"></span>
-        <span id="recCount">0</span>
-        <span class="rec-badge-label">rec</span>
-        <span id="recTime">0:00</span>
-      </span>
-      <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose stream server"></button>
-      <button id="stitchBtn" class="btn btn-ghost btn-icon" type="button" aria-label="record main and dining together"></button>
-      <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
-      <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
+      <div class="status-main">
+        <span class="status-led" aria-hidden="true"></span>
+        <span id="statusText" role="status" aria-atomic="true">connecting feeds...</span>
+        <span class="rec-badge hidden" id="recBadge" aria-hidden="true">
+          <span class="rec-badge-dot" aria-hidden="true"></span>
+          <span id="recCount">0</span>
+          <span class="rec-badge-label">rec</span>
+          <span id="recTime">0:00</span>
+        </span>
+      </div>
+      <div class="status-actions">
+        <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose stream server"></button>
+        <button id="stitchBtn" class="btn btn-ghost btn-icon" type="button" aria-label="record main and dining together"></button>
+        <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
+        <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
+      </div>
     </footer>
   </div>
   <div class="sheet hidden" id="sourceSheet" role="dialog" aria-modal="true" aria-label="stream server">

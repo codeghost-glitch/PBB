@@ -474,7 +474,7 @@ function fullscreenKeepsThePictureWhole() {
   check("the old blanket status hide is gone", false,
     css.includes("body.fullscreen-mode .stream-status { display: none"));
   check("the feed name is a corner channel bug", true,
-    /body\.fullscreen-mode \.indicator \{[^}]*top: max\(12px, env\(safe-area-inset-top\)\)/s.test(css));
+    /body\.fullscreen-mode \.indicator \{[^}]*top: max\(var\(--s-3\), env\(safe-area-inset-top\)\)/s.test(css));
   check("fullscreen does not open the keypad on entry", false,
     /if \(state\.fullscreen && players\[state\.focused\]\) \{[^}]*showControls\(\)/s.test(app));
 }
@@ -754,6 +754,20 @@ function designSystemHoldsTheLine() {
     && !/text-overflow/.test(titleRule[0])
     && Boolean(statusRule) && /white-space: normal/.test(statusRule[0])
     && !/text-overflow/.test(statusRule[0]));
+  check("the status bar separates the message from the keys", true,
+    html.includes('class="status-main"') && html.includes('class="status-actions"')
+    && /\.status \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/s.test(css));
+  check("a phone gives the message its own row", true,
+    /@media \(max-width: 640px\) \{[\s\S]{0,260}\.status \{ grid-template-columns: 1fr;/s.test(css));
+  const cardStateRule = /\.stream-status \{[^}]*\}/s.exec(css);
+  check("feed state sits in a wrapable card, not a cut pill", true,
+    Boolean(cardStateRule) && /bottom: var\(--s-3\)/.test(cardStateRule[0])
+    && /white-space: normal/.test(cardStateRule[0])
+    && !/text-overflow/.test(cardStateRule[0]));
+  check("the dark grade has depth", true,
+    css.includes("--g-main: #16181B")
+    && css.includes("--surface: #20242A")
+    && /body \{[^}]*background-image:[\s\S]{0,200}radial-gradient/.test(css));
 }
 
 function liveWindowAndBackupRoute() {

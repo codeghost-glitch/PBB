@@ -13,20 +13,20 @@
 :root {
   color-scheme: dark;
 
-  --g-main: #0E0E0F;
-  --g-alt: #151517;
-  --surface: #19191B;
-  --surface-2: #1F1F21;
-  --ink: #F1F1EE;
-  --muted: rgba(241, 241, 238, 0.64);
-  --faint: rgba(241, 241, 238, 0.40);
-  --line: rgba(241, 241, 238, 0.13);
-  --line-strong: rgba(241, 241, 238, 0.24);
-  --paper: #0A0A0B;
-  --live: #56C48D;
-  --rec: #E25555;
-  --focus: #91AEFF;
-  --scrim: rgba(0, 0, 0, 0.5);
+  --g-main: #16181B;
+  --g-alt: #1C1F23;
+  --surface: #20242A;
+  --surface-2: #282D34;
+  --ink: #F5F5F2;
+  --muted: rgba(245, 245, 242, 0.72);
+  --faint: rgba(245, 245, 242, 0.48);
+  --line: rgba(245, 245, 242, 0.16);
+  --line-strong: rgba(245, 245, 242, 0.28);
+  --paper: #0D0E10;
+  --live: #63CFA0;
+  --rec: #F06A6A;
+  --focus: #A9BAFF;
+  --scrim: rgba(8, 9, 11, 0.56);
 
   --s-1: 4px;
   --s-2: 8px;
@@ -77,7 +77,10 @@ body {
 
 body {
   color: var(--ink);
-  background: var(--g-main);
+  background-color: var(--g-main);
+  background-image:
+    radial-gradient(circle at 12% -12%, rgba(169, 186, 255, 0.07), transparent 38%),
+    radial-gradient(circle at 92% 4%, rgba(99, 207, 160, 0.04), transparent 30%);
   font-family: var(--font);
   font-size: var(--t-body);
   font-weight: var(--w-reg);
@@ -123,8 +126,9 @@ body.keyboard-focus :focus-visible {
   gap: var(--s-4);
   height: var(--nav);
   padding: 0 var(--gut);
-  background: var(--g-main);
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .brand {
@@ -270,23 +274,22 @@ h1 {
 
 .stream-status {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  bottom: var(--s-3);
+  left: var(--s-3);
   z-index: 2;
-  max-width: calc(100% - var(--s-6));
-  overflow: hidden;
+  max-width: min(320px, calc(100% - var(--s-6)));
   padding: var(--s-2) var(--s-3);
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   font-size: var(--t-label);
   font-weight: var(--w-reg);
-  line-height: 1.3;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transform: translate(-50%, -50%);
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   pointer-events: none;
 }
 
@@ -468,15 +471,30 @@ h1 {
 .status {
   position: relative;
   z-index: 20;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   flex: 0 0 auto;
   align-items: center;
   gap: var(--s-3);
-  min-height: var(--nav);
-  max-height: 112px;
-  padding: var(--s-2) var(--gut);
-  background: var(--g-main);
+  min-height: 76px;
+  max-height: 136px;
+  padding: var(--s-3) var(--gut);
+  background: var(--surface);
   border-top: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.status-main {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
 }
 
 .status-led {
@@ -499,7 +517,7 @@ h1 {
   flex: 1 1 auto;
   min-width: 0;
   font-size: var(--t-body);
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--ink);
   overflow-wrap: anywhere;
   white-space: normal;
@@ -808,29 +826,32 @@ body.fullscreen-mode .cam-card.mini .video-wrap {
 
 .indicator {
   position: fixed;
-  top: 50%;
+  top: max(var(--s-4), env(safe-area-inset-top));
   left: 50%;
   z-index: 95;
-  max-width: calc(100vw - var(--s-8));
-  padding: var(--s-2) var(--s-3);
+  max-width: min(360px, calc(100vw - var(--s-8)));
+  padding: var(--s-3) var(--s-4);
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-size: var(--t-label);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: var(--t-body);
   font-weight: var(--w-reg);
+  line-height: 1.35;
   text-align: center;
   overflow-wrap: anywhere;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   pointer-events: none;
 }
 
 body.fullscreen-mode .indicator {
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
+  top: max(var(--s-3), env(safe-area-inset-top));
+  left: max(var(--s-3), env(safe-area-inset-left));
   transform: none;
-  max-width: min(60vw, 320px);
+  max-width: min(48vw, 320px);
   padding: var(--s-2) var(--s-3);
+  font-size: var(--t-label);
   text-align: left;
   animation: bug-in var(--m-panel) var(--ease-enter);
 }
@@ -969,6 +990,9 @@ body.fullscreen-mode .indicator {
 
 @media (max-width: 640px) {
   :root { --gut: 16px; }
+  /* The message gets the whole width; the keys take their own row. */
+  .status { grid-template-columns: 1fr; gap: var(--s-2); }
+  .status-actions { justify-content: flex-end; }
   .cam-bar { padding: var(--s-2); gap: var(--s-2); }
   .cam-role { display: none; }
   /* A preview card is only half the wall. Its name gets the whole strip and
