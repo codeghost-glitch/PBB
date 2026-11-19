@@ -912,10 +912,8 @@ function updateControls() {
     // Recording is per camera now: each card owns its own tally light and stop
     // button, and the set survives whichever camera is focused.
     const armed = state.recording.has(index);
-    const stopping = state.stopping.has(index);
     const recordBtn = card.querySelector('[data-role="record"]');
     recordBtn.classList.toggle("recording", armed);
-    recordBtn.disabled = stopping;
     recordBtn.setAttribute("aria-pressed", armed ? "true" : "false");
     card.classList.toggle("rec", armed);
 
@@ -1060,7 +1058,12 @@ function setSound(index) {
 // their frames live; audio is still routed by applyAudio().
 function playOnly() {
   for (const entry of players) {
-    entry.video.play().catch(() => {});
+    // A second play() call on a feed that is already running makes the
+    // picture restart on some devices. PiP announces its state twice, so the
+    // guard is what keeps the small window from stuttering.
+    if (entry.video.paused) {
+      entry.video.play().catch(() => {});
+    }
   }
 }
 
@@ -1269,7 +1272,7 @@ function markStopping(index) {
 }
 
 function toggleRecord(index) {
-  if (!window.Pbb || state.stopping.has(index)) {
+  if (!window.Pbb) {
     return;
   }
   const entry = players[index];
@@ -1277,12 +1280,17 @@ function toggleRecord(index) {
     return;
   }
   if (state.recording.has(index)) {
-    markStopping(index);
+    if (!state.stopping.has(index)) {
+      markStopping(index);
+    }
     // The tally clears at once; the service answers again when the file is
-    // actually saved, which for a long recording takes a while.
+    // actually saved. A stop is idempotent, so the key stays live: another
+    // tap re-sends it if a blocked read kept the worker busy.
     state.recording.delete(index);
-    setStatusText(`saving ${entry.stream.name}`);
+    setStatusText(`stopping ${entry.stream.name}`);
     Pbb.stopRecording(index);
+  } else if (state.stopping.has(index)) {
+    setStatusText(`saving ${entry.stream.name}`);
   } else if (state.keysStale) {
     // The keys already rotated, so a recording now would be remuxed with the
     // wrong key and land in Movies/PBB as a file that will not play.

@@ -472,21 +472,43 @@ function fullscreenKeepsThePictureWhole() {
 }
 
 function stopNoticeClearsTheTallyButKeepsTheKey() {
+  const app = fs.readFileSync(APP, "utf8");
   const page = loadPage();
   page.state.recording.add(0);
   page.state.recordStarted.set(0, Date.now() - 5000);
   page.state.stopping.add(0);
   // "notice" is the immediate stop acknowledgement, sent before the remux and
-  // the MediaStore copy finish. Keep the key disabled until "done" lands.
+  // the MediaStore copy finish. The key stays live so another stop can be sent.
   page.window.onRecordingState({
     active: false, index: 0, kind: "notice", message: "", elapsed: 5,
   });
   check("the tally clears on the stop notice", false, page.state.recording.has(0));
-  check("the key stays disabled until done", true, page.state.stopping.has(0));
+  check("the stop key stays usable while saving", true,
+    !/recordBtn\.disabled = stopping/.test(app));
   page.window.onRecordingState({
     active: false, index: 0, kind: "done", message: "", elapsed: 5,
   });
-  check("done re-enables the key", false, page.state.stopping.has(0));
+  check("done clears the saving state", false, page.state.stopping.has(0));
+}
+
+function everyStopTapReachesTheService() {
+  const page = loadPage();
+  page.state.recording.add(0);
+  page.state.stopping.add(0);
+  page.toggleRecord(0);
+  const stops = page.calls.filter((call) => call[0] === "stopRecording");
+  check("a second stop tap is sent again", 1, stops.length);
+  check("the tally is already cleared", false, page.state.recording.has(0));
+}
+
+function pipDoesNotRestartTheFeed() {
+  const app = fs.readFileSync(APP, "utf8");
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  check("PiP state is announced once", true,
+    !/if \(entered\) \{[\s\S]{0,140}notifyPipState\(true\)/.test(java)
+    && /onPictureInPictureModeChanged[\s\S]{0,300}notifyPipState/.test(java));
+  check("play only starts paused feeds", true,
+    /if \(entry\.video\.paused\) \{[\s\S]{0,80}entry\.video\.play\(\)/.test(app));
 }
 
 function refreshResyncsAllStreams() {
@@ -808,6 +830,8 @@ const tests = [
   serverSheetFollowsTheApp,
   fullscreenKeepsThePictureWhole,
   controlRoomStructure,
+  everyStopTapReachesTheService,
+  pipDoesNotRestartTheFeed,
   stopNoticeClearsTheTallyButKeepsTheKey,
   refreshResyncsAllStreams,
   channelSourceContract,

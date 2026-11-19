@@ -905,12 +905,11 @@ public class MainActivity extends Activity {
         }
         applyImmersive(false);
         boolean entered = enterPictureInPictureMode(pipParams(false));
-        if (entered) {
-            isInPip = true;
-            notifyPipState(true);
-        } else {
+        if (!entered) {
             toast("PiP unavailable");
         }
+        // onPictureInPictureModeChanged is the only announcement. Calling this
+        // here too ran setPipMode twice and restarted the video on each hop.
     }
 
     @Override
