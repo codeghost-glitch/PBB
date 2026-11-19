@@ -1,4 +1,5 @@
 /* global Pbb, shaka */
+/* eslint-disable no-undef -- Pbb and shaka are injected before this page loads. */
 const state = {
   quality: "hd",
   focused: -1,
@@ -32,10 +33,12 @@ function refreshKeysFromUi() {
 }
 
 window.onKeysMessage = (message) => {
+  // A server switch also refreshes keys. Its failure message must reach the
+  // strip; only the manual-refresh flag needs clearing here.
   if (manualKeyRefresh) {
     manualKeyRefresh = false;
-    setStatusText(message);
   }
+  setStatusText(message);
 };
 
 const players = [];

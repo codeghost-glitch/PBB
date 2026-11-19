@@ -80,6 +80,7 @@ jobs:
       # The signing key is not in the repo. Decode it from the repository secret
       # for this run only, then point build.sh at it.
       - name: signing key
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         env:
           PBB_KEYSTORE_B64: ${{ secrets.PBB_KEYSTORE_B64 }}
         run: |
@@ -93,6 +94,7 @@ jobs:
           echo "PBB_KEYSTORE=$KEY" >> "$GITHUB_ENV"
 
       - name: build apk
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         env:
           VERSION_CODE: ${{ github.run_number }}
           PBB_KEYSTORE_PASS: ${{ secrets.PBB_KEYSTORE_PASS }}

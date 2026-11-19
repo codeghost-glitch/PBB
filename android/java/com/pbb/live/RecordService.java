@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -272,6 +273,9 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         final String quality;
         final long startedAt;
         volatile boolean running = true;
+        // An interrupt cannot stop a socket read. Stop disconnects these too.
+        final List<HttpURLConnection> connections =
+            Collections.synchronizedList(new ArrayList<HttpURLConnection>());
         Thread worker;
         Uri publishedUri;
         File publishedFile;
@@ -407,8 +411,8 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 delete(outTmp);
 
                 Plan plan = loadPlan(session.mpdUrl, session.quality);
-                byte[] videoInit = fetch(plan.baseUrl + plan.video.init);
-                byte[] audioInit = fetch(plan.baseUrl + plan.audio.init);
+                byte[] videoInit = fetch(plan.baseUrl + plan.video.init, session);
+                byte[] audioInit = fetch(plan.baseUrl + plan.audio.init, session);
                 if (videoInit == null || audioInit == null) {
                     throw new IOException("init segment missing");
                 }
@@ -472,7 +476,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                         + segmentUrl(plan.audio.media, plan.audio.startNumber + offset);
                     // The video and the audio travel together, so one segment
                     // costs one round trip instead of two.
-                    byte[][] both = fetchBoth(pool, vUrl, aUrl, index);
+                    byte[][] both = fetchBoth(pool, vUrl, aUrl, index, session);
                     byte[] v = both[0];
                     byte[] a = both[1];
                     if (v == null || a == null || v.length < 128 || a.length < 128) {
@@ -1151,21 +1155,32 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
 
     /** Returns null on 404 (the live edge has not published that segment yet). */
     private static byte[] fetch(String url) throws IOException {
+        return fetch(url, null);
+    }
+
+    private static byte[] fetch(String url, Session session) throws IOException {
         HttpURLConnection conn = Http.open(url, 15000, 20000);
-        int code = conn.getResponseCode();
-        if (code == 404) {
-            conn.disconnect();
-            return null;
+        if (session != null) {
+            session.connections.add(conn);
         }
-        if (code != 200) {
-            conn.disconnect();
-            throw new IOException("HTTP " + code + " for " + url);
-        }
-        InputStream in = conn.getInputStream();
         try {
-            return Http.readAll(in);
+            int code = conn.getResponseCode();
+            if (code == 404) {
+                return null;
+            }
+            if (code != 200) {
+                throw new IOException("HTTP " + code + " for " + url);
+            }
+            InputStream in = conn.getInputStream();
+            try {
+                return Http.readAll(in);
+            } finally {
+                in.close();
+            }
         } finally {
-            in.close();
+            if (session != null) {
+                session.connections.remove(conn);
+            }
             conn.disconnect();
         }
     }
@@ -1175,17 +1190,17 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
      * failed comes back as null and the caller counts it as a miss.
      */
     private static byte[][] fetchBoth(ExecutorService pool, final String vUrl,
-            final String aUrl, final int index) {
+            final String aUrl, final int index, final Session session) {
         Future<byte[]> video = pool.submit(new Callable<byte[]>() {
             @Override
             public byte[] call() throws IOException {
-                return fetch(vUrl);
+                return fetch(vUrl, session);
             }
         });
         Future<byte[]> audio = pool.submit(new Callable<byte[]>() {
             @Override
             public byte[] call() throws IOException {
-                return fetch(aUrl);
+                return fetch(aUrl, session);
             }
         });
         return new byte[][] { pulled(video, index), pulled(audio, index) };
@@ -1375,6 +1390,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             return;
         }
         session.running = false;
+        disconnectActive(session);
         if (session.worker != null) {
             session.worker.interrupt();
         }
@@ -1394,10 +1410,20 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         }
         for (Session session : copy) {
             session.running = false;
+            disconnectActive(session);
             if (session.worker != null) {
                 session.worker.interrupt();
             }
             status(false, session.index, "saving " + session.streamName, KIND_NOTICE);
+        }
+    }
+
+    /** Breaks an in-flight socket read; interrupt alone cannot do that. */
+    private static void disconnectActive(Session session) {
+        synchronized (session.connections) {
+            for (HttpURLConnection conn : session.connections) {
+                conn.disconnect();
+            }
         }
     }
 
@@ -1545,6 +1571,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         }
         for (Session session : copy) {
             session.running = false;
+            disconnectActive(session);
             if (session.worker != null) {
                 session.worker.interrupt();
             }

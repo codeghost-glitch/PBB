@@ -385,12 +385,11 @@ public class MainActivity extends Activity {
         HttpURLConnection conn = null;
         try {
             conn = Http.open(url, 5000, 20000);
-            conn.setRequestProperty("Cookie", sessionCookie);
-            conn.setRequestProperty("X-PBB-Client", sessionClient);
-            // Only the site's own proxy cares about the Origin. The CDN and
-            // the mirror allow anyone; sending them the site's Origin would
-            // just advertise where the request came from.
+            // The session cookie belongs only to the site. Sending it to the
+            // CDN or the mirror could leak it through a redirect.
             if (url.startsWith(SITE + "/")) {
+                conn.setRequestProperty("Cookie", sessionCookie);
+                conn.setRequestProperty("X-PBB-Client", sessionClient);
                 conn.setRequestProperty("Origin", SITE);
                 conn.setRequestProperty("Referer", SITE + "/");
             }
@@ -461,7 +460,7 @@ public class MainActivity extends Activity {
         try {
             streams = new JSONObject(streamConfigJson).getJSONArray("streams");
         } catch (Exception e) {
-            return "cannot read the sources";
+            return "cannot read the streams";
         }
         StringBuilder rotated = new StringBuilder();
         int answered = 0;
@@ -490,12 +489,12 @@ public class MainActivity extends Activity {
             }
         }
         if (rotated.length() > 0) {
-            return "keys rotated on " + rotated + " - open sources to paste the new key";
+            return "keys rotated on " + rotated + " - open servers to switch";
         }
         if (answered == 0) {
             return "could not reach the streams - tap refresh to retry";
         }
-        return "no published channel list - the sources sheet holds the current feed";
+        return "no published channel list - the server sheet holds the current feed";
     }
 
     private static String manifestKid(String url) {
@@ -707,7 +706,7 @@ public class MainActivity extends Activity {
             return;
         }
         // Fullscreen ignores the bars and the camera cutout: any padding here
-        // shows up as a cream strip in front of the notch.
+        // shows up as a light strip in front of the notch.
         if (immersive) {
             rootView.setPadding(0, 0, 0, 0);
             return;
@@ -958,25 +957,23 @@ public class MainActivity extends Activity {
 
     /** Starts every camera in the batch that is not already recording. */
     private void requestRecording(int[] indices, String[] labels) {
-        ArrayList<Integer> wantedIndices = new ArrayList<Integer>();
-        ArrayList<String> wantedLabels = new ArrayList<String>();
+        // A stitch tap arrives as two bridge calls. Keep both while a permission
+        // dialog is open; clearing here made the second call replace the first.
         for (int i = 0; i < indices.length; i++) {
-            if (indices[i] < 0 || RecordService.isActive(indices[i])) {
+            int index = indices[i];
+            if (index < 0 || RecordService.isActive(index)
+                    || pendingRecordIndices.contains(Integer.valueOf(index))) {
                 continue;
             }
-            wantedIndices.add(indices[i]);
-            wantedLabels.add(labels != null && i < labels.length && labels[i] != null
+            pendingRecordIndices.add(index);
+            pendingRecordLabels.add(labels != null && i < labels.length && labels[i] != null
                 ? labels[i] : "stream");
         }
-        if (wantedIndices.isEmpty()) {
+        if (pendingRecordIndices.isEmpty()) {
             notifyRecordingState(false, -1, RecordService.activeCount(), 0,
                 RecordService.KIND_NOTICE, "that camera is already recording");
             return;
         }
-        pendingRecordIndices.clear();
-        pendingRecordLabels.clear();
-        pendingRecordIndices.addAll(wantedIndices);
-        pendingRecordLabels.addAll(wantedLabels);
 
         ArrayList<String> needed = new ArrayList<String>();
         if (Build.VERSION.SDK_INT <= 28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {

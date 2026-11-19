@@ -173,7 +173,8 @@ if command -v node >/dev/null 2>&1; then
   node --check "$ROOT/android/assets/app.js"
   node "$ROOT/android/test/app.test.mjs"
 else
-  echo "node not found, skipping the page checks" >&2
+  echo "node not found; the page checks are required" >&2
+  exit 1
 fi
 
 echo "== dex =="

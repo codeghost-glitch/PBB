@@ -402,6 +402,14 @@ function channelListContract() {
   }
 }
 
+function serverSwitchFailuresReachTheStrip() {
+  const page = loadPage();
+  page.window.onKeysMessage("could not reach the streams - tap refresh to retry");
+  check("a Java refresh failure updates the status", 
+    "could not reach the streams - tap refresh to retry",
+    page.statusText.textContent);
+}
+
 function serverPickIsStored() {
   const page = loadPage();
   page.selectServer("s2");
@@ -827,6 +835,7 @@ const tests = [
   bridgeContract,
   channelListContract,
   serverPickIsStored,
+  serverSwitchFailuresReachTheStrip,
   serverSheetFollowsTheApp,
   fullscreenKeepsThePictureWhole,
   controlRoomStructure,

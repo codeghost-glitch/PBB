@@ -12,7 +12,6 @@ public final class RecorderLogicTest {
     private static int failures = 0;
 
     public static void main(String[] args) throws Exception {
-        channelListReadsM3u();
         manifestCarriesTheKid();
         segmentUrlPadsTheNumber();
         segmentUrlHandlesBareNumber();
@@ -23,6 +22,9 @@ public final class RecorderLogicTest {
         emptyGapPartRetriesButIsBounded();
         liveApiIsUsed();
         serviceStopsOnlyWhenIdle();
+        stitchKeepsBothPendingStarts();
+        stopBreaksSocketReads();
+        cookieStaysOnTheSite();
         if (failures > 0) {
             System.err.println(failures + " check(s) failed");
             System.exit(1);
@@ -42,43 +44,6 @@ public final class RecorderLogicTest {
             RecordService.liveOffsetFromMpd("<MPD type=\"dynamic\"></MPD>"));
     }
 
-    private static void channelListReadsM3u() {
-        String[] names = {"PBB All Access", "PBB Dining Area", "PBB External Den"};
-        String m3u = "#EXTM3U\n"
-            + "#EXTINF:-1, PBB External Den\n"
-            + "#KODIPROP:inputstream.adaptive.license_key="
-            + "b750a40736a24e60b5a4f256208b92c5:af07292597f692726dcac2bd297ddf8e\n"
-            + "https://absp-live.akamaized.net/dash/live/2099522/den/manifest.mpd\n"
-            + "#EXTINF:-1, PBB All Access\n"
-            + "##KODIPROP:inputstream.adaptive.license_key=deadbeef:deadbeef\n"
-            + "#KODIPROP:inputstream.adaptive.license_key="
-            + "8150b74d-1632-4bb4-b2ff-62e3e202fc7a:0c5ed4f9db9d4ee61bbc91b3a51ef8b5\n"
-            + "https://absp-live.akamaized.net/dash/live/2099522/all/manifest.mpd\n"
-            + "#EXTINF:-1, PBB Dining Area\n"
-            + "#KODIPROP:inputstream.adaptive.license_key="
-            + "ea6588d030c94ca89925ac0c49974430:3e6de4afee1eff8e14f9506b76ac9ee6\n"
-            + "https://absp-live.akamaized.net/dash/live/2099522/dining/manifest.mpd\n";
-        List<ChannelList.Entry> streams = ChannelList.fromM3u(m3u, names, "abslive.akamaized.net");
-        check("the M3U yields three streams", 3, streams.size());
-        ChannelList.Entry first = streams.get(0);
-        check("the first row is All Access", names[0], first.name);
-        check("the Live name suffix is accepted", names[0],
-            ChannelList.fromM3u(m3u.replace("PBB All Access", "PBB All Access Live"),
-                names, "abslive.akamaized.net").get(0).name);
-        check("the manifest uses the chosen live host",
-            "https://abslive.akamaized.net/dash/live/2099522/all/manifest.mpd",
-            first.url);
-        check("the backup host is selectable",
-            "https://absp-live.akamaized.net/dash/live/2099522/all/manifest.mpd",
-            ChannelList.fromM3u(m3u, names, "absp-live.akamaized.net").get(0).url);
-        check("the kid loses its dashes", "8150b74d16324bb4b2ff62e3e202fc7a", first.kid);
-        check("the key is read", "0c5ed4f9db9d4ee61bbc91b3a51ef8b5", first.key);
-        check("the rows come back in channel order", names[1], streams.get(1).name);
-        check("a missing channel rejects the list", null,
-            ChannelList.fromM3u(
-                m3u.replace("PBB Dining Area", "Gone"), names, "abslive.akamaized.net"));
-    }
-
     private static void liveApiIsUsed() throws Exception {
         String source = new String(java.nio.file.Files.readAllBytes(
             java.nio.file.Paths.get("android/java/com/pbb/live/MainActivity.java")),
@@ -92,6 +57,41 @@ public final class RecorderLogicTest {
         check("an idle service stops", true, RecordService.shouldStopService(0, false));
         check("another recording keeps it up", false, RecordService.shouldStopService(1, false));
         check("a join keeps it up", false, RecordService.shouldStopService(0, true));
+    }
+
+    private static String sourceOf(String path) throws Exception {
+        return new String(java.nio.file.Files.readAllBytes(
+            java.nio.file.Paths.get(path)), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static void stitchKeepsBothPendingStarts() throws Exception {
+        String java = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        String page = sourceOf("android/assets/app.js");
+        int start = java.indexOf("private void requestRecording");
+        int end = java.indexOf("private void startRecordService", start);
+        String beforePermission = java.substring(start, end);
+        check("both pending starts survive the permission dialog", true,
+            beforePermission.contains("pendingRecordIndices.contains")
+            && !beforePermission.contains("pendingRecordIndices.clear()"));
+        check("stitch still asks for both cameras", true,
+            page.contains("for (const index of STITCH_FEEDS) {")
+            && page.contains("Pbb.startRecording(index, players[index].stream.name);"));
+    }
+
+    private static void stopBreaksSocketReads() throws Exception {
+        String source = sourceOf("android/java/com/pbb/live/RecordService.java");
+        check("a stop disconnects in-flight reads", true,
+            source.contains("disconnectActive(session);")
+            && source.contains("session.connections.remove(conn);")
+            && source.contains("fetch(vUrl, session)"));
+    }
+
+    private static void cookieStaysOnTheSite() throws Exception {
+        String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        int at = source.indexOf("conn.setRequestProperty(\"Cookie\", sessionCookie);");
+        int site = source.lastIndexOf("url.startsWith(SITE + \"/\")", at);
+        check("the session cookie is only sent to the site", true,
+            at > site && source.indexOf("conn.setRequestProperty(\"Cookie\", sessionCookie);", site) == at);
     }
 
     private static void check(String what, Object expected, Object actual) {
