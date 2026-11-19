@@ -1,235 +1,148 @@
 # PBB
 
-Rust + JNI Android app for three PBB live DASH/clear-key streams.
+An Android app for three PBB live cameras. It plays the feeds together in one screen, lets you switch between three server routes, and records any camera to `Movies/PBB/`. Main and Dining can also be saved as one stacked video.
+
+The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup and on refresh. A rotation on the site reaches the app without a new build.
 
 ## What it does
 
-- Three-feed multi-view in one screen: one large top feed and two bottom feeds. The grid is locked to portrait, because that is the layout it was drawn for. Only the fullscreen picture turns the phone sideways.
-- The brightness level belongs to the fullscreen picture. It is remembered and put back the next time a feed goes fullscreen, but on the main screen and in the pip window the phone keeps its own brightness.
-- Every card has one-click fullscreen and picture-in-picture: the button focuses that feed, plays it alone with sound, then enters the mode. Focus keeps the 16:9 frame instead of stretching.
-- On Android 12+ the system auto-enters PiP on the go-home gesture via setAutoEnterEnabled(true) once a stream is focused (any fullscreen or PiP tap focuses one). It does not fire on the recents/overview gesture. The old onUserLeaveHint trigger fired for both, so swiping up to recents used to jump into PiP. On Android 8-11 and 3-button navigation, use the PiP button.
-- Focus rings only appear for keyboard/D-pad navigation. Tapping a button does not leave the WebView focus outline stuck on it.
-- Shaka network failures (1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT) trigger a bounded backoff reload instead of leaving the tile on a dead error message.
-- All three players share one live presentation delay (14s, ignoring any per-manifest suggestion) and low-latency mode is off, so they sit the same distance behind live instead of each chasing its own edge. 14s is deliberate: the live window is only about 40 seconds wide, and at 8s a device clock a few seconds ahead of the origin had Shaka asking for segments that were not written yet - which is what produced the connect, play, connect-again loop. Buffering has real headroom (20s goal, 12s behind, 8s before play resumes), which keeps delay plus ring inside that window. The page also boots on one config: `getConfig()` waits up to 8s for the launch handshake, so the tiles are built once with current keys instead of playing from yesterday's cache and then reloading when the fresh config lands. Every media hop now goes through the app's `shouldInterceptRequest`, not just server 2's. The site started publishing relative segment names for server 1 too, so its "main CDN" route landed on the site's proxy; a file:// page is sent `403 Forbidden: Cross-site stream hotlinking` there, which Shaka reported as 1001. The CDN and the mirror are intercepted as well, so all three servers get a CORS-clean response and the site proxy gets its own Origin. The recorder is unaffected: it fetches without an Origin, which the proxy allows.
-
-The site rewrites its publish time on every manifest, so the encoded manifest differs on every handshake even when nothing the player cares about moved. Change detection therefore keys off the key pair plus the segment base the app hands over, never the encoded manifest; the launch handshake is not repeated once it has succeeded; and minimumUpdatePeriod is stripped from the inlined copy so Shaka stops re-polling a manifest that can never update. Before those three, a start-up produced two handshakes, the second one looked like a key change, and all three tiles reloaded - the connect, play, connect-again loop. A startup gate holds every tile until all three manifests are loaded - with a five-second cap so one slow feed cannot freeze the others - then starts them in the same tick. A manual refresh only re-fetches the keys; when they are unchanged it leaves playback completely alone. An earlier version sought every feed toward the live edge, which froze all three tiles for a couple of seconds. All feeds stay at the chosen quality all the time - hidden tiles are no longer dropped to sd, which made a mini or feed switch play a blurry sd buffer before stepping up to hd. `hd` picks the tallest rendition the feed publishes - 1080p when the origin has one - and `sd` asks for 480 lines: the smallest rendition that is at least 480 lines tall, so 720p on this origin and never the half-height ones. The two buttons read HD and SD; the exact rendition is in the tooltip and the accessible name, read off the manifest as soon as it loads. Variant changes (only when the operator picks a new default) keep the existing buffer via `selectVariantTrack(chosen, false)`. Every feed keeps playing and decoding, and hidden cards render in a 1px offscreen box instead of `display:none`, so opening the mini tile or switching feeds shows a live frame immediately rather than a black tile while it re-buffers.
-- Opening fullscreen or PiP turns that feed's sound on automatically.
-- Switching the sound does not stall the picture. The video elements stay unmuted for their whole life and are played silent at level zero; only the level moves. A browser builds an audio renderer when an element is unmuted and drops it again when it is muted, and that rebuild is what the picture waited for - the feed visibly lagged every time the sound was switched. A feed that could not start with sound at all (some devices refuse unmuted autoplay) falls back to the muted flag for that feed only.
-- Fullscreen button on every card: hides system bars, letterboxes the feed on black, and keeps the picture at its full size. The controls are one small panel in the top-right corner - five labelled keys (zoom, next, mini, lock, exit) in two columns with a filled exit key across the bottom; locking leaves only unlock. It does not open on entry and fades a few seconds after a tap brings it back. A channel bug in the top-left names the feed when fullscreen opens or switches. Connecting feeds show a breathing lamp over a slow scan; a dropped feed a red retry chip. The mini feed is a small floating monitor in the bottom-right: no number, no status, just its picture. Tapping it swaps it with the big feed. Both feeds keep their chosen quality and their sound, and a swap clears the zoom. Exiting fullscreen drops the focus and lands on the three-feed wall.
-- Global default quality: hd or sd. Rust validates and persists the choice in app-private storage and maps old auto values to hd. hd picks the tallest rendition the feed publishes (1080p) and sd picks the smallest one that is at least 480 lines (720p here); every feed uses the chosen quality, and the buttons read HD and SD.
-- The three feeds and their current ClearKeys come from the pbbcollab.live session API at <https://www.pbbcollab.live/>. One handshake returns a cookie, a nonce and a short lived token per camera; the app unseals `kid:key` out of each token, reads that camera's MPD with the cookie and inlines it as a `data:` URL, because the manifests answer 403 to anything else. The config in src/lib.rs is the offline fallback.
-- A server key in the footer opens a sheet with three routes to the same feeds: the site's main server, its backup, and the pbb3collablive.xyz mirror. The app stores the pick and the next launch starts on the same one: no build, no release, no asking anyone for a new APK. A failed switch shows its error in the status strip instead of silently keeping the old feed.
-- PBB All Access is the default sound stream on launch.
-- Record any camera on its own: the record button on a card starts that camera, or stops it, while the other cameras keep recording. All three can run at once. Every tap is confirmed by the service, and a recording card gets a red tally on the picture with its running time. There is no master record button in the header: each camera is started on its own card, and the footer strip shows how many are running and for how long.
-- Each recording pulls that stream's DASH segments directly into Movies/PBB/ with video and audio. No MediaProjection, no consent dialog, no activity required: the foreground service keeps every recording alive with the app backgrounded or the screen off.
-- Each camera is an independent session with its own worker thread, temporary files and notification. The pulls run in parallel; only the final remux is serialised, because libavformat keeps process-wide state and two muxers driven at once would interleave. Stream copy, no re-encode.
-- The service writes each session's encrypted init + media segments for one video and one audio representation to two temporary fragmented MP4 files, then remuxes them into a normal MP4 with that stream's ClearKey on stop.
-- The remuxer is a FFmpeg plugin that ships inside the APK as base64 in the assets. It is decoded on first record, verified against a pinned SHA-256, stored read-only, and loaded with System.load(). A pinned gist is the fallback for builds made without the asset. The APK is about 1.6 MB because of it, and recording works offline.
-- Recording does not change focus, playback, sound, PiP, fullscreen or navigation: those locks were only needed for screen capture. The record button on a card only affects that camera. A running recording also no longer turns the phone sideways: the recording happens in the service and the screen keeps the orientation the layout asks for.
-- Per-camera notifications come and go under one summary notification: stop a single camera from its own notification, or stop every camera from the summary notification.
-- Recording state lives in the service, so after the activity is recreated the page rebuilds every tally and its elapsed time from Pbb.recordingState() and the stop buttons still work. The stop key is never disabled while a file is saving: the service acknowledges a stop before the remux finishes. A stop also disconnects every socket the worker has open, because interrupting a thread cannot break a network read. Every tap sends stop again, which is idempotent in the service.
-- In picture-in-picture the live badge, stream status, tally and controls are hidden, so only the video is shown. PiP state is announced only by onPictureInPictureModeChanged; announcing it from enterPipMode as well ran the page hook twice. playOnly() now starts only paused feeds, so neither the second announcement nor the focus call restarts a feed that is already playing.
-- Android 15 forces edge to edge, so the WebView sits in a container padded by the system bar and cutout insets. The top bar clears the phone's status bar and the footer clears the navigation bar; immersive fullscreen zeroes the insets and the padding drops again.
-- The screen is a monitor wall built from the taste skill's system: one type scale, one hairline, one button shape, spacing on the 4px grid, and an interface that stays 90-95% neutral so the pictures carry the colour. Colour is reserved for what is true - green for live, red for recording. There are no scrims, glows, blurs, gradients or labels on the video: each frame is the picture, and a quiet strip **under** it carries the feed name, the live mark and the four keys. On a phone the two preview strips stack the name above the keys so "PBB External Den" never truncates. The header and the status bar are plain 56px bars with equal 16px edges, separated from the wall by one hairline. The program feed is marked by a slightly stronger border; a recording feed by a red border and a tally that takes the place of the live mark. The server sheet is a bottom sheet of hairline-separated rows: a radio dot, the server name, and an in-use tag on the live one. No route explanations. One filled control per screen - the chosen quality - and the only motion is a 200ms settle on load, a 150ms hover and a 90ms press. The app is dark only: no light theme and no toggle. The launcher icon is the same eye on a near-black tile, with one amber iris and no red tally. Feed names and status messages wrap instead of being cut.
-
-## Shape
-
-- Rust: stream config, clear keys, default-quality validation and persistence, JNI exports.
-- Java: thin WebView host, PiP lifecycle, multi-session direct-pull recording service, MPD parsing and segment fetching.
-- Downloadable FFmpeg plugin (C + NDK build script in ffmpeg/): decrypts CENC samples and muxes video + audio into an MP4.
-- WebView assets: local DM Sans, vendored Shaka Player 4.14.8, local HTML/CSS/JS.
-- No Gradle, no AndroidX, no Kotlin, no network font/CDN runtime dependency.
-
-## Versioning
-
-The app version is fixed at **1.0**.
-
-- versionName: 1.0 (constant)
-- versionCode: build number, injected by the build (VERSION_CODE, default 1)
-
-The manifest declares neither, so aapt2 injects both from the build environment.
+- Three feeds in one portrait screen: one large program feed and two previews.
+- Fullscreen and picture-in-picture on any feed. The fullscreen keys sit top-right; the mini feed sits bottom-right.
+- A server sheet with main, backup and mirror routes. The choice is stored on the phone.
+- HD and SD quality buttons. HD uses the tallest rendition; SD uses the smallest rendition at least 480 lines tall.
+- Record one, two or three cameras at once. Each recording gets its own notification and stop action.
+- Stitch button: records Main Access and Dining Area, then joins them into one stacked MP4.
+- Dark-only, one type system, one hairline, 44 px touch targets.
 
 ## Build
 
+Requirements:
+
+- Android SDK platform 35 and build-tools 35.0.0.
+- Android NDK 27.2.12479018.
+- JDK 17.
+- Rust targets `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android`.
+- `cargo-ndk`.
+- Node, for the page checks.
+
 ~~~bash
-cd PBB
 ./build.sh
 ~~~
 
-Output: PBB.apk
+Output: `PBB.apk`.
 
-Environment overrides, all optional:
+Environment overrides:
 
 | Variable | Default |
 |---|---|
-| VERSION_NAME | 1.0 |
-| VERSION_CODE | 1 |
-| ANDROID_SDK_ROOT | auto-detected |
-| ANDROID_NDK_HOME | newest NDK under the SDK |
-| JAVA_HOME | auto-detected |
-| PBB_KEYSTORE | android/release.keystore (gitignored) |
-| PBB_KEY_ALIAS | pbb |
-| PBB_KEYSTORE_PASS | required, no default |
+| `VERSION_NAME` | `1.0` |
+| `VERSION_CODE` | `1` |
+| `ANDROID_SDK_ROOT` | auto-detected |
+| `ANDROID_NDK_HOME` | newest NDK under the SDK |
+| `JAVA_HOME` | auto-detected |
+| `PBB_KEYSTORE` | `android/release.keystore` |
+| `PBB_KEY_ALIAS` | `pbb` |
+| `PBB_KEYSTORE_PASS` | required |
+| `PBB_KEY_PASS` | keystore password |
 
-## CI and release
-
-.github/workflows/android.yml runs on push to main, pull requests, and manual dispatch:
-
-1. rust toolchain with the three Android targets
-2. cargo-ndk
-3. android SDK and NDK
-4. cargo fmt --check, cargo clippy -D warnings, cargo test
-5. node --check on the page plus the page checks in android/test/app.test.mjs
-6. ./build.sh
-7. leaves `PBB.apk` in the runner only; the release asset is the download
-8. on main only, creates or updates the rolling GitHub release v1.0 with one asset, `PBB-1.0-<build>.apk`
-
-The release tag is fixed at v1.0. The asset name includes the build number so a new download never hits a stale cached APK. The workflow deletes old .apk assets so exactly one APK is offered. Fork pull requests still run the rust and page tests; they skip the signing key and APK build because repository secrets are not available to forks. Artifact uploads are disabled because the account hit GitHub Actions artifact storage quota. App version is always 1.0; versionCode carries the build number.
-
-## Signing
-
-The signing key is **not** in the working tree: `android/release.keystore` is gitignored, and `build.sh` refuses to run without `PBB_KEYSTORE_PASS`. Locally:
+Local build:
 
 ~~~bash
 PBB_KEYSTORE_PASS=... ./build.sh
 ~~~
 
-CI decodes the key from the `PBB_KEYSTORE_B64` repository secret into `$RUNNER_TEMP` for the run only, so every release still carries the same signature and updates install over the previous APK. To rotate the key, generate a new keystore, replace both secrets, and bump nothing else - existing installs then need one uninstall, because Android does not accept a different signer as an update.
+## Signing
 
-### The old key is in the git history
+The release key is not in the working tree. `build.sh` fails without a keystore and password.
 
-The first release committed `android/release.keystore` and the old `build.sh` had the password written in it. Both were removed later, but the file is still in the history: `git show 2858aff:android/release.keystore` hands it over, and the password in that commit was `pbb-release`.
+CI decodes `PBB_KEYSTORE_B64` and `PBB_KEYSTORE_PASS` into `$RUNNER_TEMP` for the run only. That keeps the same signer, so updates install over older builds.
 
-Treat that key as public. Anyone with a clone can sign an APK with the same package name and the same signature, and it installs over the real app with the app's data.
+The first release committed the old key, and the old `build.sh` contained its password. Both were removed, but the key is still in git history. Treat it as public. Anyone with a clone can sign an APK that installs over the real app and can read its data.
 
-A replacement key was generated on 2026-11-11 and is in place at `android/release.keystore` (gitignored). Finishing the rotation is three steps that only the operator can do:
+A replacement key was generated on 2026-11-11. To finish the rotation:
 
-1. Set the repository secret `PBB_KEYSTORE_B64` to the base64 of that keystore.
-2. Set the repository secret `PBB_KEYSTORE_PASS` to its password. Both values are in `pbb-key-rotation.txt` next to this repository, not in the repository itself.
-3. Ship a release with it. The old installs need one uninstall first, because Android refuses to update an app signed by a different key.
+1. Set `PBB_KEYSTORE_B64` to the base64 of that keystore.
+2. Set `PBB_KEYSTORE_PASS` to its password.
+3. Ship a release. Old installs need one uninstall because Android does not accept a different signer as an update.
 
-Until step 3 is done the old key is still valid for anyone who has a clone. If the repository was ever pushed anywhere public, the old key is already burned - do not skip step 3.
+The rotation details are in `pbb-key-rotation.txt` outside this repository. Purging the old key from history is optional; it rewrites commit ids and needs a force push and fresh clones.
 
-Purging the file from the history is optional and does not replace the rotation: `git filter-repo --path android/release.keystore --invert-paths` (or `git filter-branch --index-filter 'git rm --cached --ignore-unmatch android/release.keystore' -- --all`) rewrites every commit id, so it needs a force push and a fresh clone everywhere.
+## Stream source
 
-## Requirements
-
-- Android SDK platform 35 and build-tools 35.0.0.
-- Android NDK 27.2.12479018.
-- JDK 17.
-- rustup targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android.
-- cargo-ndk.
-
-## Runtime permissions
-
-- No consent dialog: recording pulls segments directly.
-- POST_NOTIFICATIONS is requested on Android 13+.
-- WRITE_EXTERNAL_STORAGE is requested only on Android 9 and below. Android 10+ writes through MediaStore to Movies/PBB/.
-- Foreground service type dataSync is declared for Android 14+.
-
-## Stream source and runtime clear keys
-
-The broadcaster rotates ClearKeys. When that happens Shaka marks every variant unplayable and reports 4012 RESTRICTIONS_CANNOT_BE_MET; an in-flight recording would also produce garbage files because it uses the same key.
-
-The app uses the same session handshake the site's own page uses, and reads nothing out of a page bundle:
+The app uses the site's own session handshake:
 
 ~~~text
-POST /api/streams/session   X-PBB-Client: v3   { k, v: base64(seed ^ 0x3C) }
--> { nonce, streams: { all, din, ext, main } = { endpoint, token } }  + pbb_sid cookie
+POST https://www.pbbcollab.live/api/streams/session
+Headers: X-PBB-Client: v3
+Body:    { k, v: base64(seed XOR 0x3C) }
+
+Reply:   { nonce, streams: { all, din, ext, main } = { endpoint, token } }
+Cookie:  pbb_sid
 ~~~
 
-- Cookie: the handshake sets `pbb_sid`, and `/stream/.../manifest.mpd` answers 200 only to that cookie together with the `X-PBB-Client: v3` header. Anything else gets `Forbidden: Authorized player session required.`
-- ClearKey: `token` is base64 of `kid:key` XORed with `0x5A` and the reply's `nonce`. That is the camera's key; no vault, no rotation mask.
-- Feed source: the session's own `endpoint`. The MPD it returns is a live SegmentTemplate manifest whose media URLs are absolute `absp-live.akamaized.net` segment paths, and those segments need no session. The site publishes four cameras; the grid is drawn for three, so the app takes `all`, `din` and `ext` and leaves the official broadcast feed on the web player.
+Each token is base64 `kid:key` XORed with `0x5A` and the reply nonce. The app reads the three manifests with the session cookie, puts a `<BaseURL>` in each, and inlines them as `data:` URLs. Playback and recording use the same config.
 
-At startup and on manual refresh the app reads one MPD per camera, hoists the media directory into a `<BaseURL>` (the site names segments absolutely but leaves the init names relative), base64-encodes the manifest into a `data:application/dash+xml;base64,` URL, and turns it into the app's `{name,url,kid,key}` config. `Http.getBytes()` decodes that URL for the recorder, and the recorder joins `<BaseURL>` with the segment and init names it parses.
-
-The feed data lives outside the app, so a rotation shows up on the site and not in a new build.
-
-### The server sheet
-
-The same cameras come in over three routes, and the pick can be made on the phone. The footer strip carries a server key next to the stitch and refresh icons, and it opens a sheet with the three servers as chips:
-
-- Tapping a chip hands `s1`, `s2` or `s3` to Pbb.setStreamServer(), and the app answers with Pbb.getStreamServer() when the sheet opens, so the highlighted chip is the server that is actually playing.
-- A pick stores the choice in filesDir/stream_server.txt and re-reads the config immediately. Servers 1 and 2 come from the site's own handshake: it flips the mode bit (`s1` main, `s2` backup), and server 1 hands back segments straight off the CDN while server 2 returns them relative, through its proxy. Server 2 only works because the app makes that hop: the proxy answers its own Origin and returns `403 Forbidden: Cross-site stream hotlinking` to anything else, which is exactly what a `file://` page is. `shouldInterceptRequest` catches `https://www.pbbcollab.live/stream/` requests while server 2 is selected, fetches them with the session cookie, the `X-PBB-Client` tag and the site's own Origin, and streams the body back with `Access-Control-Allow-Origin: *`. Segments stay out of memory, Range is passed through, and the native recorder is unaffected because it fetches without an Origin header.
-- Server 3 is the pbb3collablive.xyz mirror. Its own bundle is a baked copy - stale window, and a key for All Access that predates the last rotation - so the app keeps the fresh manifest and ClearKey from the site and only rewrites the segment base to `https://pbb3collablive.xyz/api/proxy/stream/<camera>/`. The mirror passes the same segment numbers, init files and audio through, which makes it a working third route when the CDN itself is blocked. Its three camera ids are compiled in (`CAM_MIRROR`), so a mirror that renumbers its routes needs a one-line change.
-- The footer also carries a stitch key: it records Main Access and Dining Area together and saves **one stacked MP4** in Movies/PBB - Main Access on top, Dining Area below. A WebView cannot copy DRM-protected video frames into a canvas (every captured frame comes back black), so the two feeds are recorded by the native service, then their finished local MP4s are decoded and joined by the FFmpeg plugin: both H.264 streams are stacked into a single 1280x1440-style frame with libx264 and the first feed's AAC track carries over. The two originals are deleted once the join succeeds, so only `PBB_stitch_...mp4` remains. The key turns red while both are running and both cards show their recording tallies; a second tap stops both and the joined file lands a moment later. The plugin now includes an H.264 decoder, swscale and libx264 (reproducibly cross-built by `ffmpeg/build-android.sh`) and is pinned by SHA-256 in `RecordService`; the fallback download URL is no longer used because its old hash no longer matches.
-- The refresh icon also works without the API: it reads the kid out of every manifest and names the cameras that rotated, so a feed that changed is named instead of failing silently.
-
-- Fetched off the UI thread with short timeouts; the list must hold three channels with https manifest URLs and 32-hex KID/key pairs, and the KID may be written with or without dashes. The combined config is cached in filesDir/streams.json and used as the last-good config when offline.
-- Rust STREAM_CONFIG_JSON in src/lib.rs is the built-in fallback with the last known three feeds.
-- Pushed to the page through window.onStreamConfig(); changed keys destroy and re-init the Shaka players, so no restart is needed.
-- The status strip sits below the grid: a status LED, the message, a recording badge with the number of active recordings and the longest elapsed time, the server key, the stitch key, the refresh icon, and the back button when a feed is focused. The LED turns red while any camera records. It is hidden in PiP and fullscreen. In the grid it never hides itself: with no message it reads "tap refresh or open servers to switch".
-- The refresh icon calls Pbb.refreshKeys() and doubles as a stream sync: a manual refresh with unchanged keys does NOT rebuild the players (a full reload is slow and leaves late feeds behind). It pulls every playing feed to its live edge in the same tick, tries once more for a feed still connecting, and every player aligns itself as soon as its load finishes. A changed key list still destroys and reloads all three in the same tick. Fullscreen hides the strip, so a message that arrives there is mirrored by the on-screen indicator. On 4012 the tiles say "keys rotated" and the app asks the site for fresh keys by itself, once: a rotation shows up as a reconnecting tile instead of a dead one. If the site still serves the key that just failed, the strip says "keys rotated - open servers to switch" and the retry stays used up until a config with new keys arrives.
-- While the keys are known to be stale the record buttons refuse to start and say so. A recording that is remuxed with the wrong key is a file that will not play, and it would land in Movies/PBB looking like a normal recording.
-- A manual refresh always resolves its status text. With a live feed: changed keys re-init the players and unchanged keys pull them to the live edge and report the streams are aligned. Without one: the app reads the kid out of every manifest and compares it with the kid it plays with, so the strip says "keys rotated on pbb all access - open servers to switch" when a camera changed, "no published channel list - the server sheet holds the current feed" when everything still matches, and "could not reach the streams - tap refresh to retry" when the manifests do not answer. Silent startup fetches never overwrite the status.
-- Both playback (Pbb.getConfig()) and recording (startRecordService) read the same effective config, so key rotation needs no APK rebuild or reinstall. The keys come from the site's own session handshake, so a rotation is picked up by the next refresh.
-
-To refresh the checked-in fallback snapshot from the same site:
+The config is cached in `filesDir/streams.json`. `keys/keys.json` is the checked-in fallback used by Rust when there is no network. Refresh it with:
 
 ~~~bash
 ./keys/update.sh
 ~~~
 
-It writes keys/keys.json with the same inlined MPD URLs and KID/key pairs the app builds. src/lib.rs includes that file as `STREAM_CONFIG_JSON`, so the built-in fallback uses the same config shape as the runtime app. The runtime app reads the site directly and caches the result in filesDir/streams.json. Commit the snapshot after a rotation, or leave the fallback stale and let the first launch with a network fix it.
+### Servers
 
-## Downloadable recorder plugin
+- `s1`: main route.
+- `s2`: backup route through the site's proxy.
+- `s3`: `pbb3collablive.xyz` segment mirror with keys from the live handshake.
 
-Android 10+ forbids execve() on files in an app home directory, so a downloaded ffmpeg executable cannot run. A downloaded shared library can, as long as it is read-only (Android 14+ rejects writable dynamic code). The plugin therefore is libpbbffmpeg.so, shipped in the APK as base64 in assets/libpbbffmpeg.so.b64, decoded, chmod 0444, then loaded with System.load(). A pinned gist is the fallback for builds made without the asset. Only libc/libm/libdl are needed, and it is 16 KB page-aligned for Android 15+.
+The app routes all segment requests through `shouldInterceptRequest`. The site proxy needs the site's own Origin; the CDN and the mirror do not get the session cookie. The mirror camera ids are in `CAM_MIRROR`.
 
-Hosted at the URL pinned in RecordService.java, together with its SHA-256. Both must be updated together when the plugin changes.
+## Recording
 
-Rebuild with ./ffmpeg/build-android.sh (FFmpeg n7.1, arm64-v8a, minimal: mov demuxer, mp4 muxer, h264/aac parsers, file protocol; no TLS, libxml2 or DASH demuxer needed because Java does the fetching). Output is ffmpeg/out/libpbbffmpeg.so and .b64. Re-upload the .b64 to the gist, then update PLUGIN_URL and PLUGIN_SHA256.
+`RecordService` pulls DASH video and audio segments directly into temporary files, then an FFmpeg plugin decrypts and muxes them into an MP4 in `Movies/PBB/`. There is no screen capture and no consent dialog.
 
-The plugin is arm64-only. Non-arm64 devices get a clear error instead of a crash. On Android 15+ the dataSync foreground service has a six-hour budget, and `onTimeout` then ends the pull through the normal save path, so the file is published instead of lost.
+- One worker and one notification per camera. Temp files live in app-private storage until the file is published.
+- Video and audio segments are pulled together. Pulls run in parallel; remuxing is serialised because libavformat is not reentrant.
+- Stop sets the stop flag, disconnects in-flight reads and interrupts the worker. The tally clears at once and the status says saving. Tapping stop again is safe.
+- If MediaStore refuses a file, the app keeps a copy in its own Movies folder and reports that path.
+- A failed remux keeps the pulled segments instead of deleting the only copy.
+- The recorder uses the live edge from the MPD plus a bounded range scan. It does not walk the archive from zero.
+- The plugin is arm64-only, shipped as base64 in the APK and pinned by SHA-256. Non-arm64 devices get a clear error.
 
-The bundled copy means recording works offline and does not depend on the gist surviving; the gist is only used by builds that ship without the asset.
+The stitch button records cameras 0 and 1, then stacks them into `PBB_stitch_...mp4`. The two originals are deleted only after the joined file is published.
 
-The recorder's worker and its fetch pool run below the UI thread's priority, so the FFmpeg remux and the MediaStore copy do not make the page stutter. The stop interrupt is cleared before the save path so a framework call cannot abort and lose the file; if MediaStore refuses the entry (or leaves it pending and invisible) the recording is copied to the app's Movies folder and the status text reports that real path; a 200 response with an empty body counts as a miss (it used to produce a header-only MP4), and a remux that yields under 4 KiB is refused rather than published. The live-edge probe uses 2s/3s timeouts and a bounded fine pass, so a stop cannot land while the recorder is still walking a thousand range requests. If a stop does land during the probe, the recorder falls back to its last known edge, pulls at least one segment and saves a real file instead of reporting 'recording stopped' with nothing on disk. A stop is acknowledged immediately - the tally clears and the stop key is disabled until `saved to ...` arrives - instead of waiting for a long recording to be remuxed and copied. A long stall in the archive (the live edge moving past what the server still serves) no longer splices across the hole: the current part is saved and a second file `..._2.mp4` continues. The live edge is now computed from the MPD's own `availabilityStartTime`, `publishTime` and segment duration, then verified with a short range scan around that number (plus a small backward probe). This was the root cause of `nothing recorded` / `no live segments available`: these feeds started on Nov 10 with 4.004s segments, so the edge passes offset 65,536 after about three days and a scan that starts at zero can never reach it again. The edge is ~94,000 today and grows ~21,600 segments per day. A short DVR window or holes in the archive still cannot make it report `no live segments available` while the feeds are playing; a failed probe is retried with a fresh manifest instead of ending the recording. If the stall happens before the first segment - the edge rolled past the numbers the recorder was waiting on - the stale edge is forgotten, the manifest is re-read and the pull starts again from the live edge, up to three times, instead of reporting `nothing recorded before the stream gap`. A failed remux keeps the pulled segments in the app cache and says so in the status text instead of deleting the only copy. A stop no longer poisons the final fetch: the stop interrupt is cleared on each post-stop attempt, so the recorder still pulls and saves at least one segment instead of reporting `nothing recorded`. A transient `no live segments available` probe result no longer ends the recording - the worker re-reads the manifest and probes again (up to 20 times, 3s apart); only the user's stop ends it.
+Known limit: a recording that was already running keeps its key. If the broadcaster rotates during that recording, the file may not play. Refresh and start a new recording after a rotation.
 
-Known limit: an in-flight recording keeps the key it started with, so a rotation can produce a garbage file because remuxing copies packets without decoding them. Refresh the feeds and start a new recording after rotation.
+## CI and release
 
-DASH tfdt timestamps are absolute (time since the stream began). The remuxer sets AVFMT_AVOID_NEG_TS_MAKE_ZERO so the MP4 starts at 0; otherwise mvhd/tkhd carry a duration of hours or days and only an edit list hides it, which many players ignore. Files recorded before this fix can be repaired without re-encoding:
+`.github/workflows/android.yml` runs on push to `main`, pull requests and manual dispatch.
+
+1. Rust format, clippy and tests.
+2. `node --check` and the page checks.
+3. `./build.sh`.
+4. On `main`, one rolling release `v1.0` with one APK asset named `PBB-1.0-<build>.apk`.
+
+Fork pull requests still run rust and page tests. They skip signing and APK build because repository secrets are not available to forks.
+
+## Checks
+
+Run locally before release:
 
 ~~~bash
-ffmpeg -i old.mp4 -c copy -movflags +faststart fixed.mp4
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+node --check android/assets/app.js
+node android/test/app.test.mjs
+python3 -m json.tool keys/keys.json
+./build.sh
 ~~~
 
-## Multi-camera recording
+`build.sh` also compiles the Java tests and runs `com.pbb.live.RecorderLogicTest`. It fails if Node is missing.
 
-- MainActivity sends one RECORD_START intent per camera, each carrying that stream's MPD, key, file name and index. RecordService keeps a session per index: worker thread, temp files `pull_video_<index>.mp4` / `pull_audio_<index>.mp4` / `pull_out_<index>.mp4`, stop flag and notification.
-- The temp files live in filesDir, not the cache dir: Android may delete the cache when it needs space, and these are the only copy of the recording until the remux publishes it.
-- The recorder uses the same quality rules as the page: hd is the tallest variant the feed publishes, sd is the smallest one that is at least 480 lines wide (854 px at 16:9).
-- The live edge is found by probing the archive, and the last edge found for a manifest is remembered, so a second recording starts from there instead of walking the whole archive again.
-- The video and the audio segment of one step are pulled at the same time, so a segment costs one round trip instead of two.
-- ACTION_STOP with a stream index stops that session; without one it stops every session. Each per-camera notification carries its own stop action, and the summary notification carries stop all.
-- The service's static STARTED map is the source of truth for the activity. Every transition broadcasts `{active, index, count, elapsed, kind, message}`, and `Pbb.recordingState()` returns the active indices with their elapsed seconds so a rebuilt page can restore the tally lights and clocks.
-- Pulls run in parallel. The native remux is inside `REMUX_LOCK` because libavformat is not reentrant across muxers; only the final mux is serialised, not the download.
-- Each file is named from its camera, so concurrent saves never collide in Movies/PBB/. One dataSync foreground service covers every session, so the Android 15 six-hour budget is shared rather than multiplied.
-
-## Validation performed
-
-- cargo fmt --check
-- cargo clippy --all-targets -- -D warnings
-- cargo test
-- node --check android/assets/app.js
-- the page checks in android/test/app.test.mjs (stubbed DOM and Pbb bridge, no dependencies): picture-in-picture focus, the record button with rotated keys, and the slider levels
-- these two run in CI on every push and inside build.sh, so a broken page fails the build
-- python3 -m json.tool keys/keys.json
-- the redesigned grid, server sheet and recording state rendered in headless Chromium at 390x844 and 360x640, in both palettes, checked for fit, contrast, legibility and target size
-- tree-sitter parse of the changed Java/JS/HTML/CSS files: no ERROR nodes
-- cargo ndk build for arm64-v8a, armeabi-v7a, x86_64
-- javac against android.jar
-- d8 dexing
-- aapt2 resource packaging
-- apksigner verify
-- aapt2 dump badging
-- No emulator or on-device playback test.
-- This workspace has no JDK or Android SDK, so javac, d8, aapt2 and the signer were not re-run for the multi-camera change; the next build.sh run must confirm them.
-- The same is true of the audit fixes: the Java changes were read, not compiled. The next build.sh run must confirm them.
+No emulator or on-device playback test was done in this workspace.
 
 ## Licenses
 
-- Shaka Player: Apache-2.0, see android/assets/LICENSE-shaka.txt
-- DM Sans: SIL Open Font License 1.1, see android/assets/fonts/OFL.txt
-- FFmpeg n7.1 (downloaded plugin, LGPL-2.1-or-later build): source at https://github.com/FFmpeg/FFmpeg/tree/n7.1, rebuilt by ffmpeg/build-android.sh. The plugin is distributed separately from the APK.
+- Shaka Player: Apache-2.0, see `android/assets/LICENSE-shaka.txt`.
+- DM Sans: SIL Open Font License 1.1, see `android/assets/fonts/OFL.txt`.
+- FFmpeg n7.1: LGPL-2.1-or-later build, source at <https://github.com/FFmpeg/FFmpeg/tree/n7.1>, rebuilt by `ffmpeg/build-android.sh`.
