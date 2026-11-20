@@ -107,7 +107,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     private static final String PLUGIN_ASSET = "libpbbffmpeg.so.b64";
 
     private static final String PLUGIN_SHA256 =
-        "6c8b08e0a2e0be40c80bd01bad14e3941df8ffa04c6b3ab3c10bdb41ace891f6";
+        "fed17d893611e95b98225feabf44ed9d6ff9616d728948b44224b33dad659d06";
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
     private static final Pattern DEFAULT_KID =

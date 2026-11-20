@@ -49,10 +49,9 @@ if [ ! -f "$X264_PREFIX/lib/libx264.a" ]; then
         --disable-cli --disable-asm --prefix="$X264_PREFIX"
     make -j"$(nproc)"
     make install
-    cd "$WORK/FFmpeg-${FFMPEG_VERSION}"
 fi
 
-cd "FFmpeg-${FFMPEG_VERSION}"
+cd "$WORK/FFmpeg-${FFMPEG_VERSION}"
 
 PREFIX="$WORK/prefix"
 ./configure \
