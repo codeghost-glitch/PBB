@@ -15,6 +15,12 @@ import java.util.Locale;
 final class Http {
     private static final String AGENT = "PBB/1.0";
 
+    static {
+        // HttpURLConnection treats Origin as restricted and drops it unless
+        // this is set. The site's chat API and proxy reject requests without it.
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+    }
+
     private Http() {
     }
 
@@ -87,6 +93,29 @@ final class Http {
         return body == null ? null : new String(body, "UTF-8");
     }
 
+    /**
+     * The chat API only answers requests carrying the site's own Origin. The
+     * app makes the hop natively because a file:// page cannot claim it.
+     */
+    static String getTextWithOrigin(String url, String origin, int connectMs, int readMs)
+            throws IOException {
+        HttpURLConnection conn = open(url, connectMs, readMs);
+        conn.setRequestProperty("Origin", origin);
+        try {
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            InputStream in = conn.getInputStream();
+            try {
+                return new String(readAll(in), "UTF-8");
+            } finally {
+                in.close();
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
     /** A POST reply plus the session cookie the server set, if any. */
     static final class Reply {
         final String body;
@@ -109,6 +138,40 @@ final class Http {
         return String.format(Locale.US, "%02x:%s:%04x",
             (seed[12] & 0xfe) | (modeBit ^ (seed[0] & 0x01)), key.substring(0, 8),
             millis & 0xffffL);
+    }
+
+    /**
+     * Posts a JSON body for chat and returns the reply even on an error, so
+     * the page can tell a rejected message from a broken connection.
+     */
+    static String postJsonWithOrigin(String url, String body, String origin,
+            int connectMs, int readMs) throws IOException {
+        byte[] payload = body.getBytes("UTF-8");
+        HttpURLConnection conn = open(url, connectMs, readMs);
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Origin", origin);
+        try {
+            java.io.OutputStream out = conn.getOutputStream();
+            try {
+                out.write(payload);
+            } finally {
+                out.close();
+            }
+            int status = conn.getResponseCode();
+            InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            if (in == null) {
+                return "{\"error\":\"chat request failed\"}";
+            }
+            try {
+                return new String(readAll(in), "UTF-8");
+            } finally {
+                in.close();
+            }
+        } finally {
+            conn.disconnect();
+        }
     }
 
     /** Posts a JSON body. Returns null when the server answered anything but 200. */

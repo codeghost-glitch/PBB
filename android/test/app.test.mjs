@@ -139,6 +139,9 @@ function loadPage() {
       serverPick.server = server;
       return "";
     },
+    refreshChat: () => calls.push(["refreshChat"]),
+    sendChat: (nickname, text) => calls.push(["sendChat", nickname, text]),
+    openChatVerification: () => calls.push(["openChatVerification"]),
   };
 
   const statusText = makeElement("span");
@@ -146,7 +149,17 @@ function loadPage() {
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
   const serverChips = makeElement("div");
-  for (const id of ["s1", "s2", "s3", "s4", "s5", "s6", "s7"]) {
+  const chatNote = makeElement("p");
+  const chatSheet = makeElement("div");
+  const chatLog = makeElement("div");
+  const chatNick = makeElement("input");
+  const chatInput = makeElement("input");
+  const chatSend = makeElement("button");
+  const chatVerify = makeElement("button");
+  chatNick.value = "";
+  chatInput.value = "";
+  chatVerify.classList.add("hidden");
+  for (const id of ["s1", "pbbtop", "s2", "s3", "s4", "twitch"]) {
     const chip = makeElement("button");
     chip.dataset.server = id;
     serverChips.appendChild(chip);
@@ -156,6 +169,13 @@ function loadPage() {
     sourceNote,
     sourceSheet,
     serverChips,
+    chatNote,
+    chatSheet,
+    chatLog,
+    chatNick,
+    chatInput,
+    chatSend,
+    chatVerify,
   };
   const windowStub = {
     Pbb,
@@ -214,6 +234,9 @@ function loadPage() {
   serverSheet,
   selectServer,
   openSourceSheet,
+  openChatSheet,
+  closeChatSheet,
+  sendChatMessage,
   focusStream,
   toggleRecord,
   applyGestureValue,
@@ -425,17 +448,17 @@ function serverSheetFollowsTheApp() {
   page.openSourceSheet();
   check("the sheet opens on the stored server", "s2", page.serverSheet.server);
   check("the active chip is marked", true,
-    page.fields.serverChips.children[1].classList.contains("active")
+    page.fields.serverChips.children[2].classList.contains("active")
     && !page.fields.serverChips.children[0].classList.contains("active"));
   check("the note names the server", true,
-    /server 2 is on/.test(page.fields.sourceNote.textContent));
+    /Server Nathan is on/.test(page.fields.sourceNote.textContent));
   page.selectServer("s3");
   page.openSourceSheet();
   check("the sheet opens on the third server", "s3", page.serverSheet.server);
   check("the note names the server", true,
-    /server 3 is on/.test(page.fields.sourceNote.textContent));
+    /Server Primo is on/.test(page.fields.sourceNote.textContent));
   check("the third chip is the marked one", true,
-    page.fields.serverChips.children[2].classList.contains("active"));
+    page.fields.serverChips.children[3].classList.contains("active"));
 }
 
 function fullscreenKeepsThePictureWhole() {
@@ -592,21 +615,21 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sheet lists seven servers", true,
-    /id="serverChips"/.test(html) && /data-server="s1"/.test(html)
-    && /data-server="s7"/.test(html) && /selectServer/.test(app));
+  check("the sheet lists the site's six servers", true,
+    /id="serverChips"/.test(html)
+    && ["s1", "pbbtop", "s2", "s3", "s4", "twitch"]
+      .every((id) => html.includes(`data-server="${id}"`))
+    && /selectServer/.test(app)
+    && !/data-server="s[5-7]"/.test(html));
   check("the site routes use the website's names", true,
-    ["cloud bridge", "direct akamai", "edge global", "low latency"]
-      .every((name) => html.includes(name))
-    && !html.includes("site server"));
-  check("the last four servers come from pbbcollab.com", true,
+    ["Server Jeo", "Server Gehlee", "Server Nathan", "Server Primo",
+      "Server Bela", "Twitch Mirror"]
+      .every((name) => html.includes(name)));
+  check("all six routes come from pbbcollab.com", true,
     /SITE2 = "https:\/\/pbbcollab\.com"/.test(java)
-    && /site2Number\(streamServer\)/.test(java)
+    && !/site2Number|MIRROR|CAM_MIRROR/.test(java)
     && java.includes("\"/api/live/mpd/\" + CAM_IDS[i]")
-    && java.includes("\".mpd?srv=s\""));
-  check("the third server is the mirror route", true,
-    /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java)
-    && /CAM_MIRROR/.test(java));
+    && java.includes("\".mpd?srv=\""));
   check("the bridge stores the pick", true,
     /setStreamServer/.test(java) && /getStreamServer/.test(java));
   check("the manifest and key boxes are gone", false,
@@ -656,7 +679,7 @@ function playbackAndRecorderFixes() {
   check("sd takes the smallest rendition of at least 480 lines", 720, fakePlayer.picked);
   check("sd never falls to the half-height renditions", true,
     /SD_MIN_HEIGHT = 480/.test(app)
-    && /heights\.filter\(\(h\) => h >= SD_MIN_HEIGHT\)\[0\]/.test(app));
+    && /heights\.find\(\(h\) => h >= SD_MIN_HEIGHT\)/.test(app));
   check("the buttons read HD and SD with the rendition in the tooltip", true,
     /QUALITY_LABELS = \{ hd: "HD", sd: "SD" \}/.test(app)
     && /btn\.title = detail/.test(app)
@@ -734,7 +757,7 @@ function designSystemHoldsTheLine() {
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && (html.match(/data-server="/g) || []).length === 7
+    && (html.match(/data-server="/g) || []).length === 6
     && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
     /\.chip\.active \.chip-key \{[^}]*background: var\(--ink\)/s.test(css));
@@ -781,12 +804,12 @@ function liveWindowAndBackupRoute() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
   // The site's proxy answers its own Origin only, so the page cannot fetch
-  // server 2's segments itself. The app makes that hop and hands them over.
+  // its segments itself. The app makes that hop and hands them over.
   check("every media hop goes through the app", true,
     /shouldInterceptRequest\(/.test(java)
     && java.includes('url.startsWith(SITE + "/stream/")')
+    && java.includes('url.startsWith(SITE2 + "/stream/")')
     && java.includes('url.startsWith("https://absp-live.akamaized.net/")')
-    && java.includes('url.startsWith(MIRROR)')
     && java.includes('setRequestProperty("Origin", SITE)')
     && java.includes('setRequestProperty("Cookie", sessionCookie)')
     && java.includes('"Access-Control-Allow-Origin", "*"'));
@@ -846,6 +869,72 @@ function launcherIconFollowsTheSystem() {
       .split("fillColor").length === 3);
 }
 
+function liveChatUsesTheSiteApi() {
+  const page = loadPage();
+  page.openChatSheet();
+  check("opening chat fetches messages", 1,
+    page.calls.filter((call) => call[0] === "refreshChat").length);
+  check("the chat sheet opens", false,
+    page.fields.chatSheet.classList.contains("hidden"));
+
+  const now = Date.now();
+  page.window.onChatState(JSON.stringify({
+    messages: [
+      { id: "m1", nickname: "KuyaFan", text: "hello", timestamp: now },
+      { id: "m2", nickname: "AteFan", text: "g", timestamp: now },
+    ],
+    cfRequired: true,
+    cfVerified: false,
+  }));
+  check("site messages render", 2, page.fields.chatLog.children.length);
+  check("message text is shown", true,
+    page.fields.chatLog.children[0].children.some((c) => c.textContent === "hello"));
+  check("an unverified viewer sees the verify step", false,
+    page.fields.chatVerify.classList.contains("hidden"));
+
+  page.window.onChatState(JSON.stringify({
+    messages: [
+      { id: "m1", nickname: "KuyaFan", text: "hello", timestamp: now },
+      { id: "m2", nickname: "AteFan", text: "g", timestamp: now },
+    ],
+    cfRequired: true,
+    cfVerified: false,
+  }));
+  check("a repeat poll does not duplicate messages", 2,
+    page.fields.chatLog.children.length);
+
+  page.fields.chatNick.value = "TestFan";
+  page.fields.chatInput.value = "nice stream";
+  page.sendChatMessage();
+  const sent = page.calls.find((call) => call[0] === "sendChat");
+  check("the nickname reaches the bridge", "TestFan", sent && sent[1]);
+  check("the message reaches the bridge", "nice stream", sent && sent[2]);
+  check("the send button locks while sending", true, page.fields.chatSend.disabled);
+
+  page.window.onChatState(JSON.stringify({
+    ok: true,
+    message: { id: "m3", nickname: "TestFan", text: "nice stream", timestamp: now },
+  }));
+  const lines = page.fields.chatLog.children;
+  check("a sent message renders", true,
+    lines[lines.length - 1].children.some((c) => c.textContent === "nice stream"));
+  check("the send button unlocks after the reply", false, page.fields.chatSend.disabled);
+  page.closeChatSheet();
+  check("the chat sheet closes", true,
+    page.fields.chatSheet.classList.contains("hidden"));
+
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  const http = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
+  check("chat goes to the site API with the site's Origin", true,
+    java.includes('CHAT_URL = SITE2 + "/api/live/chat"')
+    && java.includes('Http.getTextWithOrigin(CHAT_URL, SITE2')
+    && java.includes('Http.postJsonWithOrigin(')
+    && http.includes('setRequestProperty("Origin", origin)')
+    && http.includes('sun.net.http.allowRestrictedHeaders'));
+  check("verification opens the site", true,
+    java.includes("Intent.ACTION_VIEW") && java.includes('SITE2 + "/live"'));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -872,6 +961,7 @@ const tests = [
   startupDoesNotReloadTheGrid,
   soundSwitchDoesNotRebuildTheAudioRenderer,
   launcherIconFollowsTheSystem,
+  liveChatUsesTheSiteApi,
 ];
 
 for (const test of tests) {

@@ -483,6 +483,13 @@ const ICONS = {
     ["rect", { x: 3, y: 3, width: 18, height: 8, rx: 1 }],
     ["rect", { x: 3, y: 13, width: 18, height: 8, rx: 1 }],
   ],
+  chat: [
+    ["path", { d: "M21 12a8 8 0 0 1-8 8H7l-4 3v-6a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z" }],
+  ],
+  send: [
+    ["path", { d: "m4 12 16-8-6 16-2.5-6.5z" }],
+    ["path", { d: "M11.5 13.5 20 4" }],
+  ],
 };
 
 const SVG_ATTRS = {
@@ -826,7 +833,7 @@ function qualityHeights(tracks) {
   }
   return {
     hd: heights[heights.length - 1],
-    sd: heights.filter((h) => h >= SD_MIN_HEIGHT)[0] || heights[0],
+    sd: heights.find((h) => h >= SD_MIN_HEIGHT) || heights[0],
   };
 }
 
@@ -1484,21 +1491,19 @@ window.onStreamConfig = async (raw) => {
 
 // ------------------------------------------------------------------- servers
 
-// The same cameras come in over three routes: 1 is the main one, 2 the backup
-// that answers when 1 does not, and 3 the mirror. The app stores the pick, so
-// the next launch starts on the same one.
+// The routes and their names are the six pbbcollab.com/live offers. The app
+// stores the pick, so the next launch starts on the same one.
 const serverSheet = { server: "s1" };
 
-const SERVERS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7"];
+const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch"];
 
-const SERVER_NOTE = {
-  s1: "server 1 is on",
-  s2: "server 2 is on",
-  s3: "server 3 is on",
-  s4: "cloud bridge is on",
-  s5: "direct akamai is on",
-  s6: "edge global is on",
-  s7: "low latency is on",
+const SERVER_NAMES = {
+  s1: "Server Jeo",
+  pbbtop: "Server Gehlee",
+  s2: "Server Nathan",
+  s3: "Server Primo",
+  s4: "Server Bela",
+  twitch: "Twitch Mirror",
 };
 
 function sourceField(id) {
@@ -1532,7 +1537,7 @@ function openSourceSheet() {
     serverSheet.server = SERVERS.includes(stored) ? stored : "s1";
   }
   markServerChoice();
-  setSourceNote(SERVER_NOTE[serverSheet.server]);
+  setSourceNote(SERVER_NAMES[serverSheet.server] + " is on");
   sheet.classList.remove("hidden");
 }
 
@@ -1557,7 +1562,7 @@ function selectServer(server) {
   serverSheet.server = pick;
   markServerChoice();
   closeSourceSheet();
-  setTransientStatus("server " + pick.slice(1) + " - reconnecting");
+  setTransientStatus(SERVER_NAMES[pick] + " - reconnecting");
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
@@ -1619,6 +1624,223 @@ function wireSourceSheet() {
     for (const chip of Array.from(row.children)) {
       chip.addEventListener("click", () => selectServer(chip.dataset.server));
     }
+  }
+}
+
+// ------------------------------------------------------------------- live chat
+
+const CHAT_NICK_KEY = "pbb_chat_nick";
+const chat = { ids: new Set(), sending: false };
+
+function loadChatNick() {
+  const adjectives = ["Happy", "Lucky", "Swift", "Brave", "Chill", "Bold", "Zen"];
+  const nouns = ["Kuya", "Ate", "Fan", "Star", "Viewer", "Idol", "Tropa"];
+  let nick = adjectives[Math.floor(Math.random() * adjectives.length)]
+    + nouns[Math.floor(Math.random() * nouns.length)]
+    + (Math.floor(Math.random() * 999) + 1);
+  try {
+    const saved = window.localStorage && window.localStorage.getItem(CHAT_NICK_KEY);
+    if (saved) {
+      nick = String(saved).slice(0, 20);
+    } else {
+      window.localStorage.setItem(CHAT_NICK_KEY, nick);
+    }
+  } catch {
+    // Private mode: the generated name still works for this session.
+  }
+  return nick;
+}
+
+function setChatNote(message) {
+  const note = sourceField("chatNote");
+  if (note) {
+    note.textContent = message;
+  }
+}
+
+function setChatSendState(sending) {
+  chat.sending = sending;
+  const btn = sourceField("chatSend");
+  if (btn) {
+    btn.disabled = sending;
+  }
+}
+
+function appendChatMessage(item) {
+  const id = String(item && item.id ? item.id : "");
+  if (id && chat.ids.has(id)) {
+    return;
+  }
+  if (id) {
+    chat.ids.add(id);
+  }
+  const log = sourceField("chatLog");
+  if (!log) {
+    return;
+  }
+  const line = document.createElement("div");
+  line.className = "chat-line";
+  const time = document.createElement("span");
+  time.className = "chat-time";
+  const date = new Date(Number(item && item.timestamp));
+  time.textContent = Number.isNaN(date.getTime())
+    ? "" : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const name = document.createElement("span");
+  name.className = "chat-name";
+  name.textContent = (item && item.nickname ? item.nickname : "viewer") + ":";
+  const text = document.createElement("span");
+  text.className = "chat-text";
+  text.textContent = item && item.text ? String(item.text) : "";
+  line.appendChild(time);
+  line.appendChild(name);
+  line.appendChild(text);
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderChatMessages(list) {
+  const log = sourceField("chatLog");
+  if (!log) {
+    return;
+  }
+  chat.ids = new Set();
+  log.replaceChildren();
+  for (const item of list.slice(-100)) {
+    appendChatMessage(item);
+  }
+}
+
+window.onChatState = (raw) => {
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    setChatNote("chat reply invalid - tap chat again");
+    return;
+  }
+  if (!data) {
+    return;
+  }
+  // A poll can land while a send is in flight; only the send's own reply
+  // releases the button.
+  if (data.message || data.error || data.ok || data.requiresCaptcha) {
+    setChatSendState(false);
+  }
+  const needsVerify = Boolean(data.requiresCaptcha || (data.cfRequired && !data.cfVerified));
+  const verify = sourceField("chatVerify");
+  if (verify) {
+    verify.classList.toggle("hidden", !needsVerify);
+  }
+  if (Array.isArray(data.messages)) {
+    renderChatMessages(data.messages);
+  } else if (data.message) {
+    appendChatMessage(data.message);
+  }
+  if (data.error && !needsVerify) {
+    setChatNote(String(data.error));
+  } else if (needsVerify) {
+    setChatNote("verify on pbbcollab.com to send");
+  } else if (Array.isArray(data.messages) && data.messages.length === 0) {
+    setChatNote("no messages yet - say hi!");
+  } else {
+    setChatNote("live chat");
+  }
+};
+
+function openChatSheet() {
+  const sheet = sourceField("chatSheet");
+  if (!sheet || !window.Pbb || typeof Pbb.refreshChat !== "function") {
+    return;
+  }
+  const nick = sourceField("chatNick");
+  if (nick) {
+    nick.value = loadChatNick();
+  }
+  const log = sourceField("chatLog");
+  if (log) {
+    log.replaceChildren();
+  }
+  chat.ids = new Set();
+  setChatNote("connecting to chat...");
+  sheet.classList.remove("hidden");
+  Pbb.refreshChat();
+}
+
+function closeChatSheet() {
+  const sheet = sourceField("chatSheet");
+  if (sheet) {
+    sheet.classList.add("hidden");
+  }
+}
+
+function sendChatMessage() {
+  if (chat.sending || !window.Pbb || typeof Pbb.sendChat !== "function") {
+    return;
+  }
+  const nickField = sourceField("chatNick");
+  const input = sourceField("chatInput");
+  const nickname = (nickField && nickField.value ? nickField.value : loadChatNick()).trim().slice(0, 20);
+  const text = (input && input.value ? input.value : "").trim().slice(0, 300);
+  if (!text || !nickname) {
+    return;
+  }
+  try {
+    if (window.localStorage) {
+      window.localStorage.setItem(CHAT_NICK_KEY, nickname);
+    }
+  } catch {
+    // The name still travels with this one message.
+  }
+  if (input) {
+    input.value = "";
+  }
+  setChatSendState(true);
+  setChatNote("sending...");
+  Pbb.sendChat(nickname, text);
+}
+
+function pollChat() {
+  const sheet = sourceField("chatSheet");
+  if (!sheet || sheet.classList.contains("hidden")) {
+    return;
+  }
+  if (window.Pbb && typeof Pbb.refreshChat === "function") {
+    Pbb.refreshChat();
+  }
+}
+
+function wireChatSheet() {
+  const sheet = sourceField("chatSheet");
+  if (!sheet) {
+    return;
+  }
+  sheet.addEventListener("click", (event) => {
+    if (event.target === sheet) {
+      closeChatSheet();
+    }
+  });
+  const close = sourceField("chatClose");
+  if (close) {
+    setIcon(close, "close", "close live chat");
+    close.addEventListener("click", closeChatSheet);
+  }
+  const send = sourceField("chatSend");
+  if (send) {
+    setIcon(send, "send", "send chat message");
+    send.addEventListener("click", sendChatMessage);
+  }
+  const input = sourceField("chatInput");
+  if (input) {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendChatMessage();
+      }
+    });
+  }
+  const verify = sourceField("chatVerify");
+  if (verify && window.Pbb && typeof Pbb.openChatVerification === "function") {
+    verify.addEventListener("click", () => Pbb.openChatVerification());
   }
 }
 
@@ -1689,12 +1911,18 @@ function boot() {
     setIcon(sourceBtn, "server", "choose stream server");
     sourceBtn.addEventListener("click", openSourceSheet);
   }
+  const chatBtn = document.getElementById("chatBtn");
+  if (chatBtn) {
+    setIcon(chatBtn, "chat", "open live chat");
+    chatBtn.addEventListener("click", openChatSheet);
+  }
   const stitchBtn = document.getElementById("stitchBtn");
   if (stitchBtn) {
     stitchBtn.addEventListener("click", toggleStitch);
   }
   updateStitchButton();
   wireSourceSheet();
+  wireChatSheet();
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
   const fsLock = document.getElementById("fsLock");
@@ -1734,6 +1962,7 @@ function boot() {
   updateControls();
   updateTimers();
   setInterval(updateTimers, 1000);
+  setInterval(pollChat, 2000);
 }
 
 // The page can be destroyed while recordings keep running (the service is

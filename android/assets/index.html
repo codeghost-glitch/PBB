@@ -51,6 +51,7 @@
       </div>
       <div class="status-actions">
         <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose stream server"></button>
+        <button id="chatBtn" class="btn btn-ghost btn-icon" type="button" aria-label="open live chat"></button>
         <button id="stitchBtn" class="btn btn-ghost btn-icon" type="button" aria-label="record main and dining together"></button>
         <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
         <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
@@ -66,34 +67,46 @@
       <div class="sheet-chips" id="serverChips" role="group" aria-label="stream server">
         <button class="chip" type="button" data-server="s1">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">main server</span>
+          <span class="chip-name">Server Jeo</span>
+        </button>
+        <button class="chip" type="button" data-server="pbbtop">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Server Gehlee</span>
         </button>
         <button class="chip" type="button" data-server="s2">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">backup server</span>
+          <span class="chip-name">Server Nathan</span>
         </button>
         <button class="chip" type="button" data-server="s3">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">mirror server</span>
+          <span class="chip-name">Server Primo</span>
         </button>
         <button class="chip" type="button" data-server="s4">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">cloud bridge</span>
+          <span class="chip-name">Server Bela</span>
         </button>
-        <button class="chip" type="button" data-server="s5">
+        <button class="chip" type="button" data-server="twitch">
           <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">direct akamai</span>
-        </button>
-        <button class="chip" type="button" data-server="s6">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">edge global</span>
-        </button>
-        <button class="chip" type="button" data-server="s7">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">low latency</span>
+          <span class="chip-name">Twitch Mirror</span>
         </button>
       </div>
       <p class="sheet-note" id="sourceNote"></p>
+    </div>
+  </div>
+  <div class="sheet hidden" id="chatSheet" role="dialog" aria-modal="true" aria-label="live chat">
+    <div class="sheet-panel chat-panel">
+      <div class="sheet-head">
+        <h2>live chat</h2>
+        <button id="chatClose" class="btn btn-ghost btn-icon" type="button" aria-label="close live chat"></button>
+      </div>
+      <p class="sheet-note" id="chatNote">connecting to chat...</p>
+      <div class="chat-log" id="chatLog" role="log" aria-live="polite"></div>
+      <button id="chatVerify" class="chat-verify hidden" type="button">verify to send</button>
+      <div class="chat-compose">
+        <input id="chatNick" class="chat-nick" type="text" maxlength="20" aria-label="chat nickname" placeholder="nickname">
+        <input id="chatInput" class="chat-input" type="text" maxlength="300" aria-label="chat message" placeholder="Say something...">
+        <button id="chatSend" class="chat-send" type="button" aria-label="send chat message"></button>
+      </div>
     </div>
   </div>
   <div id="indicator" class="indicator hidden"></div>
