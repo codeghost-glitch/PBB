@@ -23,6 +23,8 @@ public final class RecorderLogicTest {
         liveApiIsUsed();
         serviceStopsOnlyWhenIdle();
         stitchKeepsBothPendingStarts();
+        theStitchPairStacksOnceAndAbortsOnFailure();
+        theSnapshotScriptMatchesTheApp();
         sevenServersAreAccepted();
         theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
@@ -115,6 +117,69 @@ public final class RecorderLogicTest {
             && body.contains("indices.contains(Integer.valueOf(0))"));
         check("the stack start reports its status", true,
             service.contains("saving main + dining as one video"));
+    }
+
+    /**
+     * The join runs only when both feeds saved. A half pair waits, a failed feed
+     * abandons the pair, and a running join is never started twice: those three
+     * answers are the difference between one stacked file and two separate ones.
+     */
+    private static void theStitchPairStacksOnceAndAbortsOnFailure() {
+        check("the first feed waits for its partner", RecordService.PAIR_WAIT,
+            RecordService.pairStep(0, false, false, true, true, false));
+        check("the second feed starts the join", RecordService.PAIR_STACK,
+            RecordService.pairStep(0, false, false, true, true, true));
+        check("a failed feed abandons the pair", RecordService.PAIR_ABORT,
+            RecordService.pairStep(0, false, false, false, true, true));
+        check("a running join is not started twice", RecordService.PAIR_WAIT,
+            RecordService.pairStep(0, true, false, true, true, true));
+        check("no pair means nothing to join", RecordService.PAIR_WAIT,
+            RecordService.pairStep(-1, false, false, true, true, true));
+        check("an abandoned pair never rejoins", RecordService.PAIR_WAIT,
+            RecordService.pairStep(0, false, true, true, true, true));
+    }
+
+    /**
+     * keys/session.py writes the checked-in snapshot and carries its own copy of
+     * the payload format, so both are run on one seed here. If the site changes
+     * the shape, this fails instead of shipping a stale snapshot.
+     */
+    private static void theSnapshotScriptMatchesTheApp() throws Exception {
+        byte[] seed = new byte[13];
+        for (int i = 0; i < seed.length; i++) {
+            seed[i] = (byte) (i * 7 + 1);
+        }
+        StringBuilder hex = new StringBuilder();
+        for (int i = 0; i < 16; i++) {
+            hex.append(String.format(java.util.Locale.US, "%02x", i * 11 + 3));
+        }
+        String key = hex.toString();
+        for (int mode = 0; mode < 2; mode++) {
+            long millis = 123456789L + mode;
+            String app = Http.sessionPlain(seed, key, mode == 1, millis);
+            String script = python("-c",
+                "import sys;sys.path.insert(0,'keys');import session;"
+                + "print(session.plain(bytes([i*7+1 for i in range(13)]),'" + key + "',"
+                + mode + "," + millis + "))");
+            check("the snapshot script builds the same payload", app, script);
+        }
+    }
+
+    private static String python(String... args) throws Exception {
+        List<String> command = new ArrayList<String>();
+        command.add("python3");
+        for (String arg : args) {
+            command.add(arg);
+        }
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String out;
+        try {
+            out = new String(Http.readAll(process.getInputStream()), "UTF-8");
+        } finally {
+            process.getInputStream().close();
+        }
+        process.waitFor();
+        return out.trim();
     }
 
     private static void check(String what, Object expected, Object actual) {

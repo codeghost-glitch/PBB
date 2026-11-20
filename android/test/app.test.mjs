@@ -557,9 +557,8 @@ function channelSourceContract() {
     && /Base64\.encodeToString\(\s*siteMpd\(xml,/.test(java));
   check("the site's segment base is hoisted into BaseURL", true,
     java.includes('"<BaseURL>" + base + "</BaseURL>"'));
-  check("Http decodes inlined MPDs and reads Last-Modified", true,
-    /Base64\.getDecoder\(\)\.decode/.test(http)
-    && /getLastModified\(\)/.test(http));
+  check("Http decodes inlined MPDs", true,
+    /Base64\.getDecoder\(\)\.decode/.test(http));
   check("recoveries show the Shaka error code", true,
     /setTransientStatus\(`camera \$\{index \+ 1\}: \$\{why\}`/.test(app)
     && /setStreamStatus\(entry, `\$\{why\}retrying/.test(app));

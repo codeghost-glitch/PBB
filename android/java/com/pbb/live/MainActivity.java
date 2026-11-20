@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
+    private static final Pattern MEDIA_BASE = Pattern.compile("media=\"(https://[^\"]*/)");
     private static final String KEYS_CACHE = "streams.json";
     private static final String SERVER_FILE = "stream_server.txt";
 
@@ -117,6 +118,9 @@ public class MainActivity extends Activity {
     // handshake is still running is what made every tile load twice.
     private final Object configLock = new Object();
     private volatile boolean configFresh = false;
+    // The operator asked for a stitch. Both starts can also arrive as one
+    // batch from two plain record taps, and only this flag tells them apart.
+    private volatile boolean stitchPending = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override
@@ -400,12 +404,23 @@ public class MainActivity extends Activity {
      * the connection keeps a segment out of memory and passes Range through.
      */
     private WebResourceResponse proxyStream(String url, Map<String, String> asked) {
+        return proxyStream(url, asked, 0);
+    }
+
+    private WebResourceResponse proxyStream(String url, Map<String, String> asked, int hops) {
         HttpURLConnection conn = null;
         try {
             conn = Http.open(url, 5000, 20000);
+            boolean siteHop = url.startsWith(SITE + "/");
+            // Automatic redirects re-send the request headers, cookie included,
+            // to whatever host the site names. Follow the hop here instead, and
+            // only while it stays on the site.
+            if (siteHop) {
+                conn.setInstanceFollowRedirects(false);
+            }
             // The session cookie belongs only to the site. Sending it to the
             // CDN or the mirror could leak it through a redirect.
-            if (url.startsWith(SITE + "/")) {
+            if (siteHop) {
                 conn.setRequestProperty("Cookie", sessionCookie);
                 conn.setRequestProperty("X-PBB-Client", sessionClient);
                 conn.setRequestProperty("Origin", SITE);
@@ -417,6 +432,15 @@ public class MainActivity extends Activity {
                 conn.setRequestProperty("Range", asked.get("Range"));
             }
             int status = conn.getResponseCode();
+            if (siteHop && status >= 300 && status < 400 && hops < 3) {
+                String location = conn.getHeaderField("Location");
+                conn.disconnect();
+                conn = null;
+                if (location != null && location.startsWith(SITE + "/")) {
+                    return proxyStream(location, asked, hops + 1);
+                }
+                return null;
+            }
             Map<String, String> out = new HashMap<String, String>();
             out.put("Access-Control-Allow-Origin", "*");
             out.put("Access-Control-Allow-Headers", "*");
@@ -565,10 +589,8 @@ public class MainActivity extends Activity {
                 key.append(String.format(Locale.US, "%02x", seed[i] & 0xff));
             }
             // The tag byte's low bit names the server: 0 main, 1 backup.
-            int modeBit = "s2".equals(streamServer) ? 1 : 0;
-            String plain = String.format(Locale.US, "%02x:%s:%04x",
-                (seed[12] & 0xfe) | (modeBit ^ (seed[0] & 0x01)), key.substring(0, 8),
-                System.currentTimeMillis() & 0xffffL);
+            String plain = Http.sessionPlain(seed, key.toString(),
+                "s2".equals(streamServer), System.currentTimeMillis());
             byte[] sealed = new byte[plain.length()];
             for (int i = 0; i < plain.length(); i++) {
                 sealed[i] = (byte) (plain.charAt(i) ^ key.charAt(i % key.length()) ^ 0x3c);
@@ -653,17 +675,23 @@ public class MainActivity extends Activity {
         if ("s3".equals(streamServer)) {
             return MIRROR + CAM_MIRROR[index] + "/";
         }
-        Matcher media = Pattern.compile("media=\"(https://[^\"]*/)").matcher(xml);
-        if (media.find()) {
-            return media.group(1);
+        String media = mediaBase(xml);
+        if (media != null) {
+            return media;
         }
         return SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
     }
 
+    /** The absolute segment folder a manifest names, or null when it names none. */
+    private static String mediaBase(String xml) {
+        Matcher media = MEDIA_BASE.matcher(xml);
+        return media.find() ? media.group(1) : null;
+    }
+
     private String siteMpd(String xml, String base) {
-        Matcher media = Pattern.compile("media=\"(https://[^\"]*/)").matcher(xml);
-        if (media.find()) {
-            xml = xml.replace("media=\"" + media.group(1), "media=\"");
+        String media = mediaBase(xml);
+        if (media != null) {
+            xml = xml.replace("media=\"" + media, "media=\"");
         }
         // A baked copy cannot publish updates. Leaving this in makes the player
         // re-poll the same static window every 30s for nothing.
@@ -1033,8 +1061,11 @@ public class MainActivity extends Activity {
         }
         // The stitch tap arrives as two separate bridge calls. Mark the pair
         // again here, at the point both starts are actually sent, so a stale
-        // or missed UI mark cannot leave two ordinary recordings.
-        if (indices.size() == 2 && indices.contains(Integer.valueOf(0))
+        // or missed UI mark cannot leave two ordinary recordings. The flag keeps
+        // two plain record taps that happen to land in one batch out of it.
+        boolean stitch = stitchPending;
+        stitchPending = false;
+        if (stitch && indices.size() == 2 && indices.contains(Integer.valueOf(0))
                 && indices.contains(Integer.valueOf(1))) {
             RecordService.markStackPair(0, 1);
         }
@@ -1242,6 +1273,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void markStackPair(int top, int bottom) {
+            stitchPending = top >= 0 && bottom >= 0;
             RecordService.markStackPair(top, bottom);
         }
 

@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Locale;
 
 /**
  * The two HTTP GETs the app makes and the one stream reader, in a single place
@@ -38,14 +39,9 @@ final class Http {
         return out.toByteArray();
     }
 
-    static byte[] getBytes(String url, int connectMs, int readMs, String referer)
-            throws IOException {
-        return getBytes(url, connectMs, readMs, referer, null, null);
-    }
-
     /** Returns null when the server answered anything but 200. */
-    static byte[] getBytes(String url, int connectMs, int readMs, String referer, String cookie,
-            String client) throws IOException {
+    static byte[] getBytes(String url, int connectMs, int readMs, String cookie, String client)
+            throws IOException {
         String prefix = "data:application/dash+xml;base64,";
         if (url.startsWith(prefix)) {
             try {
@@ -55,9 +51,6 @@ final class Http {
             }
         }
         HttpURLConnection conn = open(url, connectMs, readMs);
-        if (referer != null) {
-            conn.setRequestProperty("Referer", referer);
-        }
         if (cookie != null) {
             conn.setRequestProperty("Cookie", cookie);
         }
@@ -80,33 +73,17 @@ final class Http {
     }
 
     static byte[] getBytes(String url, int connectMs, int readMs) throws IOException {
-        return getBytes(url, connectMs, readMs, null);
-    }
-
-    /** Unix seconds from Last-Modified, or 0 when the server omits it. */
-    static long lastModified(String url, int connectMs, int readMs) throws IOException {
-        HttpURLConnection conn = open(url, connectMs, readMs);
-        conn.setRequestMethod("HEAD");
-        try {
-            long value = conn.getLastModified();
-            return value > 0 ? value / 1000L : 0;
-        } finally {
-            conn.disconnect();
-        }
-    }
-
-    static String getText(String url, int connectMs, int readMs, String referer) throws IOException {
-        byte[] body = getBytes(url, connectMs, readMs, referer);
-        return body == null ? null : new String(body, "UTF-8");
+        return getBytes(url, connectMs, readMs, null, null);
     }
 
     static String getText(String url, int connectMs, int readMs) throws IOException {
-        return getText(url, connectMs, readMs, null);
+        byte[] body = getBytes(url, connectMs, readMs);
+        return body == null ? null : new String(body, "UTF-8");
     }
 
     static String getText(String url, int connectMs, int readMs, String cookie, String client)
             throws IOException {
-        byte[] body = getBytes(url, connectMs, readMs, null, cookie, client);
+        byte[] body = getBytes(url, connectMs, readMs, cookie, client);
         return body == null ? null : new String(body, "UTF-8");
     }
 
@@ -119,6 +96,19 @@ final class Http {
             this.body = body;
             this.cookie = cookie;
         }
+    }
+
+    /**
+     * The plain payload the site seals: a tag byte, the first eight key
+     * characters and sixteen bits of the clock. It lives here, and not in the
+     * activity, because keys/session.py writes the offline snapshot with the
+     * same format and the host test compares the two.
+     */
+    static String sessionPlain(byte[] seed, String key, boolean backup, long millis) {
+        int modeBit = backup ? 1 : 0;
+        return String.format(Locale.US, "%02x:%s:%04x",
+            (seed[12] & 0xfe) | (modeBit ^ (seed[0] & 0x01)), key.substring(0, 8),
+            millis & 0xffffL);
     }
 
     /** Posts a JSON body. Returns null when the server answered anything but 200. */

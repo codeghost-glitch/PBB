@@ -106,8 +106,6 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     private static final String PLUGIN_FILE = "libpbbffmpeg.so";
     private static final String PLUGIN_ASSET = "libpbbffmpeg.so.b64";
 
-    private static final String PLUGIN_URL =
-        "https://gist.githubusercontent.com/codeghost-glitch/e2db5f9ab594739147c94ad82f5bd3d1/raw/7a5bd9a1ea01410443b94f310be6a1684c967823/libpbbffmpeg.so.b64";
     private static final String PLUGIN_SHA256 =
         "6c8b08e0a2e0be40c80bd01bad14e3941df8ffa04c6b3ab3c10bdb41ace891f6";
 
@@ -130,6 +128,27 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     private static final Map<Integer, File> pairSources = new HashMap<Integer, File>();
     private static final Map<Integer, Uri> pairUris = new HashMap<Integer, Uri>();
     private static final Map<Integer, File> pairPublished = new HashMap<Integer, File>();
+
+    /** What the pair step should do once one feed of a stitch has finished. */
+    static final int PAIR_WAIT = 0;
+    static final int PAIR_STACK = 1;
+    static final int PAIR_ABORT = 2;
+
+    /**
+     * The join only runs once both feeds are saved. Kept pure so the host test
+     * can check that a half pair waits and a failed feed abandons it, which is
+     * the difference between one stacked file and two separate ones.
+     */
+    static int pairStep(int top, boolean stacking, boolean failed, boolean savedOk,
+            boolean hasTop, boolean hasBottom) {
+        if (top < 0 || stacking || failed) {
+            return PAIR_WAIT;
+        }
+        if (!savedOk) {
+            return PAIR_ABORT;
+        }
+        return hasTop && hasBottom ? PAIR_STACK : PAIR_WAIT;
+    }
 
     /** Called by the page before starting the two feeds of a stitch recording. */
     static void markStackPair(int top, int bottom) {
@@ -280,9 +299,15 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         Uri publishedUri;
         File publishedFile;
         File publishedFallbackFile;
+        // Named per session, not per camera. A stack thread reads the finished
+        // part of a camera that may already be recording again, and a shared
+        // name let the new recording truncate the file being joined.
+        final File videoTmp;
+        final File audioTmp;
+        final File outTmp;
 
         Session(int index, String mpdUrl, String key, String displayName,
-                String streamName, String quality) {
+                String streamName, String quality, File dir) {
             this.index = index;
             this.mpdUrl = mpdUrl;
             this.key = key;
@@ -290,6 +315,10 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             this.streamName = streamName;
             this.quality = quality;
             this.startedAt = System.currentTimeMillis();
+            String part = index + "_" + startedAt;
+            this.videoTmp = new File(dir, "pull_video_" + part + ".mp4");
+            this.audioTmp = new File(dir, "pull_audio_" + part + ".mp4");
+            this.outTmp = new File(dir, "pull_out_" + part + ".mp4");
         }
     }
 
@@ -297,6 +326,26 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
+        deleteStaleTempFiles();
+    }
+
+    /**
+     * A recording killed mid-pull leaves its part files in filesDir, and no
+     * session owns them at service start, so a sweep here is the only cleanup
+     * they ever get.
+     */
+    private void deleteStaleTempFiles() {
+        File[] files = getFilesDir().listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            String name = file.getName();
+            if (name.startsWith("pull_video_") || name.startsWith("pull_audio_")
+                    || name.startsWith("pull_out_") || name.startsWith("pbb_stack_")) {
+                delete(file);
+            }
+        }
     }
 
     @Override
@@ -339,7 +388,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 session = new Session(index, mpdUrl, key,
                     name == null ? "PBB_recording.mp4" : name,
                     streamName == null ? "camera " + (index + 1) : streamName,
-                    quality == null ? "hd" : quality);
+                    quality == null ? "hd" : quality, getFilesDir());
                 sessions.put(index, session);
             }
         }
@@ -383,9 +432,9 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         // The temp files live in filesDir, not the cache dir: Android is free
         // to delete the cache when it needs space, and these are the only copy
         // of the recording until the remux publishes them.
-        File videoTmp = new File(getFilesDir(), "pull_video_" + index + ".mp4");
-        File audioTmp = new File(getFilesDir(), "pull_audio_" + index + ".mp4");
-        File outTmp = new File(getFilesDir(), "pull_out_" + index + ".mp4");
+        File videoTmp = session.videoTmp;
+        File audioTmp = session.audioTmp;
+        File outTmp = session.outTmp;
         String result = "nothing recorded - stopped before the first segment";
         String savedMessage = null;
         boolean failed = false;
@@ -421,10 +470,10 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
 
                 long offset;
                 try {
-                    offset = findLiveOffset(session.mpdUrl, plan, session);
+                    offset = findLiveOffset(edgeKey(plan, session), plan, session);
                 } catch (IOException e) {
                     if (!session.running) {
-                        long fallback = rememberedEdge(session.mpdUrl);
+                        long fallback = rememberedEdge(edgeKey(plan, session));
                         if (savedMessage != null || fallback < 0) {
                             result = savedMessage != null ? savedMessage : result;
                             break;
@@ -435,7 +484,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                         // probe is not the end of a live broadcast. Re-read the
                         // manifest and probe again; the user decides when to stop.
                         probeRetries++;
-                        forgetEdge(session.mpdUrl);
+                        forgetEdge(edgeKey(plan, session));
                         if (probeRetries > MAX_PROBE_RETRIES) {
                             throw e;
                         }
@@ -448,7 +497,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                     }
                 }
                 if (offset < 0) {
-                    long fallback = rememberedEdge(session.mpdUrl);
+                    long fallback = rememberedEdge(edgeKey(plan, session));
                     if (savedMessage == null && fallback >= 0) {
                         offset = fallback;
                     } else {
@@ -511,7 +560,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                     // stale edge, re-plan from the start and try again.
                     if (retryEmptyPart(gap, session.running, emptyRetries)) {
                         emptyRetries++;
-                        forgetEdge(session.mpdUrl);
+                        forgetEdge(edgeKey(plan, session));
                         continue;
                     }
                     // Do not replace the file a previous part already published.
@@ -612,27 +661,30 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         File topPublished;
         File bottomPublished;
         synchronized (PAIR_LOCK) {
-            if (pairTop < 0 || pairStacking || pairFailed) {
-                return;
+            File source = session.outTmp;
+            if (savedOk) {
+                pairSources.put(session.index, source);
+                if (session.publishedUri != null) {
+                    pairUris.put(session.index, session.publishedUri);
+                }
+                File published = session.publishedFile != null
+                    ? session.publishedFile : session.publishedFallbackFile;
+                if (published != null) {
+                    pairPublished.put(session.index, published);
+                }
             }
-            if (!savedOk) {
+            int step = pairStep(pairTop, pairStacking, pairFailed, savedOk,
+                pairSources.containsKey(pairTop), pairSources.containsKey(pairBottom));
+            if (step == PAIR_ABORT) {
+                // One side of the pair is unusable, so the join can never run.
+                // Forget the pair and remove both part files; otherwise the
+                // partner's file stays and the next recording is stacked onto it.
                 pairFailed = true;
-                pairTop = -1;
-                pairBottom = -1;
-                delete(new File(getFilesDir(), "pull_out_" + session.index + ".mp4"));
+                delete(source);
+                abandonPair();
                 return;
             }
-            pairSources.put(session.index,
-                new File(getFilesDir(), "pull_out_" + session.index + ".mp4"));
-            if (session.publishedUri != null) {
-                pairUris.put(session.index, session.publishedUri);
-            }
-            File published = session.publishedFile != null
-                ? session.publishedFile : session.publishedFallbackFile;
-            if (published != null) {
-                pairPublished.put(session.index, published);
-            }
-            if (!pairSources.containsKey(pairTop) || !pairSources.containsKey(pairBottom)) {
+            if (step != PAIR_STACK) {
                 return;
             }
             pairStacking = true;
@@ -654,6 +706,21 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 joinPair(fTop, fBottom, uTop, uBottom, topPublished, bottomPublished);
             }
         }).start();
+    }
+
+    /** Drops a pair that cannot be joined, with its part files. */
+    private void abandonPair() {
+        synchronized (PAIR_LOCK) {
+            for (File source : pairSources.values()) {
+                delete(source);
+            }
+            pairSources.clear();
+            pairUris.clear();
+            pairPublished.clear();
+            pairTop = -1;
+            pairBottom = -1;
+            pairStacking = false;
+        }
     }
 
     private void joinPair(File top, File bottom, Uri topUri, Uri bottomUri,
@@ -689,6 +756,9 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             delete(bottom);
             delete(joined);
             synchronized (PAIR_LOCK) {
+                pairSources.clear();
+                pairUris.clear();
+                pairPublished.clear();
                 pairTop = -1;
                 pairBottom = -1;
                 pairStacking = false;
@@ -756,7 +826,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         if (existing == null || !PLUGIN_SHA256.equals(hex(sha256(existing)))) {
             byte[] so = bundledPlugin(context);
             if (so == null) {
-                so = downloadedPlugin();
+                throw new IOException("the recorder plugin is missing from this build");
             }
             if (!PLUGIN_SHA256.equals(hex(sha256(so)))) {
                 throw new IOException("recorder plugin checksum mismatch");
@@ -789,15 +859,6 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             Log.w(TAG, "no bundled recorder plugin", e);
             return null;
         }
-    }
-
-    private static byte[] downloadedPlugin() throws IOException {
-        byte[] encoded = fetch(PLUGIN_URL);
-        if (encoded == null) {
-            throw new IOException("cannot download the recorder plugin, check the network and record again");
-        }
-        return Base64.decode(
-            new String(encoded, StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
     }
 
     private Plan loadPlan(String mpdUrl, String quality) throws Exception {
@@ -936,28 +997,28 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
      * edge by probing one-byte range requests: coarse scan for the highest
      * published segment, then binary search the 404 boundary.
      *
-     * The last edge found for a manifest is remembered, because the scan from
-     * the start of the archive costs about fifty requests every time.
+     * The last edge found for a route is remembered, because the scan from the
+     * start of the archive costs about fifty requests every time.
      */
-    private static long findLiveOffset(String mpdUrl, Plan plan, Session session)
+    private static long findLiveOffset(String edge, Plan plan, Session session)
             throws IOException {
         long start = plan.suggestedOffset >= 0
-            ? plan.suggestedOffset : Math.max(0L, rememberedEdge(mpdUrl));
+            ? plan.suggestedOffset : Math.max(0L, rememberedEdge(edge));
         try {
-            return scanEdge(mpdUrl, plan, start, session);
+            return scanEdge(edge, plan, start, session);
         } catch (IOException e) {
-            long known = rememberedEdge(mpdUrl);
+            long known = rememberedEdge(edge);
             if (known < 0 || Math.abs(known - start) <= 8) {
                 throw e;
             }
             // The computed edge is stale; try the last edge we actually played.
-            return scanEdge(mpdUrl, plan, known, session);
+            return scanEdge(edge, plan, known, session);
         }
     }
 
     /** Scans forward from start for the last segment the server still serves.
      *  Returns -1 when the session was stopped mid-probe. */
-    private static long scanEdge(String mpdUrl, Plan plan, long start, Session session)
+    private static long scanEdge(String edge, Plan plan, long start, Session session)
             throws IOException {
         long best = coarseScan(plan, start, 1024L, 65, session);
         if (best < 0 && session.running) {
@@ -990,7 +1051,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 // Keep the best hit found so far so the final fetch can still
                 // land on a real segment instead of reporting nothing recorded.
                 synchronized (LAST_EDGE) {
-                    LAST_EDGE.put(mpdUrl, Long.valueOf(good));
+                    LAST_EDGE.put(edge, Long.valueOf(good));
                 }
                 return Math.max(0L, good - 1);
             }
@@ -1002,7 +1063,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             }
         }
         synchronized (LAST_EDGE) {
-            LAST_EDGE.put(mpdUrl, Long.valueOf(good));
+            LAST_EDGE.put(edge, Long.valueOf(good));
         }
         return Math.max(0L, good - 1);
     }
@@ -1036,16 +1097,25 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         return gap && running && emptyRetries < MAX_EMPTY_RETRIES;
     }
 
+    /**
+     * The route plus the key pair, which is the identity the page uses too. The
+     * manifest URL itself carries a fresh publishTime on every handshake, so it
+     * never matched and each refresh left another entry behind.
+     */
+    private static String edgeKey(Plan plan, Session session) {
+        return plan.baseUrl + "|" + session.key;
+    }
+
     /** Force the next live-edge scan to start from the beginning of the archive. */
-    private static void forgetEdge(String mpdUrl) {
+    private static void forgetEdge(String edge) {
         synchronized (LAST_EDGE) {
-            LAST_EDGE.remove(mpdUrl);
+            LAST_EDGE.remove(edge);
         }
     }
 
-    private static long rememberedEdge(String mpdUrl) {
+    private static long rememberedEdge(String edge) {
         synchronized (LAST_EDGE) {
-            Long value = LAST_EDGE.get(mpdUrl);
+            Long value = LAST_EDGE.get(edge);
             return value == null ? -1L : value.longValue();
         }
     }
@@ -1565,6 +1635,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
 
     @Override
     public void onDestroy() {
+        abandonPair();
         List<Session> copy;
         synchronized (sessions) {
             copy = new ArrayList<Session>(sessions.values());

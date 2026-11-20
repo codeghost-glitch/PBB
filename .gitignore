@@ -8,3 +8,4 @@
 /ffmpeg/out/
 /ffmpeg/include/
 /ffmpeg/compile_commands.json
+__pycache__/

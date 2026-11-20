@@ -238,9 +238,13 @@ typedef struct {
     int audio_index;
     AVPacket *pkt;
     int eof;
-    AVPacket **audio;
-    int audio_count;
-    int audio_cap;
+    /* Where the kept audio goes: the output mux and the streams it joins.
+     * Writing each packet as it arrives keeps the track interleaved with the
+     * picture, and keeps a long recording out of memory. */
+    AVFormatContext *out;
+    AVStream *out_audio;
+    AVStream *src_audio;
+    int audio_failed;
 } StackInput;
 
 static int stack_open(StackInput *in, const char *path) {
@@ -295,19 +299,14 @@ static int stack_read_frame(StackInput *in, AVFrame *frame, int keep_audio) {
                 in->eof = 1;
             }
         } else if (keep_audio && in->audio_index >= 0
-                   && in->pkt->stream_index == in->audio_index) {
-            if (in->audio_count == in->audio_cap) {
-                int cap = in->audio_cap ? in->audio_cap * 2 : 64;
-                AVPacket **grown = av_realloc(in->audio, (size_t)cap * sizeof(*grown));
-                if (grown == NULL) {
-                    av_packet_unref(in->pkt);
-                    in->eof = 1;
-                    continue;
-                }
-                in->audio = grown;
-                in->audio_cap = cap;
+                   && in->pkt->stream_index == in->audio_index
+                   && in->out_audio != NULL && in->src_audio != NULL) {
+            in->pkt->stream_index = in->out_audio->index;
+            av_packet_rescale_ts(in->pkt, in->src_audio->time_base,
+                in->out_audio->time_base);
+            if (av_interleaved_write_frame(in->out, in->pkt) < 0) {
+                in->audio_failed = 1;
             }
-            in->audio[in->audio_count++] = av_packet_clone(in->pkt);
         }
         av_packet_unref(in->pkt);
     }
@@ -392,6 +391,7 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
     AVPacket *pkt = NULL;
     struct SwsContext *sws_t = NULL, *sws_b = NULL;
     AVStream *vst = NULL, *ast = NULL;
+    AVStream *asrc = NULL;
     AVDictionary *mux_opts = NULL, *enc_opts = NULL;
     int w, h, ret = AVERROR(EINVAL), wrote_header = 0;
     int64_t pts = 0;
@@ -448,7 +448,7 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
     if (ret < 0) { describe_error(err, errlen, "video stream", ret); goto done; }
     vst->time_base = enc->time_base;
     if (top.audio_index >= 0) {
-        AVStream *asrc = top.fmt->streams[top.audio_index];
+        asrc = top.fmt->streams[top.audio_index];
         ast = avformat_new_stream(out, NULL);
         if (ast == NULL) { ret = AVERROR(ENOMEM); goto done; }
         ret = avcodec_parameters_copy(ast->codecpar, asrc->codecpar);
@@ -462,6 +462,9 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
     ret = avformat_write_header(out, &mux_opts);
     if (ret < 0) { describe_error(err, errlen, "write header", ret); goto done; }
     wrote_header = 1;
+    top.out = out;
+    top.out_audio = ast;
+    top.src_audio = asrc;
 
     ft = av_frame_alloc();
     fb = av_frame_alloc();
@@ -491,7 +494,17 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
         }
         av_frame_make_writable(frame);
         stack_planes(frame, pt, pb, w, h);
-        frame->pts = pts++;
+        /* Follow the top feed's own timeline. A plain counter drifts from the
+         * audio as soon as either feed drops a segment. */
+        if (got_top && (ft->pts != AV_NOPTS_VALUE
+                        || ft->best_effort_timestamp != AV_NOPTS_VALUE)) {
+            int64_t src = ft->pts != AV_NOPTS_VALUE
+                ? ft->pts : ft->best_effort_timestamp;
+            frame->pts = av_rescale_q(src, vsrc->time_base, enc->time_base);
+        } else {
+            frame->pts = pts;
+        }
+        pts = frame->pts + 1;
         ret = avcodec_send_frame(enc, frame);
         if (ret < 0) { describe_error(err, errlen, "encode frame", ret); goto done; }
         while ((ret = avcodec_receive_packet(enc, pkt)) == 0) {
@@ -505,17 +518,10 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
         if (pb != NULL && pb != fb) av_frame_free(&pb);
     }
     stack_flush(enc, out, vst, pkt);
-
-    if (ast != NULL) {
-        AVStream *asrc = top.fmt->streams[top.audio_index];
-        for (int i = 0; i < top.audio_count; i++) {
-            AVPacket *ap = top.audio[i];
-            ap->stream_index = ast->index;
-            av_packet_rescale_ts(ap, asrc->time_base, ast->time_base);
-            ret = av_interleaved_write_frame(out, ap);
-            if (ret < 0) { describe_error(err, errlen, "write audio", ret); goto done; }
-            av_packet_unref(ap);
-        }
+    if (top.audio_failed) {
+        describe_error(err, errlen, "write audio", AVERROR(EIO));
+        ret = AVERROR(EIO);
+        goto done;
     }
 
     ret = av_write_trailer(out);
@@ -525,10 +531,6 @@ done:
     if (wrote_header && out != NULL) {
         /* av_write_trailer was called on success; nothing extra to close. */
     }
-    for (int i = 0; i < top.audio_count; i++) {
-        av_packet_free(&top.audio[i]);
-    }
-    av_free(top.audio);
     av_frame_free(&ft);
     av_frame_free(&fb);
     av_frame_free(&frame);

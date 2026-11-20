@@ -1,6 +1,6 @@
 # PBB
 
-An Android app for three PBB live cameras. It plays the feeds together in one screen, lets you switch between three server routes, and records any camera to `Movies/PBB/`. Main and Dining can also be saved as one stacked video.
+An Android app for three PBB live cameras. It plays the feeds together in one screen, lets you switch between seven server routes, and records any camera to `Movies/PBB/`. Main and Dining can also be saved as one stacked video.
 
 The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup and on refresh. A rotation on the site reaches the app without a new build.
 
@@ -8,7 +8,7 @@ The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup a
 
 - Three feeds in one portrait screen: one large program feed and two previews.
 - Fullscreen and picture-in-picture on any feed. The fullscreen keys sit top-right; the mini feed sits bottom-right.
-- A server sheet with main, backup and mirror routes. The choice is stored on the phone. The footer status has its own row on a phone, so a long message wraps without fighting the keys.
+- A server sheet with all seven routes, named the way the site names them. The choice is stored on the phone. The footer status has its own row on a phone, so a long message wraps without fighting the keys.
 - HD and SD quality buttons. HD uses the tallest rendition; SD uses the smallest rendition at least 480 lines tall.
 - Record one, two or three cameras at once. Each recording gets its own notification and stop action.
 - Stitch button: records Main Access and Dining Area, then joins them into one stacked MP4.
@@ -24,6 +24,7 @@ Requirements:
 - Rust targets `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android`.
 - `cargo-ndk`.
 - Node, for the page checks.
+- Python 3, for the plugin checksum and the snapshot parity check.
 
 ~~~bash
 ./build.sh
