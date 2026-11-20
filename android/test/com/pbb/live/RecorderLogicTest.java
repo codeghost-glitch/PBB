@@ -25,7 +25,7 @@ public final class RecorderLogicTest {
         stitchKeepsBothPendingStarts();
         theStitchPairStacksOnceAndAbortsOnFailure();
         theSnapshotScriptMatchesTheApp();
-        sevenServersAreAccepted();
+        siteServersAreAccepted();
         theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
         cookieStaysOnTheSite();
@@ -98,12 +98,14 @@ public final class RecorderLogicTest {
             at > site && source.indexOf("conn.setRequestProperty(\"Cookie\", sessionCookie);", site) == at);
     }
 
-    private static void sevenServersAreAccepted() throws Exception {
+    private static void siteServersAreAccepted() throws Exception {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
-        check("all seven server ids are accepted", true,
-            source.contains("n >= '1' && n <= '7'"));
-        check("site servers map to the four site routes", true,
-            source.contains("server.charAt(1) - '3'"));
+        check("the six site server ids are accepted", true,
+            source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\""));
+        check("every server uses its site route", true,
+            source.contains("+ \".mpd?srv=\" + srv")
+            && source.contains("\"twitch\".equals(streamServer) ? \"s1\" : streamServer")
+            && !source.contains("site2Number"));
     }
 
     private static void theServiceMarksTheStitchPairAtStart() throws Exception {
