@@ -1495,10 +1495,10 @@ const SERVER_NOTE = {
   s1: "server 1 is on",
   s2: "server 2 is on",
   s3: "server 3 is on",
-  s4: "site server 1 is on",
-  s5: "site server 2 is on",
-  s6: "site server 3 is on",
-  s7: "site server 4 is on",
+  s4: "cloud bridge is on",
+  s5: "direct akamai is on",
+  s6: "edge global is on",
+  s7: "low latency is on",
 };
 
 function sourceField(id) {

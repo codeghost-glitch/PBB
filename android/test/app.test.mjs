@@ -596,6 +596,10 @@ function stitchAndServerContract() {
   check("the sheet lists seven servers", true,
     /id="serverChips"/.test(html) && /data-server="s1"/.test(html)
     && /data-server="s7"/.test(html) && /selectServer/.test(app));
+  check("the site routes use the website's names", true,
+    ["cloud bridge", "direct akamai", "edge global", "low latency"]
+      .every((name) => html.includes(name))
+    && !html.includes("site server"));
   check("the last four servers come from pbbcollab.com", true,
     /SITE2 = "https:\/\/pbbcollab\.com"/.test(java)
     && /site2Number\(streamServer\)/.test(java)

@@ -93,7 +93,7 @@ The config is cached in `filesDir/streams.json`. `keys/keys.json` is the checked
 - `s1`: main route.
 - `s2`: backup route through the site's proxy.
 - `s3`: `pbb3collablive.xyz` segment mirror with keys from the live handshake. Its upstream CDN now answers 403 to the mirror, so the app retries the same segment through the live site proxy when the mirror fails.
-- `s4`–`s7`: the four routes offered by `pbbcollab.com/live`. The app reads that site's MPD for the chosen route and plays it with keys from the `pbbcollab.live` handshake. All four currently serve the same manifest; they stay separate to match the website. When that site returns an error, the app passes the real status to the player instead of hiding it behind a CORS failure.
+- `s4`–`s7`: cloud bridge, direct akamai, edge global and low latency — the four routes offered by `pbbcollab.com/live`. The app reads that site's MPD for the chosen route and plays it with keys from the `pbbcollab.live` handshake. All four currently serve the same manifest; they stay separate to match the website. When that site returns an error, the app passes the real status to the player instead of hiding it behind a CORS failure.
 
 The app routes all segment requests through `shouldInterceptRequest`. The site proxy needs the site's own Origin; the CDN and the mirror do not get the session cookie. The mirror camera ids are in `CAM_MIRROR`.
 
