@@ -1031,6 +1031,13 @@ public class MainActivity extends Activity {
         if (indices.isEmpty()) {
             return;
         }
+        // The stitch tap arrives as two separate bridge calls. Mark the pair
+        // again here, at the point both starts are actually sent, so a stale
+        // or missed UI mark cannot leave two ordinary recordings.
+        if (indices.size() == 2 && indices.contains(Integer.valueOf(0))
+                && indices.contains(Integer.valueOf(1))) {
+            RecordService.markStackPair(0, 1);
+        }
         JSONArray streams;
         try {
             streams = new JSONObject(streamConfigJson).getJSONArray("streams");

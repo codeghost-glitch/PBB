@@ -23,6 +23,8 @@ public final class RecorderLogicTest {
         liveApiIsUsed();
         serviceStopsOnlyWhenIdle();
         stitchKeepsBothPendingStarts();
+        sevenServersAreAccepted();
+        theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
         cookieStaysOnTheSite();
         if (failures > 0) {
@@ -100,6 +102,19 @@ public final class RecorderLogicTest {
             source.contains("n >= '1' && n <= '7'"));
         check("site servers map to the four site routes", true,
             source.contains("server.charAt(1) - '3'"));
+    }
+
+    private static void theServiceMarksTheStitchPairAtStart() throws Exception {
+        String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        String service = sourceOf("android/java/com/pbb/live/RecordService.java");
+        int start = source.indexOf("private void startRecordService()");
+        int end = source.indexOf("private String makeDisplayName", start);
+        String body = source.substring(start, end);
+        check("the pair is marked when both starts are sent", true,
+            body.contains("RecordService.markStackPair(0, 1);")
+            && body.contains("indices.contains(Integer.valueOf(0))"));
+        check("the stack start reports its status", true,
+            service.contains("saving main + dining as one video"));
     }
 
     private static void check(String what, Object expected, Object actual) {

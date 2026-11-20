@@ -109,7 +109,7 @@ The app routes all segment requests through `shouldInterceptRequest`. The site p
 - The recorder uses the live edge from the MPD plus a bounded range scan. It does not walk the archive from zero.
 - The plugin is arm64-only, shipped as base64 in the APK and pinned by SHA-256. Non-arm64 devices get a clear error.
 
-The stitch button records cameras 0 and 1, then stacks them into `PBB_stitch_...mp4`. The two originals are deleted only after the joined file is published.
+The stitch button records cameras 0 and 1, then stacks them into `PBB_stitch_...mp4`. The service marks the pair again when the two starts are actually sent, so a missed UI mark cannot leave two ordinary files. The two originals are deleted only after the joined file is published.
 
 Known limit: a recording that was already running keeps its key. If the broadcaster rotates during that recording, the file may not play. Refresh and start a new recording after a rotation.
 

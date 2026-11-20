@@ -636,6 +636,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 return;
             }
             pairStacking = true;
+            status(false, -1, "saving main + dining as one video", KIND_NOTICE);
             top = pairSources.get(pairTop);
             bottom = pairSources.get(pairBottom);
             topUri = pairUris.get(pairTop);
