@@ -1630,7 +1630,7 @@ function wireSourceSheet() {
 // ------------------------------------------------------------------- live chat
 
 const CHAT_NICK_KEY = "pbb_chat_nick";
-const chat = { ids: new Set(), sending: false };
+const chat = { ids: new Set(), sending: false, needsVerify: false };
 
 function loadChatNick() {
   const adjectives = ["Happy", "Lucky", "Swift", "Brave", "Chill", "Bold", "Zen"];
@@ -1726,19 +1726,25 @@ window.onChatState = (raw) => {
   if (data.message || data.error || data.ok || data.requiresCaptcha) {
     setChatSendState(false);
   }
-  const needsVerify = Boolean(data.requiresCaptcha || (data.cfRequired && !data.cfVerified));
+  // A plain poll omits the Cloudflare flags. Keep the last known state so
+  // the verify button cannot vanish between two 2s polls.
+  if (data.requiresCaptcha || (data.cfRequired && data.cfVerified === false)) {
+    chat.needsVerify = true;
+  } else if (data.cfVerified === true || data.message) {
+    chat.needsVerify = false;
+  }
   const verify = sourceField("chatVerify");
   if (verify) {
-    verify.classList.toggle("hidden", !needsVerify);
+    verify.classList.toggle("hidden", !chat.needsVerify);
   }
   if (Array.isArray(data.messages)) {
     renderChatMessages(data.messages);
   } else if (data.message) {
     appendChatMessage(data.message);
   }
-  if (data.error && !needsVerify) {
+  if (data.error && !chat.needsVerify) {
     setChatNote(String(data.error));
-  } else if (needsVerify) {
+  } else if (chat.needsVerify) {
     setChatNote("verify on pbbcollab.com to send");
   } else if (Array.isArray(data.messages) && data.messages.length === 0) {
     setChatNote("no messages yet - say hi!");

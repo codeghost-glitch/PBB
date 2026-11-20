@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
-    private static final Pattern MEDIA_BASE = Pattern.compile("media=\"(https://[^\"]*/)");
+    private static final Pattern MEDIA_BASE = Pattern.compile("media=\"(https://[^\"?]*/)[^\"?]*");
     private static final String KEYS_CACHE = "streams.json";
     private static final String SERVER_FILE = "stream_server.txt";
     private static final String[] SITE_SERVERS = {
@@ -700,12 +700,12 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Every site route serves relative segment names through the site's own
-     * proxy. One BaseURL and relative names are the shape the page and the
-     * recorder join.
+     * Every site route names its absolute segment folder in the MPD. Hoist
+     * that folder into BaseURL; the site's own root does not serve segments.
      */
     private String siteBase(String xml, String endpoint, int index) {
-        return SITE2;
+        String media = mediaBase(xml);
+        return media != null ? media : SITE2;
     }
 
     /** The absolute segment folder a manifest names, or null when it names none. */
@@ -717,7 +717,10 @@ public class MainActivity extends Activity {
     private String siteMpd(String xml, String base) {
         String media = mediaBase(xml);
         if (media != null) {
+            // Both templates carry the same absolute folder. The player and
+            // the recorder join names to BaseURL, so neither wants it twice.
             xml = xml.replace("media=\"" + media, "media=\"");
+            xml = xml.replace("initialization=\"" + media, "initialization=\"");
         }
         // A baked copy cannot publish updates. Leaving this in makes the player
         // re-poll the same static window every 30s for nothing.

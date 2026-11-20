@@ -580,6 +580,10 @@ function channelSourceContract() {
     && /Base64\.encodeToString\(\s*siteMpd\(xml,/.test(java));
   check("the site's segment base is hoisted into BaseURL", true,
     java.includes('"<BaseURL>" + base + "</BaseURL>"'));
+  check("the base comes from the MPD, not the site root", true,
+    /return media != null \? media : SITE2;/.test(java));
+  check("the init template loses its absolute folder too", true,
+    /private String siteMpd[\s\S]*?\n    \}/.exec(java)[0].includes("initialization"));
   check("Http decodes inlined MPDs", true,
     /Base64\.getDecoder\(\)\.decode/.test(http));
   check("recoveries show the Shaka error code", true,
@@ -897,11 +901,11 @@ function liveChatUsesTheSiteApi() {
       { id: "m1", nickname: "KuyaFan", text: "hello", timestamp: now },
       { id: "m2", nickname: "AteFan", text: "g", timestamp: now },
     ],
-    cfRequired: true,
-    cfVerified: false,
   }));
   check("a repeat poll does not duplicate messages", 2,
     page.fields.chatLog.children.length);
+  check("a plain poll does not hide the verify step", false,
+    page.fields.chatVerify.classList.contains("hidden"));
 
   page.fields.chatNick.value = "TestFan";
   page.fields.chatInput.value = "nice stream";
@@ -919,6 +923,8 @@ function liveChatUsesTheSiteApi() {
   check("a sent message renders", true,
     lines[lines.length - 1].children.some((c) => c.textContent === "nice stream"));
   check("the send button unlocks after the reply", false, page.fields.chatSend.disabled);
+  check("a sent message clears the verify step", true,
+    page.fields.chatVerify.classList.contains("hidden"));
   page.closeChatSheet();
   check("the chat sheet closes", true,
     page.fields.chatSheet.classList.contains("hidden"));
