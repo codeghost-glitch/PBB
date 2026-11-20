@@ -146,7 +146,7 @@ function loadPage() {
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
   const serverChips = makeElement("div");
-  for (const id of ["s1", "s2", "s3"]) {
+  for (const id of ["s1", "s2", "s3", "s4", "s5", "s6", "s7"]) {
     const chip = makeElement("button");
     chip.dataset.server = id;
     serverChips.appendChild(chip);
@@ -593,10 +593,14 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sheet lists the three servers", true,
+  check("the sheet lists seven servers", true,
     /id="serverChips"/.test(html) && /data-server="s1"/.test(html)
-    && /data-server="s2"/.test(html) && /data-server="s3"/.test(html)
-    && /selectServer/.test(app));
+    && /data-server="s7"/.test(html) && /selectServer/.test(app));
+  check("the last four servers come from pbbcollab.com", true,
+    /SITE2 = "https:\/\/pbbcollab\.com"/.test(java)
+    && /site2Number\(streamServer\)/.test(java)
+    && java.includes("\"/api/live/mpd/\" + CAM_IDS[i]")
+    && java.includes("\".mpd?srv=s\""));
   check("the third server is the mirror route", true,
     /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java)
     && /CAM_MIRROR/.test(java));
@@ -727,7 +731,7 @@ function designSystemHoldsTheLine() {
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && (html.match(/data-server="/g) || []).length === 3
+    && (html.match(/data-server="/g) || []).length === 7
     && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
     /\.chip\.active \.chip-key \{[^}]*background: var\(--ink\)/s.test(css));

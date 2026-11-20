@@ -1489,12 +1489,16 @@ window.onStreamConfig = async (raw) => {
 // the next launch starts on the same one.
 const serverSheet = { server: "s1" };
 
-const SERVERS = ["s1", "s2", "s3"];
+const SERVERS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7"];
 
 const SERVER_NOTE = {
   s1: "server 1 is on",
   s2: "server 2 is on",
   s3: "server 3 is on",
+  s4: "site server 1 is on",
+  s5: "site server 2 is on",
+  s6: "site server 3 is on",
+  s7: "site server 4 is on",
 };
 
 function sourceField(id) {

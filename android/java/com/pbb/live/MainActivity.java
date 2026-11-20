@@ -53,6 +53,7 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
     private static final String SITE = "https://www.pbbcollab.live";
+    private static final String SITE2 = "https://pbbcollab.com";
     private static final String CLIENT = "v3";
     private static final String DATA_MPD = "data:application/dash+xml;base64,";
     // The site carries four cameras; the grid is drawn for three, so the
@@ -226,6 +227,7 @@ public class MainActivity extends Activity {
                 // WebView a plain CORS-clean response.
                 String url = request.getUrl().toString();
                 if (url.startsWith(SITE + "/stream/")
+                    || url.startsWith(SITE2 + "/stream/")
                     || url.startsWith("https://absp-live.akamaized.net/")
                     || url.startsWith(MIRROR)) {
                     return proxyStream(url, request.getRequestHeaders());
@@ -326,10 +328,26 @@ public class MainActivity extends Activity {
             } finally {
                 in.close();
             }
-            return "s2".equals(raw) || "s3".equals(raw) ? raw : "s1";
+            return validServer(raw) ? raw : "s1";
         } catch (Exception e) {
             return "s1";
         }
+    }
+
+    private static boolean validServer(String server) {
+        if (server == null || server.length() != 2 || server.charAt(0) != 's') {
+            return false;
+        }
+        char n = server.charAt(1);
+        return n >= '1' && n <= '7';
+    }
+
+    /** pbbcollab.com lists four servers; they are options 4-7 in this app. */
+    private static int site2Number(String server) {
+        if (!validServer(server) || server.charAt(1) < '4') {
+            return 0;
+        }
+        return server.charAt(1) - '3';
     }
 
     private void storeServer(String server) {
@@ -349,8 +367,8 @@ public class MainActivity extends Activity {
      * a fresh config from it. Returns an empty string when the pick was taken.
      */
     private String setStreamServer(String server) {
-        if (!"s1".equals(server) && !"s2".equals(server) && !"s3".equals(server)) {
-            return "pick server 1, 2 or 3";
+        if (!validServer(server)) {
+            return "pick server 1 to 7";
         }
         if (server.equals(streamServer)) {
             return "";
@@ -399,15 +417,20 @@ public class MainActivity extends Activity {
                 conn.setRequestProperty("Range", asked.get("Range"));
             }
             int status = conn.getResponseCode();
-            if (status < 200 || status >= 300) {
-                conn.disconnect();
-                return null;
-            }
             Map<String, String> out = new HashMap<String, String>();
             out.put("Access-Control-Allow-Origin", "*");
             out.put("Access-Control-Allow-Headers", "*");
             out.put("Access-Control-Expose-Headers", "Content-Length,Content-Range");
             out.put("Cache-Control", "no-store");
+            if (status < 200 || status >= 300) {
+                out.put("Content-Type", "text/plain");
+                String reason = status >= 500 ? "Server Error" : "Not Found";
+                WebResourceResponse error = new WebResourceResponse(
+                    "text/plain", null, status, reason, out,
+                    new java.io.ByteArrayInputStream(new byte[0]));
+                conn.disconnect();
+                return error;
+            }
             String type = conn.getContentType();
             return new WebResourceResponse(
                 type == null ? "video/mp4" : type,
@@ -570,8 +593,15 @@ public class MainActivity extends Activity {
                 JSONObject cam = cams.getJSONObject(CAM_IDS[i]);
                 String[] pair = sessionToken(cam.getString("token"), nonce);
                 String endpoint = cam.getString("endpoint");
-                String xml = Http.getText(SITE + endpoint, 5000, 8000,
-                    handshake.cookie, CLIENT);
+                int site2 = site2Number(streamServer);
+                String xml;
+                if (site2 > 0) {
+                    xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
+                        + ".mpd?srv=s" + site2, 5000, 8000);
+                } else {
+                    xml = Http.getText(SITE + endpoint, 5000, 8000,
+                        handshake.cookie, CLIENT);
+                }
                 if (xml == null) {
                     return null;
                 }
@@ -612,10 +642,14 @@ public class MainActivity extends Activity {
      * Server 1 names its segments absolutely, straight off the CDN; server 2
      * leaves them relative because they come back through the site's own
      * proxy; server 3 keeps the live manifest and plays the same segment
-     * numbers through the pbb3collablive.xyz mirror. All three end up with one
-     * BaseURL and relative names - the shape the page and the recorder join.
+     * numbers through the pbb3collablive.xyz mirror, and servers 4-7 use the
+     * four routes listed on pbbcollab.com/live. They end up with one BaseURL
+     * and relative names - the shape the page and the recorder join.
      */
     private String siteBase(String xml, String endpoint, int index) {
+        if (site2Number(streamServer) > 0) {
+            return SITE2;
+        }
         if ("s3".equals(streamServer)) {
             return MIRROR + CAM_MIRROR[index] + "/";
         }

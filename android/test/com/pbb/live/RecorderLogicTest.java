@@ -94,6 +94,14 @@ public final class RecorderLogicTest {
             at > site && source.indexOf("conn.setRequestProperty(\"Cookie\", sessionCookie);", site) == at);
     }
 
+    private static void sevenServersAreAccepted() throws Exception {
+        String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        check("all seven server ids are accepted", true,
+            source.contains("n >= '1' && n <= '7'"));
+        check("site servers map to the four site routes", true,
+            source.contains("server.charAt(1) - '3'"));
+    }
+
     private static void check(String what, Object expected, Object actual) {
         if (expected == null ? actual != null : !expected.equals(actual)) {
             failures++;
