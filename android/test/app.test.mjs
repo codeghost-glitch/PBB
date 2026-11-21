@@ -142,6 +142,8 @@ function loadPage() {
   };
 
   const statusText = makeElement("span");
+  const statusMeta = makeElement("span");
+  const statusBar = makeElement("footer");
   const backBtn = makeElement("button");
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
@@ -153,6 +155,8 @@ function loadPage() {
   }
   const fields = {
     statusText,
+    statusMeta,
+    statusBar,
     sourceNote,
     sourceSheet,
     serverChips,
@@ -214,6 +218,9 @@ function loadPage() {
   serverSheet,
   selectServer,
   openSourceSheet,
+  setStatusText,
+  statusStateFor,
+  updateStatusMeta,
   focusStream,
   toggleRecord,
   applyGestureValue,
@@ -223,6 +230,7 @@ function loadPage() {
     grid = refs.grid;
     backBtn = refs.backBtn;
     statusText = refs.statusText;
+    statusMeta = refs.statusMeta;
     indicator = null;
     qualityButtons = [];
     recBadge = null;
@@ -237,6 +245,7 @@ function loadPage() {
     grid: makeElement("div"),
     backBtn,
     statusText,
+    statusMeta,
   });
   page.players.length = 0;
   page.players.push(makePlayer(0, "PBB All Access"));
@@ -858,6 +867,40 @@ function launcherIconFollowsTheSystem() {
       .split("fillColor").length === 3);
 }
 
+function statusStripCarriesContext() {
+  const page = loadPage();
+  page.setStatusText("syncing all three streams...");
+  check("a working message marks the strip busy", "busy",
+    page.fields.statusBar.dataset.state);
+  check("the strip names the route and quality", "Server Jeo · HD",
+    page.fields.statusMeta.textContent);
+
+  page.setStatusText("saved PBB_All_20260101.mp4");
+  check("a saved file marks the strip successful", "success",
+    page.fields.statusBar.dataset.state);
+
+  page.state.recording.add(0);
+  page.setStatusText("");
+  check("an active recording marks the strip recording", "recording",
+    page.fields.statusBar.dataset.state);
+  page.state.recording.clear();
+
+  page.setStatusText("camera 1: error 1001");
+  check("a stream failure marks the strip as an error", "error",
+    page.fields.statusBar.dataset.state);
+  check("the live message still carries the text", true,
+    /camera 1: error 1001/.test(page.statusText.textContent));
+
+  const html = fs.readFileSync(HTML, "utf8");
+  const css = fs.readFileSync(CSS, "utf8");
+  check("the strip has an anchored state marker and a context line", true,
+    html.includes('class="status-state"') && html.includes('id="statusMeta"'));
+  check("state is carried by the marker and the words", true,
+    css.includes('.status[data-state="error"] .status-led')
+    && css.includes('.status-meta')
+    && /\.status-actions::before/.test(css));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -884,6 +927,7 @@ const tests = [
   startupDoesNotReloadTheGrid,
   soundSwitchDoesNotRebuildTheAudioRenderer,
   launcherIconFollowsTheSystem,
+  statusStripCarriesContext,
 ];
 
 for (const test of tests) {

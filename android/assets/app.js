@@ -46,6 +46,7 @@ const players = [];
 let grid;
 let backBtn;
 let statusText;
+let statusMeta;
 let qualityButtons;
 let recBadge;
 let recCount;
@@ -99,15 +100,41 @@ function defaultStatus() {
   return IDLE_HINT;
 }
 
+function statusStateFor(message) {
+  if (state.recording.size) {
+    return "recording";
+  }
+  if (!message) {
+    return "idle";
+  }
+  if (/^(saved|all three feeds ready|streams already in sync)/i.test(message)) {
+    return "success";
+  }
+  if (/error|failed|cannot|could not|rotated|unavailable|403|1001/i.test(message)) {
+    return "error";
+  }
+  return "busy";
+}
+
+function updateStatusMeta() {
+  const meta = statusMeta || document.getElementById("statusMeta");
+  if (meta) {
+    const server = SERVER_NAMES[serverSheet.server] || "Server Jeo";
+    meta.textContent = `${server} · ${state.quality.toUpperCase()}`;
+  }
+}
+
 function setStatusText(message) {
   // The footer never hides itself: an idle label takes the place of the message.
   statusText.textContent = message || defaultStatus();
   const bar = document.getElementById("statusBar");
   if (bar) {
     bar.classList.remove("hidden");
+    bar.dataset.state = statusStateFor(message);
     // A saved recording is the end of the job: give the LED one quiet flash.
     bar.classList.toggle("success", /^saved/i.test(message || ""));
   }
+  updateStatusMeta();
   // Fullscreen hides the footer, so mirror the message on the indicator or a
   // control like the refresh icon looks like it did nothing.
   if (message && state.fullscreen) {
@@ -1624,6 +1651,7 @@ function boot() {
   grid = document.getElementById("grid");
   backBtn = document.getElementById("backBtn");
   statusText = document.getElementById("statusText");
+  statusMeta = document.getElementById("statusMeta");
   qualityButtons = Array.from(document.querySelectorAll("[data-quality]"));
   recBadge = document.getElementById("recBadge");
   recCount = document.getElementById("recCount");
@@ -1653,6 +1681,7 @@ function boot() {
   }
 
   state.quality = normalizeQuality(Pbb.getDefaultQuality());
+  updateStatusMeta();
   const systemVolume = Number(Pbb.getVolume());
   if (!Number.isNaN(systemVolume)) {
     state.volume = Math.min(1, Math.max(0, systemVolume));

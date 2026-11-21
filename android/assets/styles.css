@@ -491,22 +491,67 @@ h1 {
   min-width: 0;
 }
 
+.status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
 .status-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  padding-left: var(--s-3);
+}
+
+.status-actions::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 28px;
+  background: var(--line);
+  transform: translateY(-50%);
+}
+
+.status-state {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--g-alt);
 }
 
 .status-led {
-  width: 7px;
-  height: 7px;
-  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--live);
+  background: var(--muted);
+  transition: background var(--m-in) var(--ease);
 }
 
-.recording .status-led { background: var(--rec); }
+.status[data-state="success"] .status-led { background: var(--live); }
+.status[data-state="success"] .status-state { border-color: var(--live); }
+.status[data-state="recording"] .status-led { background: var(--rec); }
+.status[data-state="recording"] .status-state { border-color: var(--rec); }
+.status[data-state="error"] .status-led { background: var(--rec); }
+.status[data-state="error"] .status-state { border-color: var(--rec); }
+.status[data-state="busy"] .status-led {
+  background: var(--ink);
+  animation: status-pulse 1.2s var(--ease) infinite;
+}
 .status.success .status-led { animation: led-done 800ms var(--ease-out, var(--ease)); }
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
 
 @keyframes led-done {
   from { box-shadow: 0 0 0 0 var(--live); }
@@ -519,6 +564,17 @@ h1 {
   font-size: var(--t-body);
   line-height: 1.35;
   color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.status-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--faint);
+  font-size: var(--t-label);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
   overflow-wrap: anywhere;
   white-space: normal;
 }
@@ -546,7 +602,10 @@ h1 {
   background: currentColor;
 }
 
-.rec-badge-label { display: none; }
+.rec-badge-label {
+  font-weight: var(--w-bold);
+  letter-spacing: 0.02em;
+}
 
 #stitchBtn.stitch-active {
   color: var(--paper);
@@ -993,6 +1052,7 @@ body.fullscreen-mode .indicator {
   /* The message gets the whole width; the keys take their own row. */
   .status { grid-template-columns: 1fr; gap: var(--s-2); }
   .status-actions { justify-content: flex-end; }
+  .status-actions::before { display: none; }
   .cam-bar { padding: var(--s-2); gap: var(--s-2); }
   .cam-role { display: none; }
   /* A preview card is only half the wall. Its name gets the whole strip and
