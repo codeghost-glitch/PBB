@@ -23,9 +23,10 @@ const state = {
   volume: 1,
   brightness: 0.5,
   keysStale: false,
-  // One automatic re-handshake per rotation; a second failure leaves the
-  // message on the strip instead of hammering the site.
+  // One automatic key check per config. A repeat failure stops here instead
+  // of refreshing and rebuilding the players in a loop.
   keyRetry: false,
+  keyChecked: false,
   mini: -1,
 };
 
@@ -37,6 +38,7 @@ function refreshKeysFromUi() {
     return;
   }
   manualKeyRefresh = true;
+  state.keyChecked = false;
   setStatusText("Syncing feeds");
   Pbb.refreshKeys();
 }
@@ -137,10 +139,11 @@ function updateStatusMeta() {
   }
   const live = usingLiveSource();
   const pbb3 = !live && serverSheet.server === "pbb3";
+  const mirror = !live && serverSheet.server === "mirror";
   const server = live
     ? (LIVE_SERVER_NAMES[liveSheet.server] || "Server 1")
     : (SERVER_NAMES[serverSheet.server] || "Server Jeo");
-  const source = live ? "LIVE" : (pbb3 ? "PBB3" : "SITE");
+  const source = live ? "LIVE" : (pbb3 ? "PBB3" : (mirror ? "MIRROR" : "SITE"));
   meta.textContent = `${source} · ${server} · ${state.quality.toUpperCase()}`;
 }
 
@@ -848,9 +851,13 @@ async function initPlayer(entry, index) {
       setStreamStatus(entry, "Checking keys", true);
       // The keys come from the site's handshake, so ask it for fresh ones
       // before asking the operator to do anything.
-      if (!state.keyRetry && window.Pbb && typeof Pbb.refreshKeys === "function") {
+      if (!state.keyChecked && !state.keyRetry && window.Pbb
+          && typeof Pbb.refreshKeys === "function") {
         state.keyRetry = true;
         refreshKeysFromUi();
+        // refreshKeysFromUi starts a fresh manual check. Mark this one after
+        // it, so a second 4012 cannot open another refresh loop.
+        state.keyChecked = true;
         setStatusText("Fetching new keys");
       } else {
         state.keysStale = true;
@@ -1573,6 +1580,7 @@ window.onStreamConfig = async (raw) => {
   state.keysStale = false;
   // A fresh rotation gets its own automatic retry.
   state.keyRetry = false;
+  state.keyChecked = false;
   for (const [i, s] of streams.entries()) {
     players[i].stream = s;
   }
@@ -1676,12 +1684,12 @@ applyTheme(loadTheme());
 
 // ------------------------------------------------------------------- servers
 
-// Six names from pbbcollab.com/live, plus the direct route from
-// pbb-3.pages.dev. The app stores the pick, so it survives a restart.
+// Six names from pbbcollab.com/live, plus the direct PBB3.0 and mirror
+// routes. The app stores the pick, so it survives a restart.
 const serverSheet = { server: "s1" };
 const liveSheet = { server: "s1" };
 
-const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"];
+const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"];
 
 const SERVER_NAMES = {
   s1: "Server Jeo",
@@ -1691,6 +1699,7 @@ const SERVER_NAMES = {
   s4: "Server Bela",
   twitch: "Twitch Mirror",
   pbb3: "PBB3.0",
+  mirror: "PBB3 CCTV",
 };
 
 const LIVE_SERVERS = ["s1", "s2", "s3", "s4", "s5", "s6"];
@@ -1757,7 +1766,9 @@ function openSourceSheet() {
     ? ("pbbcollab.live · " + LIVE_SERVER_NAMES[liveSheet.server])
     : (serverSheet.server === "pbb3"
       ? ("pbb-3.pages.dev · " + SERVER_NAMES[serverSheet.server])
-      : ("pbbcollab.com · " + SERVER_NAMES[serverSheet.server])));
+      : (serverSheet.server === "mirror"
+        ? ("pbb3collablive.xyz · " + SERVER_NAMES[serverSheet.server])
+        : ("pbbcollab.com · " + SERVER_NAMES[serverSheet.server]))));
   sheet.classList.remove("hidden");
 }
 

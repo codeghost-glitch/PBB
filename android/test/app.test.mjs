@@ -173,7 +173,7 @@ function loadPage() {
     liveServerChips.appendChild(chip);
   }
   const serverChips = makeElement("div");
-  for (const id of ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"]) {
+  for (const id of ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"]) {
     const chip = makeElement("button");
     chip.dataset.server = id;
     serverChips.appendChild(chip);
@@ -512,6 +512,10 @@ function serverSheetFollowsTheApp() {
   page.openSourceSheet();
   check("the PBB3.0 note names pbb-3.pages.dev", true,
     /pbb-3\.pages\.dev · PBB3\.0/.test(page.fields.sourceNote.textContent));
+  page.selectServer("mirror");
+  page.openSourceSheet();
+  check("the CCTV note names the mirror host", true,
+    /\.xyz · PBB3 CCTV/.test(page.fields.sourceNote.textContent));
 }
 
 function fullscreenKeepsThePictureWhole() {
@@ -603,8 +607,12 @@ function refreshResyncsAllStreams() {
   check("all players reload in the same tick", true,
     /for \(const \[i\] of players\.entries\(\)\) \{[\s\S]{0,120}initPlayer\(players\[i\], i\)/s.test(app));
   check("a key failure is checked once before it is called stale", true,
-    /=== 4012[\s\S]{0,500}state\.keyRetry = true;[\s\S]{0,120}refreshKeysFromUi\(\)/.test(app)
+    /=== 4012[\s\S]{0,520}state\.keyRetry = true;[\s\S]{0,240}state\.keyChecked = true;/.test(app)
+    && /=== 4012[\s\S]{0,620}refreshKeysFromUi\(\)/.test(app)
     && /\} else \{\s*state\.keysStale = true;/.test(app));
+  check("a repeated key failure cannot start another loop", true,
+    /state\.keyRetry\) \{[\s\S]{0,260}await resyncStreams\(\)/.test(app)
+    && !/state\.keyRetry\) \{[\s\S]{0,180}state\.keyChecked = false;/.test(app));
   check("a confirmed key rebuilds the players instead of sticking", true,
     /state\.keyRetry\) \{[\s\S]{0,320}state\.keysStale = false;[\s\S]{0,120}await resyncStreams\(\)/.test(app));
   check("an unchanged-key refresh never seeks the live feeds", true,
@@ -686,15 +694,15 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sheet lists the site's six servers and PBB3.0", true,
+  check("the sheet lists the site servers and the two mirrors", true,
     /id="serverChips"/.test(html)
-    && ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"]
+    && ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"]
       .every((id) => html.includes(`data-server="${id}"`))
     && /selectServer/.test(app)
     && !/data-server="s[5-7]"/.test(html));
   check("the site routes use the websites' names", true,
     ["Server Jeo", "Server Gehlee", "Server Nathan", "Server Primo",
-      "Server Bela", "Twitch Mirror", "PBB3.0"]
+      "Server Bela", "Twitch Mirror", "PBB3.0", "PBB3 CCTV"]
       .every((name) => html.includes(name)));
   check("PBB3.0 uses the direct CDN manifests, then the site route", true,
     java.includes("pbb3Streams()")
@@ -707,6 +715,25 @@ function stitchAndServerContract() {
     && /site2Number\(streamServer\)/.test(java)
     && java.includes("\"/api/live/mpd/\" + CAM_IDS[i]")
     && java.includes("\".mpd?srv=s\""));
+  check("the CCTV mirror uses its own tokenized MPDs", true,
+    /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java)
+    && java.includes("MIRROR_MPD = {")
+    && java.includes("MIRROR + CAM_MIRROR[0] + \"/manifest.mpd\"")
+    && /if \("mirror"\.equals\(streamServer\)/.test(java)
+    && java.includes("manifestBase(xml)"));
+  const httpSource = fs.readFileSync(
+    path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
+  check("signed mirror segment queries stay intact", true,
+    java.includes("// Strip only a leading folder")
+    && java.includes("(media|initialization)=")
+    && httpSource.includes("if (url.indexOf('?') >= 0)"));
+  void httpSource;
+  check("a stale KID cannot put the players in a refresh loop", true,
+    /keyChecked: false/.test(app)
+    && /if \(!state\.keyChecked && !state\.keyRetry/.test(app)
+    && /state\.keyChecked = false;\s*for \(const \[i, s\]/.test(app));
+  check("even a failed site route can fall back to the mirror", true,
+    java.includes("streams = mirrorStreams();"));
   check("the third server is the mirror route", true,
     /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java)
     && /CAM_MIRROR/.test(java));
@@ -848,7 +875,7 @@ function designSystemHoldsTheLine() {
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && (html.match(/data-server="/g) || []).length === 7
+    && (html.match(/data-server="/g) || []).length === 8
     && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
     /\.chip\.active \.chip-key \{[^}]*background: var\(--primary\)/s.test(css));
@@ -1021,7 +1048,7 @@ function serverSheetAndWallReadClearly() {
   check("the routes are a radio group", true,
     Boolean(routeBlock)
     && routeBlock[0].includes('role="radiogroup"')
-    && (routeBlock[0].match(/role="radio"/g) || []).length === 7);
+    && (routeBlock[0].match(/role="radio"/g) || []).length === 8);
   check("the chosen route is named to assistive tech", true,
     /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
       fs.readFileSync(APP, "utf8")));
@@ -1082,9 +1109,12 @@ function liveRoutesShareTheServerSheet() {
     && html.includes('id="liveServerChips"')
     && (html.match(/data-live-server="/g) || []).length === 6
     && !html.includes('id="liveServerBtn"'));
-  check("the sheet names all three sites", true,
+  check("the sheet names the source groups", true,
     html.includes("pbbcollab.com/live") && html.includes("pbbcollab.live")
-    && html.includes("pbb-3.pages.dev"));
+    && html.includes("PBB3 sources"));
+  check("the mirror source is labelled on the sheet", true,
+    html.includes('data-server="mirror"') && html.includes("PBB3 CCTV")
+    && /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java));
   check("the native route list accepts all six live servers", true,
     java.includes('"s1", "s2", "s3", "s4", "s5", "s6"'));
   check("a blocked handshake falls back to fresh site MPDs", true,

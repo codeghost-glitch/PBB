@@ -78,6 +78,13 @@ public class MainActivity extends Activity {
         "https://absp-live.akamaized.net/dash/live/2099522/"
             + "%70bbcollab30allaccesslivestream-externalden/manifest.mpd"
     };
+    // The mirror publishes one tokenized MPD per camera. Its segment names
+    // carry an access token in the query, so it is its own route.
+    private static final String[] MIRROR_MPD = {
+        MIRROR + CAM_MIRROR[0] + "/manifest.mpd",
+        MIRROR + CAM_MIRROR[1] + "/manifest.mpd",
+        MIRROR + CAM_MIRROR[2] + "/manifest.mpd"
+    };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
@@ -91,7 +98,7 @@ public class MainActivity extends Activity {
     private static final String LIVE_SERVER_FILE = "live_server.txt";
     private static final String SOURCE_FILE = "stream_source.txt";
     private static final String[] SITE_SERVERS = {
-        "s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"
+        "s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"
     };
     private static final String[] LIVE_SERVERS = {
         "s1", "s2", "s3", "s4", "s5", "s6"
@@ -688,7 +695,12 @@ public class MainActivity extends Activity {
      */
     private String publishedConfig() {
         JSONArray streams = null;
-        if ("pbb3".equals(streamServer) && !useLiveSite) {
+        if ("mirror".equals(streamServer) && !useLiveSite) {
+            streams = mirrorStreams();
+            if (streams == null) {
+                streams = siteStreamsWithBundledKeys();
+            }
+        } else if ("pbb3".equals(streamServer) && !useLiveSite) {
             streams = pbb3Streams();
             if (streams == null) {
                 streams = siteStreamsWithBundledKeys();
@@ -699,6 +711,9 @@ public class MainActivity extends Activity {
             if (streams == null) {
                 streams = siteStreamsWithBundledKeys();
             }
+        }
+        if (streams == null && !useLiveSite) {
+            streams = mirrorStreams();
         }
         if (streams == null) {
             return null;
@@ -745,6 +760,11 @@ public class MainActivity extends Activity {
         return bundledKeyStreams(PBB3_MPD, null);
     }
 
+    /** The mirror route, using its own tokenized manifest endpoints. */
+    private JSONArray mirrorStreams() {
+        return bundledKeyStreams(MIRROR_MPD, null);
+    }
+
     private JSONArray bundledKeyStreams(String[] mpds, String fallbackBase) {
         try {
             JSONArray bundled = new JSONObject(streamConfig()).getJSONArray("streams");
@@ -758,7 +778,10 @@ public class MainActivity extends Activity {
                     return null;
                 }
                 String xml = doc.body;
-                String base = mediaBase(xml);
+                String base = manifestBase(xml);
+                if (base == null) {
+                    base = mediaBase(xml);
+                }
                 if (base == null) {
                     base = fallbackBase == null
                         ? mpds[i].substring(0, mpds[i].lastIndexOf('/') + 1) : fallbackBase;
@@ -960,6 +983,13 @@ public class MainActivity extends Activity {
         return SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
     }
 
+    /** The manifest's own BaseURL, before any tokenized segment names. */
+    private static String manifestBase(String xml) {
+        int start = xml.indexOf("<BaseURL>");
+        int end = start < 0 ? -1 : xml.indexOf("</BaseURL>", start);
+        return end > start ? xml.substring(start + "<BaseURL>".length(), end) : null;
+    }
+
     /** The absolute segment folder a manifest names, or null when it names none. */
     private static String mediaBase(String xml) {
         Matcher media = MEDIA_BASE.matcher(xml);
@@ -973,10 +1003,10 @@ public class MainActivity extends Activity {
     }
 
     private String siteMpd(String xml, String base) {
-        // Templates may carry the folder as an absolute URL or a root-relative
-        // path. Strip either, leaving names the player and recorder join to
-        // the one BaseURL below.
-        xml = xml.replaceAll("(media|initialization)=\"[^\"]*/", "$1=\"");
+        // Strip only a leading folder. Mirror segment names carry signed query
+        // tokens with slashes; cutting at the last slash would break them.
+        xml = xml.replaceAll("(media|initialization)=\"(?:https?://[^\"?]*/|/)[^\"?]*",
+            "$1=\"");
         // Drop every baked BaseURL, including root-relative ones. Leaving one
         // behind gives Shaka a second, scheme-less location to try.
         xml = xml.replaceAll("<BaseURL>[^<]*</BaseURL>", "");

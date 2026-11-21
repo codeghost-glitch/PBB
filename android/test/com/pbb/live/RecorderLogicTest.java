@@ -104,8 +104,8 @@ public final class RecorderLogicTest {
 
     private static void siteServersAreAccepted() throws Exception {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
-        check("the six site routes and PBB3.0 are accepted", true,
-            source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\", \"pbb3\""));
+        check("the site routes and both mirrors are accepted", true,
+            source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\", \"pbb3\", \"mirror\""));
         check("site routes use the site MPD endpoint", true,
             source.contains("\"pbbtop\".equals(server) || \"s4\".equals(server)"));
     }
@@ -119,6 +119,17 @@ public final class RecorderLogicTest {
             && source.contains("replaceAll("));
         check("every baked BaseURL is dropped", true,
             source.contains("<BaseURL>[^<]*</BaseURL>"));
+        check("signed segment queries survive the rewrite", true,
+            source.contains("// Strip only a leading folder")
+            && source.contains("(media|initialization)=")
+            && source.contains("String base = manifestBase(xml);"));
+        String cdn = "https://absp-live.akamaized.net/dash/live/2099522/";
+        check("the signed mirror URLs keep their query", true,
+            Http.normalizeCdnUrl(cdn + "pbbcollab30x/init.mp4?token=1")
+                .equals(cdn + "pbbcollab30x/init.mp4?token=1"));
+        check("the CCTV mirror has its own signed MPDs", true,
+            source.contains("MIRROR_MPD = {")
+            && source.contains("MIRROR + CAM_MIRROR[0] + \"/manifest.mpd\""));
     }
 
     private static void cdnPathKeepsItsEscapedLetter() {
@@ -127,6 +138,8 @@ public final class RecorderLogicTest {
             Http.normalizeCdnUrl(base + "pbbcollab30x/init.mp4"));
         check("an already escaped CDN folder stays put", base + "%70bbcollab30x/init.mp4",
             Http.normalizeCdnUrl(base + "%70bbcollab30x/init.mp4"));
+        String signed = base + "pbbcollab30x/init.mp4?expires=1~acl=/*~hmac=abc";
+        check("a signed mirror URL is left alone", signed, Http.normalizeCdnUrl(signed));
     }
 
     private static void theClearKeyHeaderWins() throws Exception {

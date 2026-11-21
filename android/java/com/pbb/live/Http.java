@@ -71,6 +71,11 @@ final class Http {
 
     /** Akamai rejects the literal camera folder; escape its first letter. */
     static String normalizeCdnUrl(String url) {
+        // The mirror sends literal folder names with a signed query. Those
+        // URLs work as written; escaping them invalidates the signature.
+        if (url.indexOf('?') >= 0) {
+            return url;
+        }
         return url.replace(CDN_LITERAL, CDN_ESCAPED);
     }
 
