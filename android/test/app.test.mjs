@@ -139,6 +139,11 @@ function loadPage() {
       serverPick.server = server;
       return "";
     },
+    getLiveServer: () => "s1",
+    setLiveServer: (server) => {
+      calls.push(["setLiveServer", server]);
+      return "";
+    },
   };
 
   const statusText = makeElement("span");
@@ -154,6 +159,14 @@ function loadPage() {
   const backBtn = makeElement("button");
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
+  const liveServerNote = makeElement("p");
+  const liveServerSheet = makeElement("div");
+  const liveServerChips = makeElement("div");
+  for (const id of ["s1", "s2", "s3", "s4", "s5", "s6"]) {
+    const chip = makeElement("button");
+    chip.dataset.liveServer = id;
+    liveServerChips.appendChild(chip);
+  }
   const serverChips = makeElement("div");
   for (const id of ["s1", "pbbtop", "s2", "s3", "s4", "twitch"]) {
     const chip = makeElement("button");
@@ -168,6 +181,9 @@ function loadPage() {
     themeOptions,
     sourceNote,
     sourceSheet,
+    liveServerNote,
+    liveServerSheet,
+    liveServerChips,
     serverChips,
   };
   const stored = {};
@@ -230,6 +246,10 @@ function loadPage() {
   players,
   gesture,
   serverSheet,
+  liveSheet,
+  openLiveServerSheet,
+  closeLiveServerSheet,
+  selectLiveServer,
   theme,
   applyTheme,
   openThemeSheet,
@@ -984,6 +1004,32 @@ function materialYouThemesSwitch() {
     page.fields.themeSheet.classList.contains("hidden"));
 }
 
+function liveSiteHasItsOwnServerSheet() {
+  const html = fs.readFileSync(HTML, "utf8");
+  const java = fs.readFileSync(ACTIVITY, "utf8");
+  check("the live site gets a separate sheet", true,
+    html.includes('id="liveServerSheet"')
+    && html.includes('id="liveServerChips"')
+    && (html.match(/data-live-server="/g) || []).length === 6);
+  check("the site route names are preserved", true,
+    ["Server 1", "Server 2", "Server 3", "Server 4", "Server 5", "Server 6"]
+      .every((name) => html.includes(name)));
+  check("the native route list accepts all six live servers", true,
+    java.includes('"s1", "s2", "s3", "s4", "s5", "s6"'));
+
+  const page = loadPage();
+  page.openLiveServerSheet();
+  check("the live sheet opens", false,
+    page.fields.liveServerSheet.classList.contains("hidden"));
+  page.selectLiveServer("s5");
+  const call = page.calls.find((entry) => entry[0] === "setLiveServer");
+  check("the live pick reaches the app", "s5", call && call[1]);
+  check("the live sheet closes after a pick", true,
+    page.fields.liveServerSheet.classList.contains("hidden"));
+  check("the note names the live server", true,
+    /Server 5 is on/.test(page.fields.liveServerNote.textContent));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -1013,6 +1059,7 @@ const tests = [
   statusStripCarriesContext,
   serverSheetAndWallReadClearly,
   materialYouThemesSwitch,
+  liveSiteHasItsOwnServerSheet,
 ];
 
 for (const test of tests) {

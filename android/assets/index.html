@@ -90,6 +90,60 @@
       </div>
     </div>
   </div>
+  <div class="sheet hidden" id="liveServerSheet" role="dialog" aria-modal="true" aria-label="pbbcollab.live server">
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <h2>pbbcollab.live</h2>
+        <button id="liveServerClose" class="btn btn-ghost btn-icon" type="button" aria-label="close live servers"></button>
+      </div>
+      <p class="sheet-intro">Six routes from the live site. Switching reconnects all three feeds.</p>
+      <div class="sheet-chips" id="liveServerChips" role="radiogroup" aria-label="pbbcollab.live server">
+        <button class="chip" type="button" role="radio" aria-checked="true" data-live-server="s1">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-copy">
+            <span class="chip-name">Server 1</span>
+            <span class="chip-note">Main server · recommended</span>
+          </span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-live-server="s2">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-copy">
+            <span class="chip-name">Server 2</span>
+            <span class="chip-note">Backup server · fast</span>
+          </span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-live-server="s3">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-copy">
+            <span class="chip-name">Server 3</span>
+            <span class="chip-note">Edge server · alternate</span>
+          </span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-live-server="s4">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-copy">
+            <span class="chip-name">Server 4</span>
+            <span class="chip-note">Relay server · low latency</span>
+          </span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-live-server="s5">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-copy">
+            <span class="chip-name">Server 5</span>
+            <span class="chip-note">Cloud mirror · ultra fast</span>
+          </span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-live-server="s6">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-copy">
+            <span class="chip-name">Server 6</span>
+            <span class="chip-note">Global relay · ultra fast</span>
+          </span>
+        </button>
+      </div>
+      <p class="sheet-note" id="liveServerNote"></p>
+    </div>
+  </div>
   <div class="sheet hidden" id="sourceSheet" role="dialog" aria-modal="true" aria-label="stream server">
     <div class="sheet-panel">
       <div class="sheet-head">

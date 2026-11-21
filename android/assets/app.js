@@ -1,5 +1,7 @@
 /* global Pbb, shaka */
 /* eslint-disable no-undef -- Pbb and shaka are injected before this page loads. */
+const Pbb = window.Pbb;
+const shaka = window.shaka;
 const state = {
   quality: "hd",
   focused: -1,
@@ -1614,6 +1616,7 @@ applyTheme(loadTheme());
 // The routes and their names are the six pbbcollab.com/live offers. The app
 // stores the pick, so the next launch starts on the same one.
 const serverSheet = { server: "s1" };
+const liveSheet = { server: "s1" };
 
 const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch"];
 
@@ -1624,6 +1627,17 @@ const SERVER_NAMES = {
   s3: "Server Primo",
   s4: "Server Bela",
   twitch: "Twitch Mirror",
+};
+
+const LIVE_SERVERS = ["s1", "s2", "s3", "s4", "s5", "s6"];
+
+const LIVE_SERVER_NAMES = {
+  s1: "Server 1",
+  s2: "Server 2",
+  s3: "Server 3",
+  s4: "Server 4",
+  s5: "Server 5",
+  s6: "Server 6",
 };
 
 function sourceField(id) {
@@ -1685,6 +1699,92 @@ function selectServer(server) {
   markServerChoice();
   closeSourceSheet();
   setTransientStatus(SERVER_NAMES[pick] + " - reconnecting");
+}
+
+function markLiveServerChoice() {
+  const row = sourceField("liveServerChips");
+  if (!row) {
+    return;
+  }
+  for (const chip of row.children) {
+    const active = chip.dataset.liveServer === liveSheet.server;
+    chip.classList.toggle("active", active);
+    chip.setAttribute("aria-checked", active ? "true" : "false");
+  }
+}
+
+function openLiveServerSheet() {
+  const sheet = sourceField("liveServerSheet");
+  if (!sheet) {
+    return;
+  }
+  if (window.Pbb && typeof Pbb.getLiveServer === "function") {
+    const stored = Pbb.getLiveServer();
+    liveSheet.server = LIVE_SERVERS.includes(stored) ? stored : "s1";
+  }
+  markLiveServerChoice();
+  setLiveNote(LIVE_SERVER_NAMES[liveSheet.server] + " is on");
+  sheet.classList.remove("hidden");
+}
+
+function closeLiveServerSheet() {
+  const sheet = sourceField("liveServerSheet");
+  if (sheet) {
+    sheet.classList.add("hidden");
+  }
+}
+
+function selectLiveServer(server) {
+  const pick = LIVE_SERVERS.includes(server) ? server : "s1";
+  if (!window.Pbb || typeof Pbb.setLiveServer !== "function") {
+    setLiveNote("android bridge missing");
+    return;
+  }
+  const error = Pbb.setLiveServer(pick);
+  if (error) {
+    setLiveNote(error);
+    return;
+  }
+  liveSheet.server = pick;
+  markLiveServerChoice();
+  setLiveNote(LIVE_SERVER_NAMES[pick] + " is on");
+  closeLiveServerSheet();
+  setTransientStatus(LIVE_SERVER_NAMES[pick] + " - reconnecting");
+}
+
+function setLiveNote(message) {
+  const note = sourceField("liveServerNote");
+  if (note) {
+    note.textContent = message;
+  }
+}
+
+function wireLiveServerSheet() {
+  const sheet = sourceField("liveServerSheet");
+  if (!sheet) {
+    return;
+  }
+  sheet.addEventListener("click", (event) => {
+    if (event.target === sheet) {
+      closeLiveServerSheet();
+    }
+  });
+  const close = sourceField("liveServerClose");
+  if (close) {
+    setIcon(close, "close", "close live servers");
+    close.addEventListener("click", closeLiveServerSheet);
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeLiveServerSheet();
+    }
+  });
+  const row = sourceField("liveServerChips");
+  if (row) {
+    for (const chip of Array.from(row.children)) {
+      chip.addEventListener("click", () => selectLiveServer(chip.dataset.liveServer));
+    }
+  }
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
@@ -1823,6 +1923,11 @@ function boot() {
     setIcon(sourceBtn, "server", "choose stream server");
     sourceBtn.addEventListener("click", openSourceSheet);
   }
+  const liveServerBtn = document.getElementById("liveServerBtn");
+  if (liveServerBtn) {
+    setIcon(liveServerBtn, "server", "choose pbbcollab.live server");
+    liveServerBtn.addEventListener("click", openLiveServerSheet);
+  }
   const themeBtn = document.getElementById("themeBtn");
   if (themeBtn) {
     setIcon(themeBtn, "palette", "choose color theme");
@@ -1834,6 +1939,7 @@ function boot() {
   }
   updateStitchButton();
   wireSourceSheet();
+  wireLiveServerSheet();
   wireThemeSheet();
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");

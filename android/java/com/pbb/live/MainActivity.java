@@ -76,8 +76,13 @@ public class MainActivity extends Activity {
     private static final Pattern MEDIA_BASE = Pattern.compile("media=\"(https://[^\"?]*/)[^\"?]*");
     private static final String KEYS_CACHE = "streams.json";
     private static final String SERVER_FILE = "stream_server.txt";
+    private static final String LIVE_SERVER_FILE = "live_server.txt";
+    private static final String SOURCE_FILE = "stream_source.txt";
     private static final String[] SITE_SERVERS = {
         "s1", "pbbtop", "s2", "s3", "s4", "twitch"
+    };
+    private static final String[] LIVE_SERVERS = {
+        "s1", "s2", "s3", "s4", "s5", "s6"
     };
 
     static {
@@ -112,6 +117,8 @@ public class MainActivity extends Activity {
     private volatile String streamConfigJson;
     // The site runs the cameras off a main server and a backup one.
     private volatile String streamServer = "s1";
+    private volatile String liveServer = "s1";
+    private volatile boolean useLiveSite = false;
     // The site's segment route only answers its own page: a file:// WebView
     // asking for it is "cross-site stream hotlinking". The cookie and the
     // origin for that hop are kept here.
@@ -146,6 +153,8 @@ public class MainActivity extends Activity {
         appBrightnessLevel = appBrightness(filesDir);
         streamConfigJson = streamConfig();
         streamServer = loadServer();
+        liveServer = loadLiveServer();
+        useLiveSite = loadSource();
         loadCachedKeys();
         // Start the handshake before the page exists, so the config the page
         // asks for on boot is the fresh one.
@@ -325,7 +334,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** s1 or s2, whichever the operator picked last. */
+    /** The pbbcollab.com route picked last. */
     private String loadServer() {
         try {
             FileInputStream in = new FileInputStream(new File(getFilesDir(), SERVER_FILE));
@@ -341,11 +350,53 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String loadLiveServer() {
+        try {
+            FileInputStream in = new FileInputStream(new File(getFilesDir(), LIVE_SERVER_FILE));
+            String raw;
+            try {
+                raw = new String(Http.readAll(in), "UTF-8").trim();
+            } finally {
+                in.close();
+            }
+            return validLiveServer(raw) ? raw : "s1";
+        } catch (Exception e) {
+            return "s1";
+        }
+    }
+
+    private boolean loadSource() {
+        try {
+            FileInputStream in = new FileInputStream(new File(getFilesDir(), SOURCE_FILE));
+            String raw;
+            try {
+                raw = new String(Http.readAll(in), "UTF-8").trim();
+            } finally {
+                in.close();
+            }
+            return "live".equals(raw);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private static boolean validServer(String server) {
         if (server == null) {
             return false;
         }
         for (String route : SITE_SERVERS) {
+            if (route.equals(server)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean validLiveServer(String server) {
+        if (server == null) {
+            return false;
+        }
+        for (String route : LIVE_SERVERS) {
             if (route.equals(server)) {
                 return true;
             }
@@ -360,10 +411,22 @@ public class MainActivity extends Activity {
     }
 
     private void storeServer(String server) {
+        storeText(SERVER_FILE, server);
+    }
+
+    private void storeLiveServer(String server) {
+        storeText(LIVE_SERVER_FILE, server);
+    }
+
+    private void storeSource(boolean live) {
+        storeText(SOURCE_FILE, live ? "live" : "site");
+    }
+
+    private void storeText(String name, String value) {
         try {
-            FileOutputStream out = new FileOutputStream(new File(getFilesDir(), SERVER_FILE));
+            FileOutputStream out = new FileOutputStream(new File(getFilesDir(), name));
             try {
-                out.write(server.getBytes("UTF-8"));
+                out.write(value.getBytes("UTF-8"));
             } finally {
                 out.close();
             }
@@ -379,12 +442,29 @@ public class MainActivity extends Activity {
         if (!validServer(server)) {
             return "pick a server from the site";
         }
-        if (server.equals(streamServer)) {
-            return "";
-        }
+        boolean changed = !server.equals(streamServer) || useLiveSite;
         streamServer = server;
+        useLiveSite = false;
         storeServer(server);
-        refreshKeys();
+        storeSource(false);
+        if (changed) {
+            refreshKeys();
+        }
+        return "";
+    }
+
+    private String setLiveServer(String server) {
+        if (!validLiveServer(server)) {
+            return "pick a server from pbbcollab.live";
+        }
+        boolean changed = !server.equals(liveServer) || !useLiveSite;
+        liveServer = server;
+        useLiveSite = true;
+        storeLiveServer(server);
+        storeSource(true);
+        if (changed) {
+            refreshKeys();
+        }
         return "";
     }
 
@@ -595,8 +675,9 @@ public class MainActivity extends Activity {
             for (int i = 0; i < 12; i++) {
                 key.append(String.format(Locale.US, "%02x", seed[i] & 0xff));
             }
+            String route = useLiveSite ? liveServer : streamServer;
             String plain = Http.sessionPlain(seed, key.toString(),
-                serverMode(streamServer), System.currentTimeMillis());
+                serverMode(route), System.currentTimeMillis());
             byte[] sealed = new byte[plain.length()];
             for (int i = 0; i < plain.length(); i++) {
                 sealed[i] = (byte) (plain.charAt(i) ^ key.charAt(i % key.length()) ^ 0x3c);
@@ -621,7 +702,7 @@ public class MainActivity extends Activity {
                 JSONObject cam = cams.getJSONObject(CAM_IDS[i]);
                 String[] pair = sessionToken(cam.getString("token"), nonce);
                 String endpoint = cam.getString("endpoint");
-                int site2 = site2Number(streamServer);
+                int site2 = useLiveSite ? 0 : site2Number(streamServer);
                 String xml;
                 if (site2 > 0) {
                     xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
@@ -666,6 +747,12 @@ public class MainActivity extends Activity {
         if ("s4".equals(server)) {
             return 3;
         }
+        if ("s5".equals(server)) {
+            return 4;
+        }
+        if ("s6".equals(server)) {
+            return 5;
+        }
         return 0;
     }
 
@@ -693,6 +780,11 @@ public class MainActivity extends Activity {
      * and relative names - the shape the page and the recorder join.
      */
     private String siteBase(String xml, String endpoint, int index) {
+        if (useLiveSite) {
+            String media = mediaBase(xml);
+            return media != null ? media
+                : SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
+        }
         if (site2Number(streamServer) > 0) {
             String media = mediaBase(xml);
             return media != null ? media : SITE2;
@@ -1217,6 +1309,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String setStreamServer(String server) {
             return MainActivity.this.setStreamServer(server);
+        }
+
+        @JavascriptInterface
+        public String getLiveServer() {
+            return liveServer;
+        }
+
+        @JavascriptInterface
+        public String setLiveServer(String server) {
+            return MainActivity.this.setLiveServer(server);
         }
 
         @JavascriptInterface

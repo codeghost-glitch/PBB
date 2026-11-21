@@ -1127,11 +1127,26 @@ body.fullscreen-mode .indicator {
 
 
 
+.chip-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .chip-name {
   font-size: var(--t-card);
   font-weight: var(--w-bold);
   line-height: 1.25;
 }
+
+.chip-note {
+  color: var(--muted);
+  font-size: var(--t-label);
+  line-height: 1.25;
+}
+
+.chip.active .chip-note { color: var(--on-primary-container); }
 
 
 
