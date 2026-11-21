@@ -143,6 +143,35 @@ final class Http {
         return body == null ? null : new String(body, "UTF-8");
     }
 
+    /** An MPD body and the clear-key header the site publishes with it. */
+    static final class Mpd {
+        final String body;
+        final String clearKey;
+
+        Mpd(String body, String clearKey) {
+            this.body = body;
+            this.clearKey = clearKey;
+        }
+    }
+
+    static Mpd getMpd(String url, int connectMs, int readMs) throws IOException {
+        HttpURLConnection conn = open(url, connectMs, readMs);
+        try {
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            InputStream in = conn.getInputStream();
+            try {
+                return new Mpd(new String(readAll(in), "UTF-8"),
+                    conn.getHeaderField("X-PBB-ClearKey"));
+            } finally {
+                in.close();
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
     /** A POST reply plus the session cookie the server set, if any. */
     static final class Reply {
         final String body;

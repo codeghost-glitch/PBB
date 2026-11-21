@@ -632,9 +632,9 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Reads the kid out of every manifest and compares it with the kid the
-     * app plays with. A manifest that carries another kid is a rotated
-     * channel: the key in the config is old and that tile will not play.
+     * Compares the published clear keys with the keys in the config. The site
+     * MPD body can carry an old default KID - it is not the key source. Its
+     * X-PBB-ClearKey header is, and it is what the site player uses.
      */
     private String rotationReport() {
         JSONArray streams;
@@ -644,25 +644,22 @@ public class MainActivity extends Activity {
             return "Could not read the stream list";
         }
         StringBuilder rotated = new StringBuilder();
+        int srv = useLiveSite ? 1 : ("pbb3".equals(streamServer) ? 1 : site2Number(streamServer));
         int answered = 0;
-        for (int i = 0; i < streams.length(); i++) {
+        for (int i = 0; i < streams.length() && i < CAM_IDS.length; i++) {
             JSONObject stream;
             try {
                 stream = streams.getJSONObject(i);
             } catch (Exception e) {
                 continue;
             }
-            String url = stream.optString("url", "");
             String kid = stream.optString("kid", "").replace("-", "").toLowerCase();
-            if ((!url.startsWith("https://") && !url.startsWith(DATA_MPD)) || kid.isEmpty()) {
-                continue;
-            }
-            String found = manifestKid(url);
-            if (found.isEmpty()) {
+            String[] published = publishedClearKey(i, srv);
+            if (kid.isEmpty() || published == null) {
                 continue;
             }
             answered++;
-            if (!found.equals(kid)) {
+            if (!published[0].equals(kid)) {
                 if (rotated.length() > 0) {
                     rotated.append(", ");
                 }
@@ -678,17 +675,10 @@ public class MainActivity extends Activity {
         return "No channel list. The selected server is still in use";
     }
 
-    private static String manifestKid(String url) {
-        String raw;
-        try {
-            raw = Http.getText(url, 4000, 5000);
-        } catch (Exception e) {
-            return "";
-        }
-        if (raw == null) {
-            return "";
-        }
-        return RecordService.manifestKid(raw);
+    /** The kid/key pair in the site's X-PBB-ClearKey header, or null. */
+    private static String[] publishedClearKey(int index, int srv) {
+        Http.Mpd mpd = siteMpdText(index, srv);
+        return mpd == null ? null : clearKeyPair(mpd.clearKey);
     }
 
     /**
@@ -700,6 +690,9 @@ public class MainActivity extends Activity {
         JSONArray streams = null;
         if ("pbb3".equals(streamServer) && !useLiveSite) {
             streams = pbb3Streams();
+            if (streams == null) {
+                streams = siteStreamsWithBundledKeys();
+            }
         } else {
             Http.Reply handshake = handshake();
             streams = handshake == null ? null : siteStreams(handshake);
@@ -724,7 +717,7 @@ public class MainActivity extends Activity {
      */
     private JSONArray siteStreamsWithBundledKeys() {
         String[] mpds = new String[CHANNEL_COUNT];
-        int srv = useLiveSite ? 1 : site2Number(streamServer);
+        int srv = useLiveSite ? 1 : ("pbb3".equals(streamServer) ? 1 : site2Number(streamServer));
         if (siteMpdText(0, srv) == null) {
             srv = srv == 0 ? 1 : 0;
             if (siteMpdText(0, srv) == null) {
@@ -738,9 +731,9 @@ public class MainActivity extends Activity {
     }
 
     /** One site MPD route. Null means that route answered with an error. */
-    private static String siteMpdText(int index, int srv) {
+    private static Http.Mpd siteMpdText(int index, int srv) {
         try {
-            return Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[index]
+            return Http.getMpd(SITE2 + "/api/live/mpd/" + CAM_IDS[index]
                 + ".mpd?srv=s" + srv, 5000, 8000);
         } catch (Exception e) {
             return null;
@@ -760,29 +753,47 @@ public class MainActivity extends Activity {
             }
             JSONArray streams = new JSONArray();
             for (int i = 0; i < CAM_IDS.length; i++) {
-                String xml = Http.getText(mpds[i], 5000, 8000);
-                if (xml == null) {
+                Http.Mpd doc = Http.getMpd(mpds[i], 5000, 8000);
+                if (doc == null) {
                     return null;
                 }
+                String xml = doc.body;
                 String base = mediaBase(xml);
                 if (base == null) {
                     base = fallbackBase == null
                         ? mpds[i].substring(0, mpds[i].lastIndexOf('/') + 1) : fallbackBase;
                 }
+                // The MPD body can name a stale KID. The site header is current.
+                String[] liveKeys = clearKeyPair(doc.clearKey);
                 JSONObject keys = bundled.getJSONObject(i);
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
                 stream.put("base", base);
                 stream.put("url", DATA_MPD + Base64.encodeToString(
                     siteMpd(xml, base).getBytes("UTF-8"), Base64.NO_WRAP));
-                stream.put("kid", keys.getString("kid"));
-                stream.put("key", keys.getString("key"));
+                stream.put("kid", liveKeys == null ? keys.getString("kid") : liveKeys[0]);
+                stream.put("key", liveKeys == null ? keys.getString("key") : liveKeys[1]);
                 streams.put(stream);
             }
             return streams;
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** Splits a kid:key header into 32-hex pairs, or null when unusable. */
+    private static String[] clearKeyPair(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        int colon = raw.indexOf(':');
+        if (colon < 1) {
+            return null;
+        }
+        String kid = raw.substring(0, colon).replace("-", "").toLowerCase(Locale.US);
+        String key = raw.substring(colon + 1).replace("-", "").toLowerCase(Locale.US);
+        return kid.matches("[0-9a-f]{32}") && key.matches("[0-9a-f]{32}")
+            ? new String[] {kid, key} : null;
     }
 
     /** The randomised handshake the site's own page posts before it plays. */
@@ -829,12 +840,14 @@ public class MainActivity extends Activity {
                 // session keys and only take the session manifest when both
                 // site routes are down.
                 int srv = useLiveSite ? 1 : site2Number(streamServer);
+                Http.Mpd doc = null;
                 if (!useLiveSite) {
-                    xml = siteMpdText(i, srv);
-                    if (xml == null) {
-                        xml = siteMpdText(i, srv == 0 ? 1 : 0);
+                    doc = siteMpdText(i, srv);
+                    if (doc == null) {
+                        doc = siteMpdText(i, srv == 0 ? 1 : 0);
                     }
-                    if (xml != null) {
+                    if (doc != null) {
+                        xml = doc.body;
                         base = "s3".equals(streamServer)
                             ? MIRROR + CAM_MIRROR[i] : mediaBase(xml);
                     }
@@ -851,11 +864,12 @@ public class MainActivity extends Activity {
                     }
                 }
                 if (xml == null) {
-                    xml = siteMpdText(i, srv);
-                    if (xml == null && srv != (srv == 0 ? 1 : 0)) {
-                        xml = siteMpdText(i, srv == 0 ? 1 : 0);
+                    doc = siteMpdText(i, srv);
+                    if (doc == null && srv != (srv == 0 ? 1 : 0)) {
+                        doc = siteMpdText(i, srv == 0 ? 1 : 0);
                     }
-                    if (xml != null) {
+                    if (doc != null) {
+                        xml = doc.body;
                         base = mediaBase(xml);
                     }
                 }
@@ -865,6 +879,7 @@ public class MainActivity extends Activity {
                 if (base == null) {
                     base = SITE2;
                 }
+                String[] liveKeys = clearKeyPair(doc == null ? null : doc.clearKey);
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
                 // The manifest body moves its publishTime on every handshake, so
@@ -872,8 +887,8 @@ public class MainActivity extends Activity {
                 stream.put("base", base);
                 stream.put("url", DATA_MPD + Base64.encodeToString(
                     siteMpd(xml, base).getBytes("UTF-8"), Base64.NO_WRAP));
-                stream.put("kid", pair[0]);
-                stream.put("key", pair[1]);
+                stream.put("kid", liveKeys == null ? pair[0] : liveKeys[0]);
+                stream.put("key", liveKeys == null ? pair[1] : liveKeys[1]);
                 streams.put(stream);
             }
         } catch (Exception e) {

@@ -2,6 +2,13 @@
 /* eslint-disable no-undef -- Pbb and shaka are injected before this page loads. */
 const Pbb = window.Pbb;
 const shaka = window.shaka;
+// The site player carries a few older KIDs in its MPDs. Keeping their keys
+// alongside the current pair stops a stale KID from looking like a rotation.
+const FALLBACK_CLEAR_KEYS = {
+  "8150b74d16324bb4b2ff62e3e202fc7a": "0c5ed4f9db9d4ee61bbc91b3a51ef8b5",
+  "1044e7ece2d741bcafe80d8613da104f": "f5e17f169ff05ea40c5d3f065f523942",
+};
+
 const state = {
   quality: "hd",
   focused: -1,
@@ -782,9 +789,12 @@ async function initPlayer(entry, index) {
   const player = new shaka.Player(entry.video);
   entry.player = player;
 
-  const clearKeys = {};
+  const clearKeys = { ...FALLBACK_CLEAR_KEYS };
   clearKeys[entry.stream.kid] = entry.stream.key;
   clearKeys[uuidKid(entry.stream.kid)] = entry.stream.key;
+  for (const [kid, key] of Object.entries(FALLBACK_CLEAR_KEYS)) {
+    clearKeys[uuidKid(kid)] = key;
+  }
 
   const retry = () => ({
     maxAttempts: 6,
@@ -835,8 +845,7 @@ async function initPlayer(entry, index) {
     const message = Number.isInteger(Number(detail.code))
       ? `Error ${detail.code}` : (detail.message || String(detail));
     if (Number(detail.code) === 4012) {
-      state.keysStale = true;
-      setStreamStatus(entry, "Keys changed", true);
+      setStreamStatus(entry, "Checking keys", true);
       // The keys come from the site's handshake, so ask it for fresh ones
       // before asking the operator to do anything.
       if (!state.keyRetry && window.Pbb && typeof Pbb.refreshKeys === "function") {
@@ -844,6 +853,7 @@ async function initPlayer(entry, index) {
         refreshKeysFromUi();
         setStatusText("Fetching new keys");
       } else {
+        state.keysStale = true;
         setStatusText("Keys changed. Choose a server");
       }
       return;
@@ -1544,9 +1554,12 @@ window.onStreamConfig = async (raw) => {
     if (manualKeyRefresh) {
       manualKeyRefresh = false;
       if (state.keyRetry) {
-        // The site still serves the key that just failed, so stop asking.
+        // The site confirms these are the current keys. A stale KID in a
+        // manifest is not a rotation; rebuild once with the fallback KIDs.
         state.keyRetry = false;
-        setStatusText("Keys changed. Choose a server");
+        state.keysStale = false;
+        await resyncStreams();
+        setStatusText("Keys confirmed. Reconnecting feeds");
         return;
       }
       // Keys are current. Seeking every feed to the live edge here froze all

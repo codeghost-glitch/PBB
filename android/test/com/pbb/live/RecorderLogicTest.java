@@ -28,6 +28,7 @@ public final class RecorderLogicTest {
         siteServersAreAccepted();
         theMpdUsesOneAbsoluteSegmentBase();
         cdnPathKeepsItsEscapedLetter();
+        theClearKeyHeaderWins();
         aSite503RetriesOnTheCdn();
         theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
@@ -126,6 +127,18 @@ public final class RecorderLogicTest {
             Http.normalizeCdnUrl(base + "pbbcollab30x/init.mp4"));
         check("an already escaped CDN folder stays put", base + "%70bbcollab30x/init.mp4",
             Http.normalizeCdnUrl(base + "%70bbcollab30x/init.mp4"));
+    }
+
+    private static void theClearKeyHeaderWins() throws Exception {
+        String javaSource = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        String httpSource = sourceOf("android/java/com/pbb/live/Http.java");
+        check("the MPD header is read with the body", true,
+            httpSource.contains("X-PBB-ClearKey"));
+        check("the published kid, not the old MPD KID, is compared", true,
+            javaSource.contains("publishedClearKey(i, srv)")
+            && !javaSource.contains("manifestKid(url)"));
+        check("a published pair overrides the bundled one", true,
+            javaSource.contains("liveKeys == null ? keys.getString(\"kid\") : liveKeys[0]"));
     }
 
     private static void aSite503RetriesOnTheCdn() throws Exception {

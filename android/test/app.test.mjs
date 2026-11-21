@@ -602,12 +602,17 @@ function refreshResyncsAllStreams() {
     /manualKeyRefresh[\s\S]{0,320}await resyncStreams\(\)/s.test(app));
   check("all players reload in the same tick", true,
     /for \(const \[i\] of players\.entries\(\)\) \{[\s\S]{0,120}initPlayer\(players\[i\], i\)/s.test(app));
-  check("a rotated key is re-fetched once, then explained", true,
+  check("a key failure is checked once before it is called stale", true,
     /=== 4012[\s\S]{0,500}state\.keyRetry = true;[\s\S]{0,120}refreshKeysFromUi\(\)/.test(app)
-    && /state\.keyRetry = false;/.test(app));
+    && /\} else \{\s*state\.keysStale = true;/.test(app));
+  check("a confirmed key rebuilds the players instead of sticking", true,
+    /state\.keyRetry\) \{[\s\S]{0,320}state\.keysStale = false;[\s\S]{0,120}await resyncStreams\(\)/.test(app));
   check("an unchanged-key refresh never seeks the live feeds", true,
     !/\.currentTime = /s.test(app) && !/goToLive\(\)/s.test(app) &&
     /setTransientStatus\("Feeds are already in sync"\)/s.test(app));
+  check("legacy KIDs keep their site keys", true,
+    /FALLBACK_CLEAR_KEYS = \{[\s\S]{0,320}1044e7ece2d741bcafe80d8613da104f/.test(app)
+    && /const clearKeys = \{ \.\.\.FALLBACK_CLEAR_KEYS \}/.test(app));
 }
 
 function channelSourceContract() {
@@ -691,8 +696,9 @@ function stitchAndServerContract() {
     ["Server Jeo", "Server Gehlee", "Server Nathan", "Server Primo",
       "Server Bela", "Twitch Mirror", "PBB3.0"]
       .every((name) => html.includes(name)));
-  check("PBB3.0 uses the direct CDN manifests from pbb-3.pages.dev", true,
+  check("PBB3.0 uses the direct CDN manifests, then the site route", true,
     java.includes("pbb3Streams()")
+    && /streams = pbb3Streams\(\);\s*if \(streams == null\) \{\s*streams = siteStreamsWithBundledKeys\(\);/.test(java)
     && java.includes("%70bbcollab30allaccesslivestream/manifest.mpd")
     && java.includes("%70bbcollab30allaccesslivestream-diningarea/manifest.mpd")
     && java.includes("%70bbcollab30allaccesslivestream-externalden/manifest.mpd"));
@@ -707,8 +713,11 @@ function stitchAndServerContract() {
   check("the bridge stores the pick", true,
     /setStreamServer/.test(java) && /getStreamServer/.test(java));
   check("site routes avoid the 503 session proxy before using it", true,
-    /if \(!useLiveSite\) \{\s*xml = siteMpdText\(i, srv\);[\s\S]{0,600}if \(xml == null\) \{\s*\/\/ The site.s player/.test(java)
-    && java.includes("siteMpdText(i, srv == 0 ? 1 : 0)"));
+    /Http\.Mpd doc = null;[\s\S]{0,500}doc = siteMpdText\(i, srv\);[\s\S]{0,600}if \(xml == null\) \{\s*\/\/ The site.s player/.test(java)
+    && java.includes("doc = siteMpdText(i, srv == 0 ? 1 : 0)"));
+  check("the published key header overrides the bundled key", true,
+    java.includes("clearKeyPair(doc == null ? null : doc.clearKey)")
+    && /stream\.put\("kid", liveKeys == null \? pair\[0\] : liveKeys\[0\]\)/.test(java));
   check("a failed MPD load cannot fall through with no manifest", true,
     /if \(xml == null\) \{\s*return null;\s*\}\s*if \(base == null\)/.test(java));
   check("a failed site route falls back to the live session only last", true,
