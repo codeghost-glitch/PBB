@@ -68,28 +68,29 @@
         <h2>server</h2>
         <button id="sourceClose" class="btn btn-ghost btn-icon" type="button" aria-label="close servers"></button>
       </div>
-      <div class="sheet-chips" id="serverChips" role="group" aria-label="stream server">
-        <button class="chip" type="button" data-server="s1">
+      <p class="sheet-intro">Choose a route. Switching reconnects all three feeds.</p>
+      <div class="sheet-chips" id="serverChips" role="radiogroup" aria-label="stream server">
+        <button class="chip" type="button" role="radio" aria-checked="true" data-server="s1">
           <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-name">Server Jeo</span>
         </button>
-        <button class="chip" type="button" data-server="pbbtop">
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="pbbtop">
           <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-name">Server Gehlee</span>
         </button>
-        <button class="chip" type="button" data-server="s2">
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s2">
           <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-name">Server Nathan</span>
         </button>
-        <button class="chip" type="button" data-server="s3">
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s3">
           <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-name">Server Primo</span>
         </button>
-        <button class="chip" type="button" data-server="s4">
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s4">
           <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-name">Server Bela</span>
         </button>
-        <button class="chip" type="button" data-server="twitch">
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="twitch">
           <span class="chip-key" aria-hidden="true"></span>
           <span class="chip-name">Twitch Mirror</span>
         </button>

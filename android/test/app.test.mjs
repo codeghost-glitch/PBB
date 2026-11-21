@@ -901,6 +901,35 @@ function statusStripCarriesContext() {
     && /\.status-actions::before/.test(css));
 }
 
+function serverSheetAndWallReadClearly() {
+  const html = fs.readFileSync(HTML, "utf8");
+  const css = fs.readFileSync(CSS, "utf8");
+  check("the server sheet explains the switch", true,
+    html.includes('class="sheet-intro"')
+    && html.includes("Switching reconnects all three feeds."));
+  check("the routes are a radio group", true,
+    html.includes('role="radiogroup"')
+    && (html.match(/role="radio"/g) || []).length === 6);
+  check("the chosen route is named to assistive tech", true,
+    /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
+      fs.readFileSync(APP, "utf8")));
+  check("the active route reads as a selected row", true,
+    /\.chip\.active \{[\s\S]*?background: var\(--g-alt\)/.test(css)
+    && /\.chip\.active \{[\s\S]*?border-color: var\(--line\)/.test(css));
+  check("the wall separates the monitors", true,
+    /\.grid \{[\s\S]*?gap: var\(--s-2\)/.test(css)
+    && /\.cam-bar \{[\s\S]*?background: var\(--surface\)/.test(css)
+    && /\.cam-role \{[\s\S]*?border: 1px solid var\(--line\)/.test(css));
+
+  const page = loadPage();
+  page.selectServer("s2");
+  page.openSourceSheet();
+  check("the selected route is checked", "true",
+    page.fields.serverChips.children[2].getAttribute("aria-checked"));
+  check("the other routes are unchecked", "false",
+    page.fields.serverChips.children[0].getAttribute("aria-checked"));
+}
+
 const tests = [
   pipFocusesAFeedWhenThereIsNone,
   pipKeepsTheFeedThatWasAlreadyFocused,
@@ -928,6 +957,7 @@ const tests = [
   soundSwitchDoesNotRebuildTheAudioRenderer,
   launcherIconFollowsTheSystem,
   statusStripCarriesContext,
+  serverSheetAndWallReadClearly,
 ];
 
 for (const test of tests) {

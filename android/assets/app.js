@@ -1543,7 +1543,9 @@ function markServerChoice() {
     return;
   }
   for (const chip of row.children) {
-    chip.classList.toggle("active", chip.dataset.server === serverSheet.server);
+    const active = chip.dataset.server === serverSheet.server;
+    chip.classList.toggle("active", active);
+    chip.setAttribute("aria-checked", active ? "true" : "false");
   }
 }
 
@@ -1639,6 +1641,11 @@ function wireSourceSheet() {
     setIcon(close, "close", "close servers");
     close.addEventListener("click", closeSourceSheet);
   }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeSourceSheet();
+    }
+  });
   const row = sourceField("serverChips");
   if (row) {
     for (const chip of Array.from(row.children)) {

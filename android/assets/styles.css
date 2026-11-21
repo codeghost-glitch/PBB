@@ -230,7 +230,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 2px;
+  gap: var(--s-2);
   height: 100%;
 }
 
@@ -255,6 +255,10 @@ h1 {
 .cam-card:first-child { border-color: var(--line-strong); }
 
 .cam-card.rec { border-color: var(--rec); }
+
+@media (hover: hover) and (pointer: fine) {
+  .cam-card:not(.rec):hover { border-color: var(--line-strong); }
+}
 
 .video-wrap {
   position: relative;
@@ -344,6 +348,7 @@ h1 {
   gap: var(--s-3);
   min-height: 56px;
   padding: var(--s-2) var(--s-3);
+  background: var(--surface);
   border-top: 1px solid var(--line);
 }
 
@@ -368,7 +373,12 @@ h1 {
 .cam-card:first-child .cam-title { font-weight: var(--w-bold); }
 
 .cam-role {
-  color: var(--faint);
+  flex: none;
+  padding: 3px var(--s-2);
+  color: var(--muted);
+  background: var(--g-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   font-size: var(--t-label);
   font-weight: var(--w-reg);
   line-height: 1;
@@ -966,9 +976,17 @@ body.fullscreen-mode .indicator {
   line-height: 1.2;
 }
 
+.sheet-intro {
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: var(--t-label);
+  line-height: 1.5;
+}
+
 .sheet-chips {
   display: flex;
   flex-direction: column;
+  gap: var(--s-1);
 }
 
 .chip {
@@ -977,18 +995,27 @@ body.fullscreen-mode .indicator {
   gap: var(--s-3);
   width: 100%;
   min-height: 64px;
-  padding: var(--s-2) 0;
+  padding: var(--s-2) var(--s-3);
   color: var(--ink);
   background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--line);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   font-family: var(--font);
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+  transition: background var(--m-in) var(--ease),
+    border-color var(--m-in) var(--ease);
 }
 
-.chip:last-child { border-bottom: 0; }
+.chip:not(.active):hover { background: var(--g-alt); }
+
+.chip.active {
+  background: var(--g-alt);
+  border-color: var(--line);
+}
+
+.chip:active { transform: translateY(1px); }
 
 .chip-key {
   position: relative;
