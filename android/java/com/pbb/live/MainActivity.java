@@ -403,10 +403,10 @@ public class MainActivity extends Activity {
 
     /**
      * Server 2 exists so a blocked CDN can still be watched, but the site's
-     * proxy answers its own Origin only. A WebView page is a different one, so
-     * the bytes are fetched here - session cookie, client tag, site Origin -
-     * and handed back with a permissive CORS header. Streaming straight from
-     * the connection keeps a segment out of memory and passes Range through.
+     * proxy answers its own session only. A WebView page cannot carry it, so
+     * the bytes are fetched here - session cookie and client tag - and handed
+     * back with a permissive CORS header. Streaming straight from the
+     * connection keeps a segment out of memory and passes Range through.
      */
     private WebResourceResponse proxyStream(String url, Map<String, String> asked) {
         return proxyStream(url, asked, 0);
@@ -426,10 +426,12 @@ public class MainActivity extends Activity {
             // The session cookie belongs only to the site. Sending it to the
             // CDN or the mirror could leak it through a redirect.
             if (siteHop) {
+                // The site's own player sends no Origin on segment reads.
+                // HttpURLConnection now allows restricted headers for the
+                // handshake, so adding one here turns a valid read into a
+                // cross-site request and gets a 403.
                 conn.setRequestProperty("Cookie", sessionCookie);
                 conn.setRequestProperty("X-PBB-Client", sessionClient);
-                conn.setRequestProperty("Origin", SITE);
-                conn.setRequestProperty("Referer", SITE + "/");
             }
             // The bytes go straight to the media stack, so no transcoding layer.
             conn.setRequestProperty("Accept-Encoding", "identity");

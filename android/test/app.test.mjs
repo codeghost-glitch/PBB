@@ -790,16 +790,18 @@ function designSystemHoldsTheLine() {
 function liveWindowAndBackupRoute() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  // The site's proxy answers its own Origin only, so the page cannot fetch
-  // server 2's segments itself. The app makes that hop and hands them over.
+  // The site's proxy needs the session cookie, which a file:// page cannot
+  // carry. The app makes that hop and hands the bytes over. Segment reads
+  // must not carry Origin: the site's own player sends none.
   check("every media hop goes through the app", true,
     /shouldInterceptRequest\(/.test(java)
     && java.includes('url.startsWith(SITE + "/stream/")')
     && java.includes('url.startsWith("https://absp-live.akamaized.net/")')
     && java.includes('url.startsWith(MIRROR)')
-    && java.includes('setRequestProperty("Origin", SITE)')
     && java.includes('setRequestProperty("Cookie", sessionCookie)')
     && java.includes('"Access-Control-Allow-Origin", "*"'));
+  check("segment reads carry no Origin", false,
+    /siteHop[\s\S]{0,400}setRequestProperty\("Origin"/.test(java));
   check("the page waits for the launch handshake before it builds tiles", true,
     /public String getConfig\(\) \{\s*waitForFreshConfig\(\d+\);/.test(java)
     && java.includes("markConfigFresh();"));
