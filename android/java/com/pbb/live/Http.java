@@ -18,6 +18,10 @@ import java.util.Map;
  */
 final class Http {
     private static final String AGENT = "PBB/1.0";
+    private static final String CDN_LITERAL =
+        "https://absp-live.akamaized.net/dash/live/2099522/pbbcollab30";
+    private static final String CDN_ESCAPED =
+        "https://absp-live.akamaized.net/dash/live/2099522/%70bbcollab30";
 
     static {
         // HttpURLConnection drops Origin and Referer unless this is set. The
@@ -65,8 +69,13 @@ final class Http {
         }
     }
 
+    /** Akamai rejects the literal camera folder; escape its first letter. */
+    static String normalizeCdnUrl(String url) {
+        return url.replace(CDN_LITERAL, CDN_ESCAPED);
+    }
+
     static HttpURLConnection open(String url, int connectMs, int readMs) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(normalizeCdnUrl(url)).openConnection();
         c.setConnectTimeout(connectMs);
         c.setReadTimeout(readMs);
         c.setInstanceFollowRedirects(true);

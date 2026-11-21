@@ -27,6 +27,7 @@ public final class RecorderLogicTest {
         theSnapshotScriptMatchesTheApp();
         siteServersAreAccepted();
         theMpdUsesOneAbsoluteSegmentBase();
+        cdnPathKeepsItsEscapedLetter();
         theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
         cookieStaysOnTheSite();
@@ -116,6 +117,14 @@ public final class RecorderLogicTest {
             && source.contains("replaceAll("));
         check("every baked BaseURL is dropped", true,
             source.contains("<BaseURL>[^<]*</BaseURL>"));
+    }
+
+    private static void cdnPathKeepsItsEscapedLetter() {
+        String base = "https://absp-live.akamaized.net/dash/live/2099522/";
+        check("the literal CDN folder is escaped again", base + "%70bbcollab30x/init.mp4",
+            Http.normalizeCdnUrl(base + "pbbcollab30x/init.mp4"));
+        check("an already escaped CDN folder stays put", base + "%70bbcollab30x/init.mp4",
+            Http.normalizeCdnUrl(base + "%70bbcollab30x/init.mp4"));
     }
 
     private static void theServiceMarksTheStitchPairAtStart() throws Exception {

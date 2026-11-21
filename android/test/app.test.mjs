@@ -620,6 +620,12 @@ function channelSourceContract() {
   check("recoveries show the Shaka error code", true,
     /setTransientStatus\(`camera \$\{index \+ 1\}: \$\{why\}`/.test(app)
     && /setStreamStatus\(entry, `\$\{why\}retrying/.test(app));
+  check("a thrown MediaSource operation is recovered too", true,
+    /RECOVERABLE_SHAKA = new Set\(\[1001, 1002, 1003, 3015\]\)/.test(app));
+  check("a recovery rebuilds the player, not just the load", true,
+    /old\.destroy\(\)\.catch/.test(app) && /await initPlayer\(entry, index\)/.test(app));
+  check("a destroyed player cannot recover its replacement", true,
+    /if \(entry\.player !== player\) \{\s*return;\s*\}[\s\S]{0,120}const detail = event\.detail/s.test(app));
   const recorder = fs.readFileSync(
     path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
   check("recording uses the generated MPD's BaseURL", true,

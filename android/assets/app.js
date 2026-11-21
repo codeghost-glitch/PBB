@@ -112,7 +112,7 @@ function statusStateFor(message) {
   if (/^(saved|all three feeds ready|streams already in sync)/i.test(message)) {
     return "success";
   }
-  if (/error|failed|cannot|could not|rotated|unavailable|403|1001/i.test(message)) {
+  if (/error|failed|cannot|could not|rotated|unavailable|403|1001|3015/i.test(message)) {
     return "error";
   }
   return "busy";
@@ -687,31 +687,41 @@ function createCard(stream, index) {
   });
 }
 
-// 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT are transient on live
-// DASH. Shaka retries internally, then gives up and fires a fatal error; reload
-// with a bounded backoff instead of leaving the tile dead.
-const RECOVERABLE_SHAKA = new Set([1001, 1002, 1003]);
+// 1001 BAD_HTTP_STATUS, 1002 HTTP_ERROR, 1003 TIMEOUT and 3015
+// MEDIA_SOURCE_OPERATION_THREW are transient on live DASH. Shaka retries
+// internally, then gives up and fires a fatal error; reload with a bounded
+// backoff instead of leaving the tile dead.
+const RECOVERABLE_SHAKA = new Set([1001, 1002, 1003, 3015]);
 
 function scheduleRecover(entry, index, detail) {
   if (entry.retryTimer) {
     return;
   }
   entry.retries = (entry.retries || 0) + 1;
+  entry.loaded = false;
   const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(entry.retries - 1, 5)));
   const why = detail ? `[${detail}] ` : "";
   setStreamStatus(entry, `${why}retrying ${Math.round(delay / 1000)}s`, true);
   entry.retryTimer = setTimeout(async () => {
     entry.retryTimer = null;
-    try {
-      await entry.player.load(entry.stream.url);
-    } catch {
-      scheduleRecover(entry, index);
+    const old = entry.player;
+    // A config push or another recovery may have replaced this player while
+    // the timer was waiting. Do not stack two players on one video element.
+    if (entry.player !== old) {
       return;
     }
-    entry.retries = 0;
-    applyAudio();
-    entry.video.play().catch(() => {});
-    setStreamStatus(entry, "live", false);
+    entry.player = null;
+    if (old) {
+      await old.destroy().catch(() => {});
+    }
+    if (entry.player !== null) {
+      return;
+    }
+    try {
+      await initPlayer(entry, index);
+    } catch {
+      scheduleRecover(entry, index);
+    }
   }, delay);
 }
 
@@ -803,6 +813,11 @@ async function initPlayer(entry, index) {
   });
 
   player.addEventListener("error", (event) => {
+    // A destroyed player can still report one late append or read. Its error
+    // must not reload the replacement player that now owns the tile.
+    if (entry.player !== player) {
+      return;
+    }
     const detail = event.detail || {};
     const message = detail.message || detail.code || detail;
     if (Number(detail.code) === 4012) {
@@ -821,7 +836,7 @@ async function initPlayer(entry, index) {
     }
     if (RECOVERABLE_SHAKA.has(Number(detail.code))) {
       const http = Array.isArray(detail.data) ? detail.data[1] : null;
-      const why = `${detail.code}${http ? `/${http}` : ""}`;
+      const why = Number.isInteger(http) ? `${detail.code}/${http}` : `${detail.code}`;
       scheduleRecover(entry, index, why);
       setTransientStatus(`camera ${index + 1}: ${why}`, 4500);
     } else {
@@ -830,16 +845,24 @@ async function initPlayer(entry, index) {
   });
 
   player.addEventListener("loaded", () => {
-    applyQuality(player, state.quality);
+    if (entry.player === player) {
+      applyQuality(player, state.quality);
+    }
   });
 
   try {
     await player.load(entry.stream.url);
   } catch {
-    scheduleRecover(entry, index);
+    if (entry.player === player) {
+      scheduleRecover(entry, index);
+    }
+    return;
+  }
+  if (entry.player !== player) {
     return;
   }
   entry.loaded = true;
+  entry.retries = 0;
   applyAudio();
   setStreamStatus(entry, "live", false);
   if (gridGateOpen) {
