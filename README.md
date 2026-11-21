@@ -1,6 +1,6 @@
 # PBB
 
-An Android app for three PBB live cameras. It plays the feeds together in one screen, lets you switch between the six server routes from pbbcollab.com/live, and records any camera to `Movies/PBB/`. Main and Dining can also be saved as one stacked video.
+An Android app for three PBB live cameras. It plays the feeds together in one screen, lets you switch between the six server routes listed on pbbcollab.com/live, and records any camera to `Movies/PBB/`. Main and Dining can also be saved as one stacked video.
 
 The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup and on refresh. A rotation on the site reaches the app without a new build.
 
@@ -9,7 +9,6 @@ The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup a
 - Three feeds in one portrait screen: one large program feed and two previews.
 - Fullscreen and picture-in-picture on any feed. The fullscreen keys sit top-right; the mini feed sits bottom-right.
 - A server sheet with the site's six routes, named the way the site names them. The choice is stored on the phone. The footer status has its own row on a phone, so a long message wraps without fighting the keys.
-- Site live chat in a sheet. It polls the site API, shows the same public messages, and sends with the local nickname. Anonymous sends need Cloudflare verification; the app opens the site for that step.
 - HD and SD quality buttons. HD uses the tallest rendition; SD uses the smallest rendition at least 480 lines tall.
 - Record one, two or three cameras at once. Each recording gets its own notification and stop action.
 - Stitch button: records Main Access and Dining Area, then joins them into one stacked MP4.
@@ -103,13 +102,9 @@ The picker uses the six ids and names from `pbbcollab.com/live`, in the same ord
 | `s4` | Server Bela |
 | `twitch` | Twitch Mirror |
 
-The app reads the chosen route's MPD from `pbbcollab.com` and plays it with keys from the `pbbcollab.live` handshake. The site maps `twitch` to `s1` for playback; the app does the same and keeps the site's name in the picker. When the site returns an error, the app passes the real status to the player instead of hiding it behind a CORS failure.
+`Server Jeo`, `Server Nathan` and `Server Primo` keep the app's original main, proxy and mirror playback routes. The three site-named routes read their MPD from `pbbcollab.com` and use the segment folder the MPD names; they keep separate labels to match the website.
 
-The app routes all segment requests through `shouldInterceptRequest`. The site proxy needs the site's own Origin, so a `file://` WebView cannot ask for the segments itself.
-
-### Chat
-
-The chat sheet reads `https://pbbcollab.com/api/live/chat` and posts new messages with a locally stored nickname. The API only accepts requests carrying the site's Origin, so both hops go through the native bridge. A Cloudflare Turnstile check can block anonymous posts; when the API asks for it, the sheet shows a verify button that opens the live page. Read-only polling still works.
+The app routes media requests through `shouldInterceptRequest`. The site proxy needs the site's own Origin; the CDN, worker and mirror do not get the session cookie. The mirror camera ids are in `CAM_MIRROR`.
 
 ## Recording
 

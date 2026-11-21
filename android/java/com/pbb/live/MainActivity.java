@@ -54,12 +54,19 @@ public class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 2001;
     private static final String SITE = "https://www.pbbcollab.live";
     private static final String SITE2 = "https://pbbcollab.com";
-    private static final String CHAT_URL = SITE2 + "/api/live/chat";
     private static final String CLIENT = "v3";
     private static final String DATA_MPD = "data:application/dash+xml;base64,";
     // The site carries four cameras; the grid is drawn for three, so the
     // official broadcast feed stays on the web player.
     private static final String[] CAM_IDS = {"all", "din", "ext"};
+    // Server 3 plays the same feeds through the pbb3collablive.xyz mirror, so
+    // its segment route is a third way in when the CDN is blocked.
+    private static final String MIRROR = "https://pbb3collablive.xyz/api/proxy/stream/";
+    private static final String[] CAM_MIRROR = {
+        "4f8b2c15-7d9a-4e3b-8c0d-1e3f6a5b9c22",
+        "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
+        "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
+    };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
@@ -103,7 +110,7 @@ public class MainActivity extends Activity {
     // the system volume when the activity goes away.
     private int appliedVolume = -1;
     private volatile String streamConfigJson;
-    // The six routes pbbcollab.com/live offers, stored by their site ids.
+    // The site runs the cameras off a main server and a backup one.
     private volatile String streamServer = "s1";
     // The site's segment route only answers its own page: a file:// WebView
     // asking for it is "cross-site stream hotlinking". The cookie and the
@@ -228,7 +235,8 @@ public class MainActivity extends Activity {
                 String url = request.getUrl().toString();
                 if (url.startsWith(SITE + "/stream/")
                     || url.startsWith(SITE2 + "/stream/")
-                    || url.startsWith("https://absp-live.akamaized.net/")) {
+                    || url.startsWith("https://absp-live.akamaized.net/")
+                    || url.startsWith(MIRROR)) {
                     return proxyStream(url, request.getRequestHeaders());
                 }
                 return null;
@@ -317,7 +325,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** The site route picked last, or its first route. */
+    /** s1 or s2, whichever the operator picked last. */
     private String loadServer() {
         try {
             FileInputStream in = new FileInputStream(new File(getFilesDir(), SERVER_FILE));
@@ -345,6 +353,12 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    /** The three pbbcollab.com routes use the site's MPD endpoint. */
+    private static int site2Number(String server) {
+        return ("pbbtop".equals(server) || "s4".equals(server)
+            || "twitch".equals(server)) ? 1 : 0;
+    }
+
     private void storeServer(String server) {
         try {
             FileOutputStream out = new FileOutputStream(new File(getFilesDir(), SERVER_FILE));
@@ -358,8 +372,8 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Switches the feeds to one of the site's routes and pulls a fresh config
-     * from it. Returns an empty string when the pick was taken.
+     * Switches the feed between the main server and the backup one and pulls
+     * a fresh config from it. Returns an empty string when the pick was taken.
      */
     private String setStreamServer(String server) {
         if (!validServer(server)) {
@@ -385,60 +399,6 @@ public class MainActivity extends Activity {
                 }
             }
         });
-    }
-
-    private void reportChat(final String payload) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (webView != null) {
-                    webView.evaluateJavascript(
-                        "window.onChatState && window.onChatState("
-                            + JSONObject.quote(payload) + ")", null);
-                }
-            }
-        });
-    }
-
-    /** The site's chat API answers its own Origin, so the app makes the hop. */
-    private void loadChat() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    String body = Http.getTextWithOrigin(CHAT_URL, SITE2, 5000, 8000);
-                    reportChat(body == null
-                        ? "{\"error\":\"chat unavailable\"}" : body);
-                } catch (Exception e) {
-                    reportChat("{\"error\":\"chat unavailable\"}");
-                }
-            }
-        }, "pbb-chat").start();
-    }
-
-    private void postChat(String nickname, String text) {
-        final String nick = nickname == null ? "" : nickname.trim();
-        final String body = text == null ? "" : text.trim();
-        if (nick.isEmpty() || body.isEmpty()) {
-            reportChat("{\"error\":\"nickname and text are required\"}");
-            return;
-        }
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    JSONObject payload = new JSONObject();
-                    payload.put("nickname", nick.substring(0, Math.min(20, nick.length())));
-                    payload.put("text", body.substring(0, Math.min(300, body.length())));
-                    String reply = Http.postJsonWithOrigin(
-                        CHAT_URL, payload.toString(), SITE2, 5000, 8000);
-                    reportChat(reply == null
-                        ? "{\"error\":\"chat unavailable\"}" : reply);
-                } catch (Exception e) {
-                    reportChat("{\"error\":\"chat unavailable\"}");
-                }
-            }
-        }, "pbb-chat-send").start();
     }
 
     /**
@@ -660,9 +620,15 @@ public class MainActivity extends Activity {
                 JSONObject cam = cams.getJSONObject(CAM_IDS[i]);
                 String[] pair = sessionToken(cam.getString("token"), nonce);
                 String endpoint = cam.getString("endpoint");
-                String srv = "twitch".equals(streamServer) ? "s1" : streamServer;
-                String xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
-                    + ".mpd?srv=" + srv, 5000, 8000);
+                int site2 = site2Number(streamServer);
+                String xml;
+                if (site2 > 0) {
+                    xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
+                        + ".mpd?srv=s" + site2, 5000, 8000);
+                } else {
+                    xml = Http.getText(SITE + endpoint, 5000, 8000,
+                        handshake.cookie, CLIENT);
+                }
                 if (xml == null) {
                     return null;
                 }
@@ -700,12 +666,26 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Every site route names its absolute segment folder in the MPD. Hoist
-     * that folder into BaseURL; the site's own root does not serve segments.
+     * Server 1 names its segments absolutely, straight off the CDN; server 2
+     * leaves them relative because they come back through the site's own
+     * proxy; server 3 keeps the live manifest and plays the same segment
+     * numbers through the pbb3collablive.xyz mirror, and servers 4-7 use the
+     * four routes listed on pbbcollab.com/live. They end up with one BaseURL
+     * and relative names - the shape the page and the recorder join.
      */
     private String siteBase(String xml, String endpoint, int index) {
+        if (site2Number(streamServer) > 0) {
+            String media = mediaBase(xml);
+            return media != null ? media : SITE2;
+        }
+        if ("s3".equals(streamServer)) {
+            return MIRROR + CAM_MIRROR[index] + "/";
+        }
         String media = mediaBase(xml);
-        return media != null ? media : SITE2;
+        if (media != null) {
+            return media;
+        }
+        return SITE + endpoint.substring(0, endpoint.lastIndexOf('/') + 1);
     }
 
     /** The absolute segment folder a manifest names, or null when it names none. */
@@ -717,8 +697,8 @@ public class MainActivity extends Activity {
     private String siteMpd(String xml, String base) {
         String media = mediaBase(xml);
         if (media != null) {
-            // Both templates carry the same absolute folder. The player and
-            // the recorder join names to BaseURL, so neither wants it twice.
+            // Both templates carry the same folder. The player and recorder
+            // join names to BaseURL, so neither wants it twice.
             xml = xml.replace("media=\"" + media, "media=\"");
             xml = xml.replace("initialization=\"" + media, "initialization=\"");
         }
@@ -1218,21 +1198,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String setStreamServer(String server) {
             return MainActivity.this.setStreamServer(server);
-        }
-
-        @JavascriptInterface
-        public void refreshChat() {
-            MainActivity.this.loadChat();
-        }
-
-        @JavascriptInterface
-        public void sendChat(String nickname, String text) {
-            MainActivity.this.postChat(nickname, text);
-        }
-
-        @JavascriptInterface
-        public void openChatVerification() {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(SITE2 + "/live")));
         }
 
         @JavascriptInterface

@@ -102,10 +102,8 @@ public final class RecorderLogicTest {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
         check("the six site server ids are accepted", true,
             source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\""));
-        check("every server uses its site route", true,
-            source.contains("+ \".mpd?srv=\" + srv")
-            && source.contains("\"twitch\".equals(streamServer) ? \"s1\" : streamServer")
-            && !source.contains("site2Number"));
+        check("site routes use the site MPD endpoint", true,
+            source.contains("\"pbbtop\".equals(server) || \"s4\".equals(server)"));
     }
 
     private static void theServiceMarksTheStitchPairAtStart() throws Exception {

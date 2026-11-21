@@ -978,94 +978,6 @@ body.fullscreen-mode .indicator {
   line-height: 1.5;
 }
 
-/* -------------------------------------------------------------- live chat */
-
-.chat-panel { gap: var(--s-3); }
-
-.chat-log {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--s-2) 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.chat-line {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  gap: var(--s-2);
-  align-items: start;
-  font-size: var(--t-label);
-  line-height: 1.4;
-}
-
-.chat-time {
-  color: var(--faint);
-  font-family: var(--mono);
-}
-
-.chat-name {
-  color: var(--ink);
-  font-weight: var(--w-bold);
-}
-
-.chat-text {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.chat-verify {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0 var(--s-3);
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  font-family: var(--font);
-  font-size: var(--t-label);
-  font-weight: var(--w-bold);
-  cursor: pointer;
-}
-
-.chat-compose {
-  display: grid;
-  grid-template-columns: minmax(88px, 112px) minmax(0, 1fr) var(--tap);
-  gap: var(--s-2);
-}
-
-.chat-compose input {
-  width: 100%;
-  min-width: 0;
-  height: var(--tap);
-  padding: 0 var(--s-3);
-  color: var(--ink);
-  background: var(--g-alt);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-family: var(--font);
-  font-size: var(--t-label);
-}
-
-.chat-send {
-  display: grid;
-  place-items: center;
-  width: var(--tap);
-  height: var(--tap);
-  padding: 0;
-  color: var(--paper);
-  background: var(--ink);
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.chat-send:disabled { opacity: 0.4; }
-
 @media (min-width: 600px) {
   .sheet { place-items: center; padding: var(--s-4); }
   .sheet-panel {
@@ -1099,12 +1011,6 @@ body.fullscreen-mode .indicator {
   .cam-actions .btn-icon { width: 36px; height: 36px; }
   .cam-actions .btn-icon::after { inset: -4px; }
   .cam-actions .btn-icon svg { width: 18px; height: 18px; }
-  .chat-compose { grid-template-columns: minmax(0, 1fr) var(--tap); }
-  .chat-nick { grid-column: 1 / -1; }
-  .chat-input { grid-column: 1; }
-  .chat-send { grid-column: 2; }
-  .chat-time { display: none; }
-  .chat-line { grid-template-columns: auto minmax(0, 1fr); }
 }
 
 @media (max-height: 320px) {
