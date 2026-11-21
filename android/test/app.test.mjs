@@ -121,6 +121,7 @@ function makePlayer(index, name) {
 function loadPage() {
   const calls = [];
   const serverPick = { server: "s1" };
+  const livePick = { server: "s1" };
   const sourcePick = { source: "site" };
   const Pbb = {
     setVolume: (value, persist) => calls.push(["setVolume", value, persist]),
@@ -138,12 +139,14 @@ function loadPage() {
     setStreamServer: (server) => {
       calls.push(["setStreamServer", server]);
       serverPick.server = server;
+      sourcePick.source = "site";
       return "";
     },
     getStreamSource: () => sourcePick.source,
-    getLiveServer: () => "s1",
+    getLiveServer: () => livePick.server,
     setLiveServer: (server) => {
       calls.push(["setLiveServer", server]);
+      livePick.server = server;
       sourcePick.source = "live";
       return "";
     },
@@ -255,6 +258,7 @@ function loadPage() {
   closeThemeSheet,
   selectServer,
   openSourceSheet,
+  loadServerChoice,
   setStatusText,
   statusStateFor,
   updateStatusMeta,
@@ -289,6 +293,9 @@ function loadPage() {
   page.players.push(makePlayer(1, "PBB Dining Area"));
   page.players.push(makePlayer(2, "PBB External Den"));
   page.window = windowStub;
+  page.serverPick = serverPick;
+  page.livePick = livePick;
+  page.sourcePick = sourcePick;
   page.statusText = statusText;
   page.calls = calls;
   page.fields = fields;
@@ -334,7 +341,7 @@ function recordingIsRefusedWhenTheKeysRotated() {
   page.toggleRecord(0);
   const started = page.calls.filter((c) => c[0] === "startRecording");
   check("no recording starts with stale keys", 0, started.length);
-  check("the status says so", true, page.statusText.textContent.includes("keys rotated"));
+  check("the status says so", true, page.statusText.textContent.includes("Keys changed"));
 }
 
 function recordingStartsWhenTheKeysAreGood() {
@@ -451,10 +458,28 @@ function channelListContract() {
 
 function serverSwitchFailuresReachTheStrip() {
   const page = loadPage();
-  page.window.onKeysMessage("could not reach the streams - tap refresh to retry");
-  check("a Java refresh failure updates the status", 
-    "could not reach the streams - tap refresh to retry",
+  page.window.onKeysMessage("Could not reach the streams. Tap Refresh to retry");
+  check("a Java refresh failure updates the status",
+    "Could not reach the streams. Tap Refresh to retry",
     page.statusText.textContent);
+}
+
+function startupReadsTheStoredServer() {
+  const page = loadPage();
+  page.serverPick.server = "pbb3";
+  page.sourcePick.source = "site";
+  page.loadServerChoice();
+  page.updateStatusMeta();
+  check("a stored PBB3.0 route opens as PBB3", "PBB3 · PBB3.0 · HD",
+    page.fields.statusMeta.textContent);
+  check("the stored PBB3.0 chip is selected", "pbb3", page.serverSheet.server);
+
+  page.sourcePick.source = "live";
+  page.livePick.server = "s5";
+  page.loadServerChoice();
+  page.updateStatusMeta();
+  check("a stored live route opens as live", "LIVE · Server 5 · HD",
+    page.fields.statusMeta.textContent);
 }
 
 function serverPickIsStored() {
@@ -582,7 +607,7 @@ function refreshResyncsAllStreams() {
     && /state\.keyRetry = false;/.test(app));
   check("an unchanged-key refresh never seeks the live feeds", true,
     !/\.currentTime = /s.test(app) && !/goToLive\(\)/s.test(app) &&
-    /setTransientStatus\("streams already in sync"\)/s.test(app));
+    /setTransientStatus\("Feeds are already in sync"\)/s.test(app));
 }
 
 function channelSourceContract() {
@@ -618,8 +643,8 @@ function channelSourceContract() {
   check("Http decodes inlined MPDs", true,
     /Base64\.getDecoder\(\)\.decode/.test(http));
   check("recoveries show the Shaka error code", true,
-    /setTransientStatus\(`camera \$\{index \+ 1\}: \$\{why\}`/.test(app)
-    && /setStreamStatus\(entry, `\$\{why\}retrying/.test(app));
+    /setTransientStatus\(`Camera \$\{index \+ 1\}: \$\{why\}`/.test(app)
+    && /setStreamStatus\(entry, `Retry in \$\{Math\.round/.test(app));
   check("a thrown MediaSource operation is recovered too", true,
     /RECOVERABLE_SHAKA = new Set\(\[1001, 1002, 1003, 3015\]\)/.test(app));
   check("a recovery rebuilds the player, not just the load", true,
@@ -681,6 +706,14 @@ function stitchAndServerContract() {
     && /CAM_MIRROR/.test(java));
   check("the bridge stores the pick", true,
     /setStreamServer/.test(java) && /getStreamServer/.test(java));
+  check("site routes avoid the 503 session proxy before using it", true,
+    /if \(!useLiveSite\) \{\s*xml = siteMpdText\(i, srv\);[\s\S]{0,600}if \(xml == null\) \{\s*\/\/ The site.s player/.test(java)
+    && java.includes("siteMpdText(i, srv == 0 ? 1 : 0)"));
+  check("a failed MPD load cannot fall through with no manifest", true,
+    /if \(xml == null\) \{\s*return null;\s*\}\s*if \(base == null\)/.test(java));
+  check("a failed site route falls back to the live session only last", true,
+    java.indexOf("siteMpdText(i, srv == 0 ? 1 : 0)")
+    < java.indexOf("Http.getText(SITE + endpoint + join + \"_b=\""));
   check("the manifest and key boxes are gone", false,
     /sourceUrl|sourceKid|sourceKey|sourceDetect|sourceApply/.test(html + app));
 }
@@ -749,7 +782,7 @@ function playbackAndRecorderFixes() {
   check("a MediaStore failure still saves a copy", true,
     /publishFallback/s.test(java) && /IS_PENDING, 0\)/s.test(java));
   check("a stop during the edge probe still saves a file", true,
-    /nothing recorded - stopped before the first segment/s.test(java) &&
+    /Nothing recorded; stopped before the first segment/s.test(java) &&
     /while \(session\.running \|\| segmentsThisPart == 0\)/s.test(java));
   check("the live-edge probe keeps real network slack", true,
     /Http\.open\(url, 4000, 6000\)/s.test(java));
@@ -836,6 +869,14 @@ function designSystemHoldsTheLine() {
   check("the status bar separates the message from the keys", true,
     html.includes('class="status-main"') && html.includes('class="status-actions"')
     && /\.status \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/s.test(css));
+  check("the stream keys carry labels, not bare icons", true,
+    (html.match(/class="key-glyph"/g) || []).length === 4
+    && ["Servers", "Refresh", "Stack", "Back"]
+      .every((label) => html.includes(`class="key-label">${label}`))
+    && /\.status-key \{[^}]*flex-direction: column/s.test(css));
+  check("the live badge is uppercase", true,
+    /createTextNode\("LIVE"\)/.test(app)
+    && /setStreamStatus\(entry, "LIVE", false\)/.test(app));
   check("a phone gives the message its own row", true,
     /@media \(max-width: 640px\) \{[\s\S]{0,260}\.status \{ grid-template-columns: 1fr;/s.test(css));
   const cardStateRule = /\.stream-status \{[^}]*\}/s.exec(css);
@@ -922,10 +963,10 @@ function launcherIconFollowsTheSystem() {
 
 function statusStripCarriesContext() {
   const page = loadPage();
-  page.setStatusText("syncing all three streams...");
+  page.setStatusText("Syncing feeds");
   check("a working message marks the strip busy", "busy",
     page.fields.statusBar.dataset.state);
-  check("the strip names the route and quality", "site · Server Jeo · HD",
+  check("the strip names the route and quality", "SITE · Server Jeo · HD",
     page.fields.statusMeta.textContent);
 
   page.setStatusText("saved PBB_All_20260101.mp4");
@@ -938,11 +979,11 @@ function statusStripCarriesContext() {
     page.fields.statusBar.dataset.state);
   page.state.recording.clear();
 
-  page.setStatusText("camera 1: error 1001");
+  page.setStatusText("Camera 1: Error 1001");
   check("a stream failure marks the strip as an error", "error",
     page.fields.statusBar.dataset.state);
   check("the live message still carries the text", true,
-    /camera 1: error 1001/.test(page.statusText.textContent));
+    /Camera 1: Error 1001/.test(page.statusText.textContent));
 
   const html = fs.readFileSync(HTML, "utf8");
   const css = fs.readFileSync(CSS, "utf8");
@@ -1043,9 +1084,9 @@ function liveRoutesShareTheServerSheet() {
   page.openSourceSheet();
   check("the shared sheet opens on both groups", false,
     page.fields.sourceSheet.classList.contains("hidden"));
-  check("both active routes are marked", true,
+  check("only the active route is marked", true,
     page.fields.serverChips.children[0].classList.contains("active")
-    && page.fields.liveServerChips.children[0].classList.contains("active"));
+    && !page.fields.liveServerChips.children[0].classList.contains("active"));
 
   page.selectLiveServer("s5");
   const call = page.calls.find((entry) => entry[0] === "setLiveServer");
@@ -1055,7 +1096,11 @@ function liveRoutesShareTheServerSheet() {
   check("one note names the live source and server", true,
     /pbbcollab\.live · Server 5/.test(page.fields.sourceNote.textContent));
   check("the status names the active source and server", true,
-    /live · Server 5 · HD/.test(page.fields.statusMeta.textContent));
+    /LIVE · Server 5 · HD/.test(page.fields.statusMeta.textContent));
+  check("switching to live clears the site highlight", false,
+    page.fields.serverChips.children[0].classList.contains("active"));
+  check("switching to live marks the live chip", true,
+    page.fields.liveServerChips.children[4].classList.contains("active"));
 }
 
 const tests = [
@@ -1067,6 +1112,7 @@ const tests = [
   sliderLevelIsSavedOnce,
   bridgeContract,
   channelListContract,
+  startupReadsTheStoredServer,
   serverPickIsStored,
   serverSwitchFailuresReachTheStrip,
   serverSheetFollowsTheApp,

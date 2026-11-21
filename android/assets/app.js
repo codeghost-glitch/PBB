@@ -30,7 +30,7 @@ function refreshKeysFromUi() {
     return;
   }
   manualKeyRefresh = true;
-  setStatusText("syncing all three streams...");
+  setStatusText("Syncing feeds");
   Pbb.refreshKeys();
 }
 
@@ -89,15 +89,15 @@ function uuidKid(kid) {
   return kid.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-$3-$4-$5");
 }
 
-const IDLE_HINT = "tap refresh or open servers to switch";
+const IDLE_HINT = "Choose a server or refresh the feeds";
 
 function defaultStatus() {
   const count = state.recording.size;
   if (count === 1) {
-    return "recording 1 camera";
+    return "Recording 1 camera";
   }
   if (count > 1) {
-    return `recording ${count} cameras`;
+    return `Recording ${count} cameras`;
   }
   return IDLE_HINT;
 }
@@ -109,13 +109,18 @@ function statusStateFor(message) {
   if (!message) {
     return "idle";
   }
-  if (/^(saved|all three feeds ready|streams already in sync)/i.test(message)) {
+  if (/^(saved|all feeds ready|feeds are already in sync)/i.test(message)) {
     return "success";
   }
-  if (/error|failed|cannot|could not|rotated|unavailable|403|1001|3015/i.test(message)) {
+  if (/error|failed|cannot|could not|keys changed|unavailable|invalid|not supported|403|1001|3015/i.test(message)) {
     return "error";
   }
   return "busy";
+}
+
+function usingLiveSource() {
+  return Boolean(window.Pbb && typeof Pbb.getStreamSource === "function"
+    && Pbb.getStreamSource() === "live");
 }
 
 function updateStatusMeta() {
@@ -123,13 +128,13 @@ function updateStatusMeta() {
   if (!meta) {
     return;
   }
-  const live = window.Pbb && typeof Pbb.getStreamSource === "function"
-    && Pbb.getStreamSource() === "live";
+  const live = usingLiveSource();
   const pbb3 = !live && serverSheet.server === "pbb3";
   const server = live
     ? (LIVE_SERVER_NAMES[liveSheet.server] || "Server 1")
     : (SERVER_NAMES[serverSheet.server] || "Server Jeo");
-  meta.textContent = `${live ? "live" : (pbb3 ? "pbb3" : "site")} · ${server} · ${state.quality.toUpperCase()}`;
+  const source = live ? "LIVE" : (pbb3 ? "PBB3" : "SITE");
+  meta.textContent = `${source} · ${server} · ${state.quality.toUpperCase()}`;
 }
 
 function setStatusText(message) {
@@ -154,7 +159,7 @@ function setStreamStatus(entry, message, bad) {
   entry.statusEl.textContent = message;
   entry.statusEl.classList.toggle("bad", Boolean(bad));
   // The steady "live" pill is noise; keep the pill only while connecting or on error.
-  const hidden = !bad && message === "live";
+  const hidden = !bad && message === "LIVE";
   entry.statusEl.classList.toggle("hidden", hidden);
   // The picture carries the state too: a scan while the signal comes up, a dim
   // wash when it drops. Both clear the moment the feed is live.
@@ -571,16 +576,24 @@ function setIcon(btn, name, label) {
   }
 }
 
-// The fullscreen keys carry a word under the glyph, so only the glyph is swapped.
-function setDeckIcon(btn, name, label) {
+// A key with a word under its glyph keeps its label when the icon changes.
+function setLabelledIcon(btn, slot, name, label) {
   if (!btn) {
     return;
   }
-  mountIcon(btn.querySelector(".fs-glyph"), name);
+  mountIcon(btn.querySelector(slot), name);
   if (label) {
     btn.setAttribute("aria-label", label);
     btn.title = label;
   }
+}
+
+function setDeckIcon(btn, name, label) {
+  setLabelledIcon(btn, ".fs-glyph", name, label);
+}
+
+function setStatusKey(btn, name, label) {
+  setLabelledIcon(btn, ".key-glyph", name, label);
 }
 
 // Replaces the children of any node with an icon, so the master record button
@@ -618,7 +631,7 @@ function createCard(stream, index) {
   video.preload = "auto";
   video.controls = false;
   video.setAttribute("aria-label", `${stream.name} live video`);
-  const statusEl = el("div", "stream-status", "status", "connecting...");
+  const statusEl = el("div", "stream-status", "status", "Connecting");
   // The running time is a burn-in over the picture, the way a recorder puts
   // it there, so the strip on top stays free for the name.
   const tally = el("div", "tally cam-tally", null, null);
@@ -640,7 +653,7 @@ function createCard(stream, index) {
   top.appendChild(tally);
   const liveMark = el("span", "cam-live", null, null);
   liveMark.appendChild(el("span", "cam-live-dot", null, null));
-  liveMark.appendChild(document.createTextNode("live"));
+  liveMark.appendChild(document.createTextNode("LIVE"));
   top.appendChild(liveMark);
 
   const bar = el("div", "cam-bar", null, null);
@@ -701,7 +714,7 @@ function scheduleRecover(entry, index, detail) {
   entry.loaded = false;
   const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(entry.retries - 1, 5)));
   const why = detail ? `[${detail}] ` : "";
-  setStreamStatus(entry, `${why}retrying ${Math.round(delay / 1000)}s`, true);
+  setStreamStatus(entry, `Retry in ${Math.round(delay / 1000)}s · ${why}`, true);
   entry.retryTimer = setTimeout(async () => {
     entry.retryTimer = null;
     const old = entry.player;
@@ -819,18 +832,19 @@ async function initPlayer(entry, index) {
       return;
     }
     const detail = event.detail || {};
-    const message = detail.message || detail.code || detail;
+    const message = Number.isInteger(Number(detail.code))
+      ? `Error ${detail.code}` : (detail.message || String(detail));
     if (Number(detail.code) === 4012) {
       state.keysStale = true;
-      setStreamStatus(entry, "keys rotated", true);
+      setStreamStatus(entry, "Keys changed", true);
       // The keys come from the site's handshake, so ask it for fresh ones
       // before asking the operator to do anything.
       if (!state.keyRetry && window.Pbb && typeof Pbb.refreshKeys === "function") {
         state.keyRetry = true;
         refreshKeysFromUi();
-        setStatusText("keys rotated - fetching fresh keys");
+        setStatusText("Fetching new keys");
       } else {
-        setStatusText("keys rotated - open servers to switch");
+        setStatusText("Keys changed. Choose a server");
       }
       return;
     }
@@ -838,7 +852,7 @@ async function initPlayer(entry, index) {
       const http = Array.isArray(detail.data) ? detail.data[1] : null;
       const why = Number.isInteger(http) ? `${detail.code}/${http}` : `${detail.code}`;
       scheduleRecover(entry, index, why);
-      setTransientStatus(`camera ${index + 1}: ${why}`, 4500);
+      setTransientStatus(`Camera ${index + 1}: ${why}`, 4500);
     } else {
       setStreamStatus(entry, `error ${message}`, true);
     }
@@ -864,14 +878,14 @@ async function initPlayer(entry, index) {
   entry.loaded = true;
   entry.retries = 0;
   applyAudio();
-  setStreamStatus(entry, "live", false);
+  setStreamStatus(entry, "LIVE", false);
   if (gridGateOpen) {
     playEntry(entry);
   } else {
     onPlayerReady();
   }
   if (state.focused < 0) {
-    setStatusText("all three feeds ready");
+    setStatusText("All three feeds are live");
   }
 }
 
@@ -966,7 +980,7 @@ function setQuality(quality, persist) {
   if (persist && window.Pbb) {
     Pbb.setDefaultQuality(state.quality);
   }
-  setStatusText(`default quality: ${state.quality}`);
+  setStatusText(`Default quality: ${state.quality}`);
 }
 
 function updateControls() {
@@ -1196,7 +1210,7 @@ function backToGrid() {
   if (window.Pbb) {
     Pbb.clearFocusedStream();
   }
-  setStatusText(state.keysStale ? "keys rotated - open servers to switch" : "");
+  setStatusText(state.keysStale ? "Keys changed. Choose a server" : "");
   updateControls();
   return true;
 }
@@ -1216,7 +1230,7 @@ function fullscreenStream(index) {
 
 function feedLabel(index) {
   const entry = players[index];
-  return `${String(index + 1).padStart(2, "0")} - ${entry ? entry.stream.name : "no feed"}`;
+  return `${String(index + 1).padStart(2, "0")} - ${entry ? entry.stream.name : "No feed"}`;
 }
 
 function enterPip(index) {
@@ -1228,7 +1242,7 @@ function enterPip(index) {
     focusStream(index);
   }
   ensureSound(index);
-  setStatusText("requesting picture-in-picture");
+  setStatusText("Opening picture-in-picture");
   Pbb.enterPip();
 }
 
@@ -1237,7 +1251,7 @@ function toggleFullscreen(keepFocus) {
     return;
   }
   if (state.focused < 0) {
-    setStatusText("focus one stream first");
+    setStatusText("Choose a feed first");
     return;
   }
   state.fullscreen = !state.fullscreen;
@@ -1361,17 +1375,17 @@ function toggleRecord(index) {
     // actually saved. A stop is idempotent, so the key stays live: another
     // tap re-sends it if a blocked read kept the worker busy.
     state.recording.delete(index);
-    setStatusText(`stopping ${entry.stream.name}`);
+    setStatusText(`Stopping ${entry.stream.name}`);
     Pbb.stopRecording(index);
   } else if (state.stopping.has(index)) {
-    setStatusText(`saving ${entry.stream.name}`);
+    setStatusText(`Saving ${entry.stream.name}`);
   } else if (state.keysStale) {
     // The keys already rotated, so a recording now would be remuxed with the
     // wrong key and land in Movies/PBB as a file that will not play.
-    setStatusText("keys rotated - open servers before recording");
+    setStatusText("Keys changed. Choose a server before recording");
   } else {
     Pbb.markStackPair(-1, -1);
-    setStatusText(`starting ${entry.stream.name}`);
+    setStatusText(`Starting ${entry.stream.name}`);
     Pbb.startRecording(index, entry.stream.name);
   }
   updateControls();
@@ -1429,11 +1443,11 @@ window.onRecordingState = (payload) => {
 function statusBelongsToRecording() {
   const text = statusText.textContent;
   return !text
-    || text === "all three feeds ready"
+    || text === "All three feeds are live"
     || text === IDLE_HINT
-    || /^recording \d+ camera/.test(text)
-    || text.startsWith("starting ")
-    || text.startsWith("stopping ");
+    || /^Recording \d+ camera/.test(text)
+    || text.startsWith("Starting ")
+    || text.startsWith("Stopping ");
 }
 
 window.setPipMode = (enabled) => {
@@ -1448,7 +1462,7 @@ window.setPipMode = (enabled) => {
     state.pip = true;
     ensureSound(state.focused);
     playOnly();
-    setStatusText(`picture-in-picture: ${players[state.focused].stream.name}`);
+    setStatusText(`Picture-in-picture: ${players[state.focused].stream.name}`);
   } else {
     state.pip = false;
     // The small window is gone, so land on the three-feed grid with the sound
@@ -1486,7 +1500,7 @@ async function resyncStreams() {
       entry.retryTimer = null;
     }
     entry.retries = 0;
-    setStreamStatus(entry, "connecting...", false);
+    setStreamStatus(entry, "Connecting", false);
   }
   await Promise.all(olds.map((p) => (p ? p.destroy().catch(() => {}) : Promise.resolve())));
   for (const [i] of players.entries()) {
@@ -1532,13 +1546,13 @@ window.onStreamConfig = async (raw) => {
       if (state.keyRetry) {
         // The site still serves the key that just failed, so stop asking.
         state.keyRetry = false;
-        setStatusText("keys rotated - open servers to switch");
+        setStatusText("Keys changed. Choose a server");
         return;
       }
       // Keys are current. Seeking every feed to the live edge here froze all
       // three tiles for a couple of seconds; the startup gate and shared
       // presentation delay already keep them together, so leave playback be.
-      setTransientStatus("streams already in sync");
+      setTransientStatus("Feeds are already in sync");
     }
     return;
   }
@@ -1550,7 +1564,7 @@ window.onStreamConfig = async (raw) => {
     players[i].stream = s;
   }
   await resyncStreams();
-  setStatusText("keys refreshed - reconnecting streams");
+  setStatusText("Keys updated. Reconnecting feeds");
 };
 
 // ------------------------------------------------------------------- themes
@@ -1638,7 +1652,7 @@ function wireThemeSheet() {
     for (const option of options.children) {
       option.addEventListener("click", () => {
         applyTheme(option.dataset.theme, true);
-        setTransientStatus(`theme: ${THEME_NAMES[theme.current]}`);
+        setTransientStatus(`Theme: ${THEME_NAMES[theme.current]}`);
         closeThemeSheet();
       });
     }
@@ -1677,6 +1691,22 @@ const LIVE_SERVER_NAMES = {
   s6: "Server 6",
 };
 
+// Java owns the persisted pick. Read it before the first status line is drawn;
+// otherwise a stored PBB3.0 route reads as Server Jeo until the sheet opens.
+function loadServerChoice() {
+  if (!window.Pbb) {
+    return;
+  }
+  if (typeof Pbb.getStreamServer === "function") {
+    const stored = Pbb.getStreamServer();
+    serverSheet.server = SERVERS.includes(stored) ? stored : "s1";
+  }
+  if (typeof Pbb.getLiveServer === "function") {
+    const stored = Pbb.getLiveServer();
+    liveSheet.server = LIVE_SERVERS.includes(stored) ? stored : "s1";
+  }
+}
+
 function sourceField(id) {
   return document.getElementById(id);
 }
@@ -1693,8 +1723,9 @@ function markServerChoice() {
   if (!row) {
     return;
   }
+  const siteActive = !usingLiveSource();
   for (const chip of row.children) {
-    const active = chip.dataset.server === serverSheet.server;
+    const active = siteActive && chip.dataset.server === serverSheet.server;
     chip.classList.toggle("active", active);
     chip.setAttribute("aria-checked", active ? "true" : "false");
   }
@@ -1705,18 +1736,10 @@ function openSourceSheet() {
   if (!sheet) {
     return;
   }
-  if (window.Pbb && typeof Pbb.getStreamServer === "function") {
-    const stored = Pbb.getStreamServer();
-    serverSheet.server = SERVERS.includes(stored) ? stored : "s1";
-  }
-  if (window.Pbb && typeof Pbb.getLiveServer === "function") {
-    const stored = Pbb.getLiveServer();
-    liveSheet.server = LIVE_SERVERS.includes(stored) ? stored : "s1";
-  }
+  loadServerChoice();
+  const live = usingLiveSource();
   markServerChoice();
   markLiveServerChoice();
-  const live = window.Pbb && typeof Pbb.getStreamSource === "function"
-    && Pbb.getStreamSource() === "live";
   setSourceNote(live
     ? ("pbbcollab.live · " + LIVE_SERVER_NAMES[liveSheet.server])
     : (serverSheet.server === "pbb3"
@@ -1735,7 +1758,7 @@ function closeSourceSheet() {
 function selectServer(server) {
   const pick = SERVERS.includes(server) ? server : "s1";
   if (!window.Pbb || typeof Pbb.setStreamServer !== "function") {
-    setSourceNote("android bridge missing");
+    setSourceNote("Android bridge unavailable");
     return;
   }
   const error = Pbb.setStreamServer(pick);
@@ -1745,8 +1768,9 @@ function selectServer(server) {
   }
   serverSheet.server = pick;
   markServerChoice();
+  markLiveServerChoice();
   closeSourceSheet();
-  setTransientStatus(SERVER_NAMES[pick] + " - reconnecting");
+  setTransientStatus("Switching to " + SERVER_NAMES[pick]);
 }
 
 function markLiveServerChoice() {
@@ -1754,8 +1778,9 @@ function markLiveServerChoice() {
   if (!row) {
     return;
   }
+  const liveActive = usingLiveSource();
   for (const chip of row.children) {
-    const active = chip.dataset.liveServer === liveSheet.server;
+    const active = liveActive && chip.dataset.liveServer === liveSheet.server;
     chip.classList.toggle("active", active);
     chip.setAttribute("aria-checked", active ? "true" : "false");
   }
@@ -1764,7 +1789,7 @@ function markLiveServerChoice() {
 function selectLiveServer(server) {
   const pick = LIVE_SERVERS.includes(server) ? server : "s1";
   if (!window.Pbb || typeof Pbb.setLiveServer !== "function") {
-    setSourceNote("android bridge missing");
+    setSourceNote("Android bridge unavailable");
     return;
   }
   const error = Pbb.setLiveServer(pick);
@@ -1773,10 +1798,11 @@ function selectLiveServer(server) {
     return;
   }
   liveSheet.server = pick;
+  markServerChoice();
   markLiveServerChoice();
   setSourceNote("pbbcollab.live · " + LIVE_SERVER_NAMES[pick]);
   closeSourceSheet();
-  setTransientStatus(LIVE_SERVER_NAMES[pick] + " - reconnecting");
+  setTransientStatus("Switching to " + LIVE_SERVER_NAMES[pick]);
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
@@ -1791,7 +1817,7 @@ function updateStitchButton() {
     return;
   }
   btn.classList.toggle("stitch-active", stitch.active);
-  setIcon(btn, stitch.active ? "stop" : "stitch",
+  setStatusKey(btn, stitch.active ? "stop" : "stitch",
     stitch.active ? "stop both recordings" : "record main and dining together");
 }
 
@@ -1804,16 +1830,16 @@ function toggleStitch() {
     for (const index of STITCH_FEEDS) {
       Pbb.stopRecording(index);
     }
-    setTransientStatus("saving main + dining");
+    setTransientStatus("Saving stacked video");
   } else if (state.keysStale) {
-    setTransientStatus("keys rotated - open servers before recording");
+    setTransientStatus("Keys changed. Choose a server before recording");
   } else {
     stitch.active = true;
     Pbb.markStackPair(STITCH_FEEDS[0], STITCH_FEEDS[1]);
     for (const index of STITCH_FEEDS) {
       Pbb.startRecording(index, players[index].stream.name);
     }
-    setTransientStatus("recording main + dining as one stacked video");
+    setTransientStatus("Recording a stacked video");
   }
   updateStitchButton();
 }
@@ -1865,13 +1891,24 @@ function boot() {
   document.addEventListener("keydown", () => document.body.classList.add("keyboard-focus"), true);
   document.addEventListener("pointerdown", () => document.body.classList.remove("keyboard-focus"), true);
   applyDarkShell();
+  // Mount the chrome before any availability check: even a failed start has
+  // to show a legible deck rather than four empty key slots.
+  const refreshBtn = document.getElementById("refreshBtn");
+  const sourceBtn = document.getElementById("sourceBtn");
+  const themeBtn = document.getElementById("themeBtn");
+  const stitchBtn = document.getElementById("stitchBtn");
+  setStatusKey(refreshBtn, "refresh", "Refresh streams");
+  setStatusKey(sourceBtn, "server", "Choose a stream server");
+  setIcon(themeBtn, "palette", "Choose a color theme");
+  setStatusKey(backBtn, "grid", "Back to grid");
+  updateStitchButton();
 
   if (!window.Pbb) {
-    setStatusText("android bridge missing");
+    setStatusText("Android bridge unavailable");
     return;
   }
   if (!window.shaka || !shaka.Player.isBrowserSupported()) {
-    setStatusText("shaka player unsupported");
+    setStatusText("Playback is not supported");
     return;
   }
 
@@ -1881,11 +1918,12 @@ function boot() {
   try {
     config = JSON.parse(Pbb.getConfig());
   } catch {
-    setStatusText("stream config invalid");
+    setStatusText("Stream settings are invalid");
     return;
   }
 
   state.quality = normalizeQuality(Pbb.getDefaultQuality());
+  loadServerChoice();
   updateStatusMeta();
   const systemVolume = Number(Pbb.getVolume());
   if (!Number.isNaN(systemVolume)) {
@@ -1911,30 +1949,21 @@ function boot() {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));
   }
   backBtn.addEventListener("click", backToGrid);
-  const refreshBtn = document.getElementById("refreshBtn");
   if (refreshBtn) {
-    setIcon(refreshBtn, "refresh", "sync all three streams");
     refreshBtn.addEventListener("click", refreshKeysFromUi);
   }
-  const sourceBtn = document.getElementById("sourceBtn");
   if (sourceBtn) {
-    setIcon(sourceBtn, "server", "choose stream server");
     sourceBtn.addEventListener("click", openSourceSheet);
   }
-  const themeBtn = document.getElementById("themeBtn");
   if (themeBtn) {
-    setIcon(themeBtn, "palette", "choose color theme");
     themeBtn.addEventListener("click", openThemeSheet);
   }
-  const stitchBtn = document.getElementById("stitchBtn");
   if (stitchBtn) {
     stitchBtn.addEventListener("click", toggleStitch);
   }
-  updateStitchButton();
   wireSourceSheet();
   wireThemeSheet();
   indicator = document.getElementById("indicator");
-  setIcon(backBtn, "grid", "back to grid");
   const fsLock = document.getElementById("fsLock");
   if (fsLock) {
     fsLock.addEventListener("click", toggleLock);

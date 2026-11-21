@@ -28,6 +28,7 @@ public final class RecorderLogicTest {
         siteServersAreAccepted();
         theMpdUsesOneAbsoluteSegmentBase();
         cdnPathKeepsItsEscapedLetter();
+        aSite503RetriesOnTheCdn();
         theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
         cookieStaysOnTheSite();
@@ -127,6 +128,16 @@ public final class RecorderLogicTest {
             Http.normalizeCdnUrl(base + "%70bbcollab30x/init.mp4"));
     }
 
+    private static void aSite503RetriesOnTheCdn() throws Exception {
+        String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        check("the site proxy retries a 503 on the CDN", true,
+            source.contains("if (status == 503 && hops < 1)")
+            && source.contains("String cdn = cdnSegment(url);"));
+        check("site segment paths map to the escaped CDN folder", true,
+            source.contains("String root = SITE2 + \"/chat/clearmpd/\"")
+            && source.contains("return cdn + name;"));
+    }
+
     private static void theServiceMarksTheStitchPairAtStart() throws Exception {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
         String service = sourceOf("android/java/com/pbb/live/RecordService.java");
@@ -137,7 +148,7 @@ public final class RecorderLogicTest {
             body.contains("RecordService.markStackPair(0, 1);")
             && body.contains("indices.contains(Integer.valueOf(0))"));
         check("the stack start reports its status", true,
-            service.contains("saving main + dining as one video"));
+            service.contains("Saving stacked video"));
     }
 
     /**

@@ -452,7 +452,7 @@ public class MainActivity extends Activity {
      */
     private String setStreamServer(String server) {
         if (!validServer(server)) {
-            return "pick a server from the site";
+            return "Choose a server from pbbcollab.com";
         }
         boolean changed = !server.equals(streamServer) || useLiveSite;
         streamServer = server;
@@ -467,7 +467,7 @@ public class MainActivity extends Activity {
 
     private String setLiveServer(String server) {
         if (!validLiveServer(server)) {
-            return "pick a server from pbbcollab.live";
+            return "Choose a server from pbbcollab.live";
         }
         boolean changed = !server.equals(liveServer) || !useLiveSite;
         liveServer = server;
@@ -531,6 +531,17 @@ public class MainActivity extends Activity {
                 conn.setRequestProperty("Range", asked.get("Range"));
             }
             int status = conn.getResponseCode();
+            // The site proxy occasionally answers a valid segment with 503.
+            // The same bytes are on the CDN the PBB3.0 route already uses,
+            // so retry there before handing Shaka a fatal HTTP error.
+            if (status == 503 && hops < 1) {
+                String cdn = cdnSegment(url);
+                if (cdn != null) {
+                    conn.disconnect();
+                    conn = null;
+                    return proxyStream(cdn, asked, hops + 1);
+                }
+            }
             if (siteHop && status >= 300 && status < 400 && hops < 3) {
                 String location = conn.getHeaderField("Location");
                 conn.disconnect();
@@ -570,6 +581,29 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** The CDN copy of a site-proxy segment, or null when there is no mapping. */
+    private static String cdnSegment(String url) {
+        String root = SITE2 + "/chat/clearmpd/";
+        if (!url.startsWith(root)) {
+            return null;
+        }
+        String rest = url.substring(root.length());
+        int slash = rest.indexOf('/');
+        if (slash < 0) {
+            return null;
+        }
+        for (int i = 0; i < CAM_IDS.length; i++) {
+            if (rest.startsWith(CAM_IDS[i] + "/")) {
+                String cdn = PBB3_MPD[i].substring(0, PBB3_MPD[i].lastIndexOf('/') + 1);
+                int query = rest.indexOf('?');
+                String name = query < 0 ? rest.substring(slash + 1)
+                    : rest.substring(slash + 1, query);
+                return cdn + name;
+            }
+        }
+        return null;
+    }
+
     /** Waits for the launch handshake, then falls back to whatever is cached. */
     private void waitForFreshConfig(long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
@@ -606,7 +640,7 @@ public class MainActivity extends Activity {
         try {
             streams = new JSONObject(streamConfigJson).getJSONArray("streams");
         } catch (Exception e) {
-            return "cannot read the streams";
+            return "Could not read the stream list";
         }
         StringBuilder rotated = new StringBuilder();
         int answered = 0;
@@ -635,12 +669,12 @@ public class MainActivity extends Activity {
             }
         }
         if (rotated.length() > 0) {
-            return "keys rotated on " + rotated + " - open servers to switch";
+            return "Keys changed for " + rotated + ". Choose a server";
         }
         if (answered == 0) {
-            return "could not reach the streams - tap refresh to retry";
+            return "Could not reach the streams. Tap Refresh to retry";
         }
-        return "no published channel list - the server sheet holds the current feed";
+        return "No channel list. The selected server is still in use";
     }
 
     private static String manifestKid(String url) {
@@ -690,10 +724,26 @@ public class MainActivity extends Activity {
     private JSONArray siteStreamsWithBundledKeys() {
         String[] mpds = new String[CHANNEL_COUNT];
         int srv = useLiveSite ? 1 : site2Number(streamServer);
+        if (siteMpdText(0, srv) == null) {
+            srv = srv == 0 ? 1 : 0;
+            if (siteMpdText(0, srv) == null) {
+                return null;
+            }
+        }
         for (int i = 0; i < CAM_IDS.length; i++) {
             mpds[i] = SITE2 + "/api/live/mpd/" + CAM_IDS[i] + ".mpd?srv=s" + srv;
         }
         return bundledKeyStreams(mpds, SITE2);
+    }
+
+    /** One site MPD route. Null means that route answered with an error. */
+    private static String siteMpdText(int index, int srv) {
+        try {
+            return Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[index]
+                + ".mpd?srv=s" + srv, 5000, 8000);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** The pbb-3.pages.dev route, straight from the CDN manifests it names. */
@@ -770,23 +820,50 @@ public class MainActivity extends Activity {
                 JSONObject cam = cams.getJSONObject(CAM_IDS[i]);
                 String[] pair = sessionToken(cam.getString("token"), nonce);
                 String endpoint = cam.getString("endpoint");
-                int site2 = useLiveSite ? 0 : site2Number(streamServer);
-                String xml;
-                if (site2 > 0) {
-                    xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
-                        + ".mpd?srv=s" + site2, 5000, 8000);
-                } else {
+                String xml = null;
+                String base = null;
+                // The session host gives fresh keys, but its /stream/ segments
+                // answer 403/503 for several routes. The site MPD names the
+                // same cameras through a proxy that stays reachable. Keep the
+                // session keys and only take the session manifest when both
+                // site routes are down.
+                int srv = useLiveSite ? 1 : site2Number(streamServer);
+                if (!useLiveSite) {
+                    xml = siteMpdText(i, srv);
+                    if (xml == null) {
+                        xml = siteMpdText(i, srv == 0 ? 1 : 0);
+                    }
+                    if (xml != null) {
+                        base = "s3".equals(streamServer)
+                            ? MIRROR + CAM_MIRROR[i] : mediaBase(xml);
+                    }
+                }
+                if (xml == null) {
                     // The site's player busts the CDN cache every 15s. A
                     // bare endpoint is rejected with 403.
                     String bucket = Long.toString(System.currentTimeMillis() / 15000L);
                     String join = endpoint.contains("?") ? "&" : "?";
                     xml = Http.getText(SITE + endpoint + join + "_b=" + bucket,
                         5000, 8000, handshake.cookie, CLIENT);
+                    if (xml != null) {
+                        base = siteBase(xml, endpoint, i);
+                    }
+                }
+                if (xml == null) {
+                    xml = siteMpdText(i, srv);
+                    if (xml == null && srv != (srv == 0 ? 1 : 0)) {
+                        xml = siteMpdText(i, srv == 0 ? 1 : 0);
+                    }
+                    if (xml != null) {
+                        base = mediaBase(xml);
+                    }
                 }
                 if (xml == null) {
                     return null;
                 }
-                String base = siteBase(xml, endpoint, i);
+                if (base == null) {
+                    base = SITE2;
+                }
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
                 // The manifest body moves its publishTime on every handshake, so
@@ -1152,7 +1229,7 @@ public class MainActivity extends Activity {
 
     private void enterPipMode() {
         if (focusedStream < 0) {
-            toast("focus one stream first");
+            toast("Choose a feed first");
             return;
         }
         if (isInPictureInPictureMode()) {
@@ -1161,7 +1238,7 @@ public class MainActivity extends Activity {
         applyImmersive(false);
         boolean entered = enterPictureInPictureMode(pipParams(false));
         if (!entered) {
-            toast("PiP unavailable");
+            toast("Picture-in-picture is unavailable");
         }
         // onPictureInPictureModeChanged is the only announcement. Calling this
         // here too ran setPipMode twice and restarted the video on each hop.
@@ -1198,13 +1275,13 @@ public class MainActivity extends Activity {
         }
         if (grantResults.length == 0) {
             notifyRecordingState(false, -1, RecordService.activeCount(), 0,
-                RecordService.KIND_ERROR, "permission denied, so nothing started recording");
+                RecordService.KIND_ERROR, "Permission denied; no recording started");
             return;
         }
         for (int result : grantResults) {
             if (result != PackageManager.PERMISSION_GRANTED) {
                 notifyRecordingState(false, -1, RecordService.activeCount(), 0,
-                    RecordService.KIND_ERROR, "permission denied, so nothing started recording");
+                    RecordService.KIND_ERROR, "Permission denied; no recording started");
                 return;
             }
         }
@@ -1227,7 +1304,7 @@ public class MainActivity extends Activity {
         }
         if (pendingRecordIndices.isEmpty()) {
             notifyRecordingState(false, -1, RecordService.activeCount(), 0,
-                RecordService.KIND_NOTICE, "that camera is already recording");
+                RecordService.KIND_NOTICE, "That camera is already recording");
             return;
         }
 
@@ -1268,7 +1345,7 @@ public class MainActivity extends Activity {
             streams = new JSONObject(streamConfigJson).getJSONArray("streams");
         } catch (Exception e) {
             notifyRecordingState(false, -1, RecordService.activeCount(), 0,
-                RecordService.KIND_ERROR, "cannot start recording: " + e.getMessage());
+                RecordService.KIND_ERROR, "Cannot start recording: " + e.getMessage());
             return;
         }
         int started = 0;
@@ -1293,12 +1370,12 @@ public class MainActivity extends Activity {
                 started++;
             } catch (Exception e) {
                 notifyRecordingState(false, index, RecordService.activeCount(), 0,
-                    RecordService.KIND_ERROR, "cannot start recording: " + e.getMessage());
+                    RecordService.KIND_ERROR, "Cannot start recording: " + e.getMessage());
             }
         }
         if (started == 0) {
             notifyRecordingState(false, -1, RecordService.activeCount(), 0,
-                RecordService.KIND_ERROR, "nothing to record");
+                RecordService.KIND_ERROR, "Nothing to record");
         }
     }
 
@@ -1306,7 +1383,7 @@ public class MainActivity extends Activity {
     private void stopRecording(int index) {
         if (!RecordService.isActive()) {
             notifyRecordingState(false, -1, 0, 0,
-                RecordService.KIND_NOTICE, "nothing is recording");
+                RecordService.KIND_NOTICE, "Nothing is recording");
             return;
         }
         Intent service = new Intent(this, RecordService.class);

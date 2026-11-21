@@ -375,7 +375,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         final String quality = intent.getStringExtra(EXTRA_QUALITY);
         int index = intent.getIntExtra(EXTRA_STREAM_INDEX, -1);
         if (mpdUrl == null || key == null || index < 0) {
-            status(false, -1, "missing stream config", KIND_ERROR);
+            status(false, -1, "Stream settings are missing", KIND_ERROR);
             stopIfIdle();
             return START_NOT_STICKY;
         }
@@ -396,7 +396,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             // The service is already foreground, but answer this start with an
             // updated notification rather than leaving the call unanswered.
             updateSummary();
-            status(true, index, "this camera is already recording", KIND_NOTICE);
+            status(true, index, "This camera is already recording", KIND_NOTICE);
             return START_NOT_STICKY;
         }
         synchronized (STARTED) {
@@ -435,7 +435,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         File videoTmp = session.videoTmp;
         File audioTmp = session.audioTmp;
         File outTmp = session.outTmp;
-        String result = "nothing recorded - stopped before the first segment";
+        String result = "Nothing recorded; stopped before the first segment";
         String savedMessage = null;
         boolean failed = false;
         boolean keepSegments = false;
@@ -565,7 +565,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                     }
                     // Do not replace the file a previous part already published.
                     result = savedMessage != null ? savedMessage
-                        : gap ? "nothing recorded before the stream gap" : "nothing recorded";
+                        : gap ? "Nothing recorded before the stream gap" : "Nothing recorded";
                     break;
                 }
                 emptyRetries = 0;
@@ -581,13 +581,13 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                     if (outTmp.length() < 4096) {
                         throw new IOException("remux produced no media");
                     }
-                    result = "saved to " + publish(outTmp, name, session).path;
+                    result = "Saved to " + publish(outTmp, name, session).path;
                     savedMessage = result;
                 } catch (Throwable t) {
                     // Keep this part's segments: a remux failure is recoverable,
                     // the pulled media is not.
                     Log.e(TAG, "remux failed for camera " + index, t);
-                    result = "recording failed: " + t.getMessage();
+                    result = "Recording failed: " + t.getMessage();
                     failed = true;
                     keepSegments = true;
                     break;
@@ -601,7 +601,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             }
         } catch (Throwable t) {
             Log.e(TAG, "recording failed for camera " + index, t);
-            result = "recording failed: " + t.getMessage();
+            result = "Recording failed: " + t.getMessage();
             failed = true;
             keepSegments = totalSegments > 0;
         } finally {
@@ -688,7 +688,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 return;
             }
             pairStacking = true;
-            status(false, -1, "saving main + dining as one video", KIND_NOTICE);
+            status(false, -1, "Saving stacked video", KIND_NOTICE);
             top = pairSources.get(pairTop);
             bottom = pairSources.get(pairBottom);
             topUri = pairUris.get(pairTop);
@@ -738,7 +738,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             }
             String name = "PBB_stitch_" + System.currentTimeMillis() + ".mp4";
             Published joinedOut = publish(joined, name, null);
-            result = "saved stacked video to " + joinedOut.path;
+            result = "Saved stacked video to " + joinedOut.path;
             ok = true;
             // Only remove the originals when the joined file is in a real
             // gallery location; a fallback copy must leave them alone.
@@ -750,7 +750,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             }
         } catch (Throwable t) {
             Log.e(TAG, "stitch failed", t);
-            result = "stitch failed: " + t.getMessage();
+            result = "Stacking failed: " + t.getMessage();
         } finally {
             delete(top);
             delete(bottom);
@@ -1467,7 +1467,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         }
         // The remux and the MediaStore copy of a long recording take a while.
         // Clear the tally and the stop button now; "saved to ..." lands later.
-        status(false, index, "saving " + session.streamName, KIND_NOTICE);
+        status(false, index, "Saving " + session.streamName, KIND_NOTICE);
     }
 
     private void stopAll() {
@@ -1485,7 +1485,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             if (session.worker != null) {
                 session.worker.interrupt();
             }
-            status(false, session.index, "saving " + session.streamName, KIND_NOTICE);
+            status(false, session.index, "Saving " + session.streamName, KIND_NOTICE);
         }
     }
 

@@ -261,8 +261,7 @@ h1 {
   background: var(--primary-container);
 }
 
-.desk-key,
-.status .btn-icon {
+.desk-key {
   display: grid;
   place-items: center;
   width: var(--tap);
@@ -277,8 +276,7 @@ h1 {
   transition: background var(--m-in) var(--ease), transform var(--m-press) var(--ease);
 }
 
-.desk-key svg,
-.status .btn-icon svg { display: block; width: 19px; height: 19px; }
+.desk-key svg { display: block; width: 19px; height: 19px; }
 
 /* ------------------------------------------------------------------ wall */
 
@@ -529,19 +527,22 @@ h1 {
 
 @media (hover: hover) and (pointer: fine) {
   .desk-key:hover,
-  .status .btn-icon:hover,
+  .status-key:hover,
   .cam-actions .btn-icon:hover { background: var(--g-alt); }
+  .status-key.active { color: var(--ink); background: var(--g-alt); }
   .seg-btn:not(.active):hover { color: var(--ink); }
 }
 
 .desk-key:active,
-.status .btn-icon:active,
+.status-key:active,
 .cam-actions .btn-icon:active {
   transform: translateY(1px) scale(0.985);
 }
 
 /* ---------------------------------------------------------------- footer */
 
+/* A control deck, not a settings panel: the message reads first, the four
+   keys keep the same shape and spacing as the fullscreen deck. */
 .status {
   position: relative;
   z-index: 20;
@@ -550,8 +551,8 @@ h1 {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--s-3);
-  min-height: 80px;
-  max-height: 144px;
+  min-height: 112px;
+  max-height: 160px;
   padding: var(--s-3) var(--gut);
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -576,7 +577,9 @@ h1 {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-1);
+  width: 268px;
+  flex: none;
   padding-left: var(--s-3);
 }
 
@@ -586,19 +589,56 @@ h1 {
   left: 0;
   top: 50%;
   width: 1px;
-  height: 28px;
+  height: 56px;
   background: var(--line);
   transform: translateY(-50%);
+}
+
+.status-key {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-width: 0;
+  min-height: 56px;
+  padding: var(--s-1) 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  cursor: pointer;
+  transition: color var(--m-in) var(--ease), background var(--m-in) var(--ease), transform var(--m-press) var(--ease);
+}
+
+.key-glyph {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.key-glyph svg { display: block; width: 18px; height: 18px; }
+
+.key-label {
+  max-width: 100%;
+  font-size: var(--t-label);
+  font-weight: var(--w-reg);
+  line-height: 1;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .status-state {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: var(--g-alt);
 }
 
@@ -688,15 +728,11 @@ h1 {
   letter-spacing: 0.02em;
 }
 
-#stitchBtn.stitch-active {
+#stitchBtn.stitch-active,
+#stitchBtn.stitch-active:hover {
   color: var(--paper);
   background: var(--rec);
   border-color: var(--rec);
-}
-
-.status .btn-icon.active {
-  color: var(--ink);
-  background: var(--g-alt);
 }
 
 /* ------------------------------------------------------------- view modes */
@@ -1178,9 +1214,12 @@ body.fullscreen-mode .indicator {
 
 @media (max-width: 640px) {
   :root { --gut: 16px; }
-  /* The message gets the whole width; the keys take their own row. */
-  .status { grid-template-columns: 1fr; gap: var(--s-2); }
-  .status-actions { justify-content: flex-end; }
+  /* The message gets the whole width; the keys take their own full-width row. */
+  .status { grid-template-columns: 1fr; gap: var(--s-2); min-height: 136px; }
+  .status-actions {
+    width: 100%;
+    padding-left: 0;
+  }
   .status-actions::before { display: none; }
   .cam-bar { padding: var(--s-2); gap: var(--s-2); }
   .cam-role { display: none; }
