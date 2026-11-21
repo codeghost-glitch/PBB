@@ -15,6 +15,12 @@ import java.util.Locale;
 final class Http {
     private static final String AGENT = "PBB/1.0";
 
+    static {
+        // HttpURLConnection drops Origin and Referer unless this is set. The
+        // session API rejects the request without them.
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+    }
+
     private Http() {
     }
 
@@ -99,16 +105,15 @@ final class Http {
     }
 
     /**
-     * The plain payload the site seals: a tag byte, the first eight key
-     * characters and sixteen bits of the clock. It lives here, and not in the
-     * activity, because keys/session.py writes the offline snapshot with the
-     * same format and the host test compares the two.
+     * The plain payload the site seals: a three-bit server mode in the tag,
+     * the first eight key characters and the clock in seconds. It lives here,
+     * and not in the activity, because keys/session.py writes the offline
+     * snapshot with the same format and the host test compares the two.
      */
-    static String sessionPlain(byte[] seed, String key, boolean backup, long millis) {
-        int modeBit = backup ? 1 : 0;
-        return String.format(Locale.US, "%02x:%s:%04x",
-            (seed[12] & 0xfe) | (modeBit ^ (seed[0] & 0x01)), key.substring(0, 8),
-            millis & 0xffffL);
+    static String sessionPlain(byte[] seed, String key, int mode, long millis) {
+        int tag = (seed[12] & 0xf8) | ((mode ^ (seed[0] & 0x07)) & 0x07);
+        return String.format(Locale.US, "%02x:%s:%08x",
+            tag, key.substring(0, 8), (millis / 1000L) & 0xffffffffL);
     }
 
     /** Posts a JSON body. Returns null when the server answered anything but 200. */
@@ -119,6 +124,15 @@ final class Http {
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
         conn.setRequestProperty("Content-Type", "application/json");
+        // The session API rejects a plain API client. It wants the same
+        // same-origin fetch headers the site's own page sends.
+        conn.setRequestProperty("Accept", "application/json, text/plain, */*");
+        conn.setRequestProperty("Origin", "https://www.pbbcollab.live");
+        conn.setRequestProperty("Referer", "https://www.pbbcollab.live/");
+        conn.setRequestProperty("Sec-Fetch-Site", "same-origin");
+        conn.setRequestProperty("Sec-Fetch-Mode", "cors");
+        conn.setRequestProperty("Sec-Fetch-Dest", "empty");
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36");
         if (client != null) {
             conn.setRequestProperty("X-PBB-Client", client);
         }

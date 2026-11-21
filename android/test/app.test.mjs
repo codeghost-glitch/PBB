@@ -552,6 +552,13 @@ function channelSourceContract() {
   check("the manifests are read with the session cookie", true,
     java.includes('handshake.cookie') && http.includes('X-PBB-Client')
     && http.includes('setRequestProperty("Cookie"'));
+  check("the manifest request busts the site's CDN cache", true,
+    java.includes('"_b=" + bucket')
+    && java.includes('System.currentTimeMillis() / 15000L'));
+  check("the handshake carries the site's same-origin headers", true,
+    http.includes('setRequestProperty("Sec-Fetch-Site", "same-origin")')
+    && http.includes('setRequestProperty("Origin", "https://www.pbbcollab.live")')
+    && http.includes('sun.net.http.allowRestrictedHeaders'));
   check("the site's MPD is inlined as a data URL", true,
     java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
     && /Base64\.encodeToString\(\s*siteMpd\(xml,/.test(java));

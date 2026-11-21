@@ -593,9 +593,8 @@ public class MainActivity extends Activity {
             for (int i = 0; i < 12; i++) {
                 key.append(String.format(Locale.US, "%02x", seed[i] & 0xff));
             }
-            // The tag byte's low bit names the server: 0 main, 1 backup.
             String plain = Http.sessionPlain(seed, key.toString(),
-                "s2".equals(streamServer), System.currentTimeMillis());
+                serverMode(streamServer), System.currentTimeMillis());
             byte[] sealed = new byte[plain.length()];
             for (int i = 0; i < plain.length(); i++) {
                 sealed[i] = (byte) (plain.charAt(i) ^ key.charAt(i % key.length()) ^ 0x3c);
@@ -626,8 +625,12 @@ public class MainActivity extends Activity {
                     xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
                         + ".mpd?srv=s" + site2, 5000, 8000);
                 } else {
-                    xml = Http.getText(SITE + endpoint, 5000, 8000,
-                        handshake.cookie, CLIENT);
+                    // The site's player busts the CDN cache every 15s. A
+                    // bare endpoint is rejected with 403.
+                    String bucket = Long.toString(System.currentTimeMillis() / 15000L);
+                    String join = endpoint.contains("?") ? "&" : "?";
+                    xml = Http.getText(SITE + endpoint + join + "_b=" + bucket,
+                        5000, 8000, handshake.cookie, CLIENT);
                 }
                 if (xml == null) {
                     return null;
@@ -648,6 +651,20 @@ public class MainActivity extends Activity {
             return null;
         }
         return streams;
+    }
+
+    /** The three-bit mode the site's session handshake uses for each route. */
+    private static int serverMode(String server) {
+        if ("s2".equals(server)) {
+            return 1;
+        }
+        if ("s3".equals(server)) {
+            return 2;
+        }
+        if ("s4".equals(server)) {
+            return 3;
+        }
+        return 0;
     }
 
     /** Unseals one camera token into its kid and key. */

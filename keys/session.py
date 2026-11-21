@@ -11,10 +11,10 @@ CLIENT = "v3"
 PREFIX = "data:application/dash+xml;base64,"
 
 
-def plain(seed, key, mode_bit, millis):
-    """tag byte, first 8 key characters, 16 bits of the clock."""
-    tag = (seed[12] & 0xFE) | (mode_bit ^ (seed[0] & 0x01))
-    return "%02x:%s:%04x" % (tag, key[:8], millis & 0xFFFF)
+def plain(seed, key, mode, millis):
+    """three-bit server mode, first 8 key characters, clock in seconds."""
+    tag = (seed[12] & 0xF8) | ((mode ^ (seed[0] & 0x07)) & 0x07)
+    return "%02x:%s:%08x" % (tag, key[:8], (millis // 1000) & 0xFFFFFFFF)
 
 
 def seal(text, key):

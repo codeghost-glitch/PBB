@@ -154,9 +154,9 @@ public final class RecorderLogicTest {
             hex.append(String.format(java.util.Locale.US, "%02x", i * 11 + 3));
         }
         String key = hex.toString();
-        for (int mode = 0; mode < 2; mode++) {
+        for (int mode = 0; mode < 6; mode++) {
             long millis = 123456789L + mode;
-            String app = Http.sessionPlain(seed, key, mode == 1, millis);
+            String app = Http.sessionPlain(seed, key, mode, millis);
             String script = python("-c",
                 "import sys;sys.path.insert(0,'keys');import session;"
                 + "print(session.plain(bytes([i*7+1 for i in range(13)]),'" + key + "',"
