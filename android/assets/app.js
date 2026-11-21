@@ -512,6 +512,13 @@ const ICONS = {
     ["rect", { x: 3, y: 3, width: 18, height: 8, rx: 1 }],
     ["rect", { x: 3, y: 13, width: 18, height: 8, rx: 1 }],
   ],
+  broadcast: [
+    ["circle", { cx: 12, cy: 12, r: 2 }],
+    ["path", { d: "M7.8 7.8a6 6 0 0 0 0 8.4" }],
+    ["path", { d: "M16.2 7.8a6 6 0 0 1 0 8.4" }],
+    ["path", { d: "M5 5a10 10 0 0 0 0 14" }],
+    ["path", { d: "M19 5a10 10 0 0 1 0 14" }],
+  ],
   palette: [
     ["path", { d: "M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6a3 3 0 0 0 3-3A6 6 0 0 0 12 3z" }],
     ["circle", { cx: 7.5, cy: 10.5, r: 1, fill: "currentColor", stroke: "none" }],
@@ -1925,7 +1932,7 @@ function boot() {
   }
   const liveServerBtn = document.getElementById("liveServerBtn");
   if (liveServerBtn) {
-    setIcon(liveServerBtn, "server", "choose pbbcollab.live server");
+    setIcon(liveServerBtn, "broadcast", "choose pbbcollab.live server");
     liveServerBtn.addEventListener("click", openLiveServerSheet);
   }
   const themeBtn = document.getElementById("themeBtn");
