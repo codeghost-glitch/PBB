@@ -1054,6 +1054,13 @@ body.fullscreen-mode .indicator {
   line-height: 1.5;
 }
 
+.sheet-section-title {
+  color: var(--faint);
+  font-size: var(--t-label);
+  font-weight: var(--w-bold);
+  line-height: 1.2;
+}
+
 .sheet-chips {
   display: flex;
   flex-direction: column;

@@ -1312,6 +1312,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String getStreamSource() {
+            return useLiveSite ? "live" : "site";
+        }
+
+        @JavascriptInterface
         public String getLiveServer() {
             return liveServer;
         }

@@ -56,8 +56,7 @@
         </span>
       </div>
       <div class="status-actions">
-        <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose collab site server"></button>
-        <button id="liveServerBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose pbbcollab.live server"></button>
+        <button id="sourceBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose stream server"></button>
         <button id="stitchBtn" class="btn btn-ghost btn-icon" type="button" aria-label="record main and dining together"></button>
         <button id="refreshBtn" class="btn btn-ghost btn-icon" type="button" aria-label="refresh streams"></button>
         <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
@@ -91,13 +90,42 @@
       </div>
     </div>
   </div>
-  <div class="sheet hidden" id="liveServerSheet" role="dialog" aria-modal="true" aria-label="pbbcollab.live server">
+  <div class="sheet hidden" id="sourceSheet" role="dialog" aria-modal="true" aria-label="stream server">
     <div class="sheet-panel">
       <div class="sheet-head">
-        <h2>pbbcollab.live</h2>
-        <button id="liveServerClose" class="btn btn-ghost btn-icon" type="button" aria-label="close live servers"></button>
+        <h2>server</h2>
+        <button id="sourceClose" class="btn btn-ghost btn-icon" type="button" aria-label="close servers"></button>
       </div>
-      <p class="sheet-intro">Six routes from the live site. Switching reconnects all three feeds.</p>
+      <p class="sheet-intro">Switching routes reconnects all three feeds.</p>
+      <h3 class="sheet-section-title">pbbcollab.com/live</h3>
+      <div class="sheet-chips" id="serverChips" role="radiogroup" aria-label="collab site server">
+        <button class="chip" type="button" role="radio" aria-checked="true" data-server="s1">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Server Jeo</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="pbbtop">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Server Gehlee</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s2">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Server Nathan</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s3">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Server Primo</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s4">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Server Bela</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-server="twitch">
+          <span class="chip-key" aria-hidden="true"></span>
+          <span class="chip-name">Twitch Mirror</span>
+        </button>
+      </div>
+      <p class="sheet-note" id="sourceNote"></p>
+      <h3 class="sheet-section-title">pbbcollab.live</h3>
       <div class="sheet-chips" id="liveServerChips" role="radiogroup" aria-label="pbbcollab.live server">
         <button class="chip" type="button" role="radio" aria-checked="true" data-live-server="s1">
           <span class="chip-key" aria-hidden="true"></span>
@@ -143,42 +171,6 @@
         </button>
       </div>
       <p class="sheet-note" id="liveServerNote"></p>
-    </div>
-  </div>
-  <div class="sheet hidden" id="sourceSheet" role="dialog" aria-modal="true" aria-label="stream server">
-    <div class="sheet-panel">
-      <div class="sheet-head">
-        <h2>server</h2>
-        <button id="sourceClose" class="btn btn-ghost btn-icon" type="button" aria-label="close servers"></button>
-      </div>
-      <p class="sheet-intro">Choose a route. Switching reconnects all three feeds.</p>
-      <div class="sheet-chips" id="serverChips" role="radiogroup" aria-label="stream server">
-        <button class="chip" type="button" role="radio" aria-checked="true" data-server="s1">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">Server Jeo</span>
-        </button>
-        <button class="chip" type="button" role="radio" aria-checked="false" data-server="pbbtop">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">Server Gehlee</span>
-        </button>
-        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s2">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">Server Nathan</span>
-        </button>
-        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s3">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">Server Primo</span>
-        </button>
-        <button class="chip" type="button" role="radio" aria-checked="false" data-server="s4">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">Server Bela</span>
-        </button>
-        <button class="chip" type="button" role="radio" aria-checked="false" data-server="twitch">
-          <span class="chip-key" aria-hidden="true"></span>
-          <span class="chip-name">Twitch Mirror</span>
-        </button>
-      </div>
-      <p class="sheet-note" id="sourceNote"></p>
     </div>
   </div>
   <div id="indicator" class="indicator hidden"></div>

@@ -120,10 +120,15 @@ function statusStateFor(message) {
 
 function updateStatusMeta() {
   const meta = statusMeta || document.getElementById("statusMeta");
-  if (meta) {
-    const server = SERVER_NAMES[serverSheet.server] || "Server Jeo";
-    meta.textContent = `${server} · ${state.quality.toUpperCase()}`;
+  if (!meta) {
+    return;
   }
+  const live = window.Pbb && typeof Pbb.getStreamSource === "function"
+    && Pbb.getStreamSource() === "live";
+  const server = live
+    ? (LIVE_SERVER_NAMES[liveSheet.server] || "Server 1")
+    : (SERVER_NAMES[serverSheet.server] || "Server Jeo");
+  meta.textContent = `${live ? "live" : "site"} · ${server} · ${state.quality.toUpperCase()}`;
 }
 
 function setStatusText(message) {
@@ -1679,8 +1684,14 @@ function openSourceSheet() {
     const stored = Pbb.getStreamServer();
     serverSheet.server = SERVERS.includes(stored) ? stored : "s1";
   }
+  if (window.Pbb && typeof Pbb.getLiveServer === "function") {
+    const stored = Pbb.getLiveServer();
+    liveSheet.server = LIVE_SERVERS.includes(stored) ? stored : "s1";
+  }
   markServerChoice();
+  markLiveServerChoice();
   setSourceNote(SERVER_NAMES[serverSheet.server] + " is on");
+  setLiveNote(LIVE_SERVER_NAMES[liveSheet.server] + " is on");
   sheet.classList.remove("hidden");
 }
 
@@ -1720,27 +1731,6 @@ function markLiveServerChoice() {
   }
 }
 
-function openLiveServerSheet() {
-  const sheet = sourceField("liveServerSheet");
-  if (!sheet) {
-    return;
-  }
-  if (window.Pbb && typeof Pbb.getLiveServer === "function") {
-    const stored = Pbb.getLiveServer();
-    liveSheet.server = LIVE_SERVERS.includes(stored) ? stored : "s1";
-  }
-  markLiveServerChoice();
-  setLiveNote(LIVE_SERVER_NAMES[liveSheet.server] + " is on");
-  sheet.classList.remove("hidden");
-}
-
-function closeLiveServerSheet() {
-  const sheet = sourceField("liveServerSheet");
-  if (sheet) {
-    sheet.classList.add("hidden");
-  }
-}
-
 function selectLiveServer(server) {
   const pick = LIVE_SERVERS.includes(server) ? server : "s1";
   if (!window.Pbb || typeof Pbb.setLiveServer !== "function") {
@@ -1755,7 +1745,7 @@ function selectLiveServer(server) {
   liveSheet.server = pick;
   markLiveServerChoice();
   setLiveNote(LIVE_SERVER_NAMES[pick] + " is on");
-  closeLiveServerSheet();
+  closeSourceSheet();
   setTransientStatus(LIVE_SERVER_NAMES[pick] + " - reconnecting");
 }
 
@@ -1763,34 +1753,6 @@ function setLiveNote(message) {
   const note = sourceField("liveServerNote");
   if (note) {
     note.textContent = message;
-  }
-}
-
-function wireLiveServerSheet() {
-  const sheet = sourceField("liveServerSheet");
-  if (!sheet) {
-    return;
-  }
-  sheet.addEventListener("click", (event) => {
-    if (event.target === sheet) {
-      closeLiveServerSheet();
-    }
-  });
-  const close = sourceField("liveServerClose");
-  if (close) {
-    setIcon(close, "close", "close live servers");
-    close.addEventListener("click", closeLiveServerSheet);
-  }
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeLiveServerSheet();
-    }
-  });
-  const row = sourceField("liveServerChips");
-  if (row) {
-    for (const chip of Array.from(row.children)) {
-      chip.addEventListener("click", () => selectLiveServer(chip.dataset.liveServer));
-    }
   }
 }
 
@@ -1857,6 +1819,12 @@ function wireSourceSheet() {
   if (row) {
     for (const chip of Array.from(row.children)) {
       chip.addEventListener("click", () => selectServer(chip.dataset.server));
+    }
+  }
+  const liveRow = sourceField("liveServerChips");
+  if (liveRow) {
+    for (const chip of Array.from(liveRow.children)) {
+      chip.addEventListener("click", () => selectLiveServer(chip.dataset.liveServer));
     }
   }
 }
@@ -1930,11 +1898,6 @@ function boot() {
     setIcon(sourceBtn, "server", "choose stream server");
     sourceBtn.addEventListener("click", openSourceSheet);
   }
-  const liveServerBtn = document.getElementById("liveServerBtn");
-  if (liveServerBtn) {
-    setIcon(liveServerBtn, "broadcast", "choose pbbcollab.live server");
-    liveServerBtn.addEventListener("click", openLiveServerSheet);
-  }
   const themeBtn = document.getElementById("themeBtn");
   if (themeBtn) {
     setIcon(themeBtn, "palette", "choose color theme");
@@ -1946,7 +1909,6 @@ function boot() {
   }
   updateStitchButton();
   wireSourceSheet();
-  wireLiveServerSheet();
   wireThemeSheet();
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");

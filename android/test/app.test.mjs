@@ -121,6 +121,7 @@ function makePlayer(index, name) {
 function loadPage() {
   const calls = [];
   const serverPick = { server: "s1" };
+  const sourcePick = { source: "site" };
   const Pbb = {
     setVolume: (value, persist) => calls.push(["setVolume", value, persist]),
     setBrightness: (value, persist) => calls.push(["setBrightness", value, persist]),
@@ -139,9 +140,11 @@ function loadPage() {
       serverPick.server = server;
       return "";
     },
+    getStreamSource: () => sourcePick.source,
     getLiveServer: () => "s1",
     setLiveServer: (server) => {
       calls.push(["setLiveServer", server]);
+      sourcePick.source = "live";
       return "";
     },
   };
@@ -247,8 +250,6 @@ function loadPage() {
   gesture,
   serverSheet,
   liveSheet,
-  openLiveServerSheet,
-  closeLiveServerSheet,
   selectLiveServer,
   theme,
   applyTheme,
@@ -910,7 +911,7 @@ function statusStripCarriesContext() {
   page.setStatusText("syncing all three streams...");
   check("a working message marks the strip busy", "busy",
     page.fields.statusBar.dataset.state);
-  check("the strip names the route and quality", "Server Jeo · HD",
+  check("the strip names the route and quality", "site · Server Jeo · HD",
     page.fields.statusMeta.textContent);
 
   page.setStatusText("saved PBB_All_20260101.mp4");
@@ -948,7 +949,7 @@ function serverSheetAndWallReadClearly() {
   const css = fs.readFileSync(CSS, "utf8");
   check("the server sheet explains the switch", true,
     html.includes('class="sheet-intro"')
-    && html.includes("Switching reconnects all three feeds."));
+    && html.includes("Switching routes reconnects all three feeds."));
   const routeBlock = /<div class="sheet-chips" id="serverChips"[\s\S]*?<\/div>/.exec(html);
   check("the routes are a radio group", true,
     Boolean(routeBlock)
@@ -1004,30 +1005,37 @@ function materialYouThemesSwitch() {
     page.fields.themeSheet.classList.contains("hidden"));
 }
 
-function liveSiteHasItsOwnServerSheet() {
+function liveRoutesShareTheServerSheet() {
   const html = fs.readFileSync(HTML, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  check("the live site gets a separate sheet", true,
-    html.includes('id="liveServerSheet"')
+  check("both server sets share one sheet", true,
+    html.includes('id="sourceSheet"')
+    && html.includes('id="serverChips"')
     && html.includes('id="liveServerChips"')
-    && (html.match(/data-live-server="/g) || []).length === 6);
-  check("the site route names are preserved", true,
-    ["Server 1", "Server 2", "Server 3", "Server 4", "Server 5", "Server 6"]
-      .every((name) => html.includes(name)));
+    && (html.match(/data-live-server="/g) || []).length === 6
+    && !html.includes('id="liveServerBtn"'));
+  check("the sheet separates the two sites", true,
+    html.includes("pbbcollab.com/live") && html.includes("pbbcollab.live"));
   check("the native route list accepts all six live servers", true,
     java.includes('"s1", "s2", "s3", "s4", "s5", "s6"'));
 
   const page = loadPage();
-  page.openLiveServerSheet();
-  check("the live sheet opens", false,
-    page.fields.liveServerSheet.classList.contains("hidden"));
+  page.openSourceSheet();
+  check("the shared sheet opens on both groups", false,
+    page.fields.sourceSheet.classList.contains("hidden"));
+  check("both active routes are marked", true,
+    page.fields.serverChips.children[0].classList.contains("active")
+    && page.fields.liveServerChips.children[0].classList.contains("active"));
+
   page.selectLiveServer("s5");
   const call = page.calls.find((entry) => entry[0] === "setLiveServer");
   check("the live pick reaches the app", "s5", call && call[1]);
-  check("the live sheet closes after a pick", true,
-    page.fields.liveServerSheet.classList.contains("hidden"));
+  check("the shared sheet closes after a pick", true,
+    page.fields.sourceSheet.classList.contains("hidden"));
   check("the note names the live server", true,
     /Server 5 is on/.test(page.fields.liveServerNote.textContent));
+  check("the status names the active source and server", true,
+    /live · Server 5 · HD/.test(page.fields.statusMeta.textContent));
 }
 
 const tests = [
@@ -1059,7 +1067,7 @@ const tests = [
   statusStripCarriesContext,
   serverSheetAndWallReadClearly,
   materialYouThemesSwitch,
-  liveSiteHasItsOwnServerSheet,
+  liveRoutesShareTheServerSheet,
 ];
 
 for (const test of tests) {
