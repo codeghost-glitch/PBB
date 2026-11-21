@@ -170,7 +170,7 @@ function loadPage() {
     liveServerChips.appendChild(chip);
   }
   const serverChips = makeElement("div");
-  for (const id of ["s1", "pbbtop", "s2", "s3", "s4", "twitch"]) {
+  for (const id of ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"]) {
     const chip = makeElement("button");
     chip.dataset.server = id;
     serverChips.appendChild(chip);
@@ -483,6 +483,10 @@ function serverSheetFollowsTheApp() {
     /pbbcollab\.com · Server Primo/.test(page.fields.sourceNote.textContent));
   check("the third chip is the marked one", true,
     page.fields.serverChips.children[3].classList.contains("active"));
+  page.selectServer("pbb3");
+  page.openSourceSheet();
+  check("the PBB3.0 note names pbb-3.pages.dev", true,
+    /pbb-3\.pages\.dev · PBB3\.0/.test(page.fields.sourceNote.textContent));
 }
 
 function fullscreenKeepsThePictureWhole() {
@@ -646,16 +650,21 @@ function stitchAndServerContract() {
   check("the double record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
-  check("the sheet lists the site's six servers", true,
+  check("the sheet lists the site's six servers and PBB3.0", true,
     /id="serverChips"/.test(html)
-    && ["s1", "pbbtop", "s2", "s3", "s4", "twitch"]
+    && ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"]
       .every((id) => html.includes(`data-server="${id}"`))
     && /selectServer/.test(app)
     && !/data-server="s[5-7]"/.test(html));
-  check("the site routes use the website's names", true,
+  check("the site routes use the websites' names", true,
     ["Server Jeo", "Server Gehlee", "Server Nathan", "Server Primo",
-      "Server Bela", "Twitch Mirror"]
+      "Server Bela", "Twitch Mirror", "PBB3.0"]
       .every((name) => html.includes(name)));
+  check("PBB3.0 uses the direct CDN manifests from pbb-3.pages.dev", true,
+    java.includes("pbb3Streams()")
+    && java.includes("%70bbcollab30allaccesslivestream/manifest.mpd")
+    && java.includes("%70bbcollab30allaccesslivestream-diningarea/manifest.mpd")
+    && java.includes("%70bbcollab30allaccesslivestream-externalden/manifest.mpd"));
   check("the site routes come from pbbcollab.com", true,
     /SITE2 = "https:\/\/pbbcollab\.com"/.test(java)
     && /site2Number\(streamServer\)/.test(java)
@@ -791,7 +800,7 @@ function designSystemHoldsTheLine() {
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && (html.match(/data-server="/g) || []).length === 6
+    && (html.match(/data-server="/g) || []).length === 7
     && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
     /\.chip\.active \.chip-key \{[^}]*background: var\(--primary\)/s.test(css));
@@ -953,7 +962,7 @@ function serverSheetAndWallReadClearly() {
   check("the routes are a radio group", true,
     Boolean(routeBlock)
     && routeBlock[0].includes('role="radiogroup"')
-    && (routeBlock[0].match(/role="radio"/g) || []).length === 6);
+    && (routeBlock[0].match(/role="radio"/g) || []).length === 7);
   check("the chosen route is named to assistive tech", true,
     /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
       fs.readFileSync(APP, "utf8")));
@@ -1014,12 +1023,14 @@ function liveRoutesShareTheServerSheet() {
     && html.includes('id="liveServerChips"')
     && (html.match(/data-live-server="/g) || []).length === 6
     && !html.includes('id="liveServerBtn"'));
-  check("the sheet separates the two sites", true,
-    html.includes("pbbcollab.com/live") && html.includes("pbbcollab.live"));
+  check("the sheet names all three sites", true,
+    html.includes("pbbcollab.com/live") && html.includes("pbbcollab.live")
+    && html.includes("pbb-3.pages.dev"));
   check("the native route list accepts all six live servers", true,
     java.includes('"s1", "s2", "s3", "s4", "s5", "s6"'));
   check("a blocked handshake falls back to fresh site MPDs", true,
     java.includes("siteStreamsWithBundledKeys()")
+    && java.includes("bundledKeyStreams(mpds, SITE2)")
     && java.includes("new JSONObject(streamConfig()).getJSONArray(\"streams\")"));
 
   const page = loadPage();

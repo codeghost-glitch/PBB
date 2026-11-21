@@ -26,6 +26,7 @@ public final class RecorderLogicTest {
         theStitchPairStacksOnceAndAbortsOnFailure();
         theSnapshotScriptMatchesTheApp();
         siteServersAreAccepted();
+        theMpdUsesOneAbsoluteSegmentBase();
         theServiceMarksTheStitchPairAtStart();
         stopBreaksSocketReads();
         cookieStaysOnTheSite();
@@ -100,10 +101,21 @@ public final class RecorderLogicTest {
 
     private static void siteServersAreAccepted() throws Exception {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
-        check("the six site server ids are accepted", true,
-            source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\""));
+        check("the six site routes and PBB3.0 are accepted", true,
+            source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\", \"pbb3\""));
         check("site routes use the site MPD endpoint", true,
             source.contains("\"pbbtop\".equals(server) || \"s4\".equals(server)"));
+    }
+
+    private static void theMpdUsesOneAbsoluteSegmentBase() throws Exception {
+        String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
+        check("a root-relative folder is anchored to the site", true,
+            source.contains("base.startsWith(\"/\") ? SITE2 + base : base"));
+        check("templates lose any absolute or root-relative folder", true,
+            source.contains("(media|initialization)=")
+            && source.contains("replaceAll("));
+        check("every baked BaseURL is dropped", true,
+            source.contains("<BaseURL>[^<]*</BaseURL>"));
     }
 
     private static void theServiceMarksTheStitchPairAtStart() throws Exception {

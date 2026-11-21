@@ -67,19 +67,31 @@ public class MainActivity extends Activity {
         "6a1e3f89-2c4d-4b0e-9a1c-5d7e8f3a2b44",
         "8d2f7c34-1e5f-4a0e-8b1c-6a3e9f2d5b11"
     };
+    // The direct CDN manifests published by pbb-3.pages.dev. Same cameras,
+    // same keys, one more way in when the site routes are blocked. Akamai
+    // rejects the literal folder name, so the site spells its first letter %70.
+    private static final String[] PBB3_MPD = {
+        "https://absp-live.akamaized.net/dash/live/2099522/"
+            + "%70bbcollab30allaccesslivestream/manifest.mpd",
+        "https://absp-live.akamaized.net/dash/live/2099522/"
+            + "%70bbcollab30allaccesslivestream-diningarea/manifest.mpd",
+        "https://absp-live.akamaized.net/dash/live/2099522/"
+            + "%70bbcollab30allaccesslivestream-externalden/manifest.mpd"
+    };
     private static final String[] CHANNEL_NAMES = {
         "PBB All Access", "PBB Dining Area", "PBB External Den"
     };
     // The gallery is one large feed over two small ones, so the list has to
     // hold the same number of channels as the built-in config.
     private static final int CHANNEL_COUNT = 3;
-    private static final Pattern MEDIA_BASE = Pattern.compile("media=\"(https://[^\"?]*/)[^\"?]*");
+    private static final Pattern MEDIA_BASE = Pattern.compile(
+        "media=\"((?:https://[^\"?]*/|/)[^\"?]*/)[^\"?]*");
     private static final String KEYS_CACHE = "streams.json";
     private static final String SERVER_FILE = "stream_server.txt";
     private static final String LIVE_SERVER_FILE = "live_server.txt";
     private static final String SOURCE_FILE = "stream_source.txt";
     private static final String[] SITE_SERVERS = {
-        "s1", "pbbtop", "s2", "s3", "s4", "twitch"
+        "s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"
     };
     private static final String[] LIVE_SERVERS = {
         "s1", "s2", "s3", "s4", "s5", "s6"
@@ -650,10 +662,15 @@ public class MainActivity extends Activity {
      * manifests only to the cookie that handshake sets.
      */
     private String publishedConfig() {
-        Http.Reply handshake = handshake();
-        JSONArray streams = handshake == null ? null : siteStreams(handshake);
-        if (streams == null) {
-            streams = siteStreamsWithBundledKeys();
+        JSONArray streams = null;
+        if ("pbb3".equals(streamServer) && !useLiveSite) {
+            streams = pbb3Streams();
+        } else {
+            Http.Reply handshake = handshake();
+            streams = handshake == null ? null : siteStreams(handshake);
+            if (streams == null) {
+                streams = siteStreamsWithBundledKeys();
+            }
         }
         if (streams == null) {
             return null;
@@ -671,6 +688,20 @@ public class MainActivity extends Activity {
      * pair instead of replaying a cached manifest with an expired token.
      */
     private JSONArray siteStreamsWithBundledKeys() {
+        String[] mpds = new String[CHANNEL_COUNT];
+        int srv = useLiveSite ? 1 : site2Number(streamServer);
+        for (int i = 0; i < CAM_IDS.length; i++) {
+            mpds[i] = SITE2 + "/api/live/mpd/" + CAM_IDS[i] + ".mpd?srv=s" + srv;
+        }
+        return bundledKeyStreams(mpds, SITE2);
+    }
+
+    /** The pbb-3.pages.dev route, straight from the CDN manifests it names. */
+    private JSONArray pbb3Streams() {
+        return bundledKeyStreams(PBB3_MPD, null);
+    }
+
+    private JSONArray bundledKeyStreams(String[] mpds, String fallbackBase) {
         try {
             JSONArray bundled = new JSONObject(streamConfig()).getJSONArray("streams");
             if (bundled.length() != CHANNEL_COUNT) {
@@ -678,15 +709,14 @@ public class MainActivity extends Activity {
             }
             JSONArray streams = new JSONArray();
             for (int i = 0; i < CAM_IDS.length; i++) {
-                int srv = useLiveSite ? 1 : site2Number(streamServer);
-                String xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
-                    + ".mpd?srv=s" + srv, 5000, 8000);
+                String xml = Http.getText(mpds[i], 5000, 8000);
                 if (xml == null) {
                     return null;
                 }
                 String base = mediaBase(xml);
                 if (base == null) {
-                    base = SITE2;
+                    base = fallbackBase == null
+                        ? mpds[i].substring(0, mpds[i].lastIndexOf('/') + 1) : fallbackBase;
                 }
                 JSONObject keys = bundled.getJSONObject(i);
                 JSONObject stream = new JSONObject();
@@ -840,17 +870,23 @@ public class MainActivity extends Activity {
     /** The absolute segment folder a manifest names, or null when it names none. */
     private static String mediaBase(String xml) {
         Matcher media = MEDIA_BASE.matcher(xml);
-        return media.find() ? media.group(1) : null;
+        if (!media.find()) {
+            return null;
+        }
+        String base = media.group(1);
+        // A root-relative folder has no scheme. Resolving it from a file://
+        // page gives Shaka Error 1000, so anchor it to the site now.
+        return base.startsWith("/") ? SITE2 + base : base;
     }
 
     private String siteMpd(String xml, String base) {
-        String media = mediaBase(xml);
-        if (media != null) {
-            // Both templates carry the same folder. The player and recorder
-            // join names to BaseURL, so neither wants it twice.
-            xml = xml.replace("media=\"" + media, "media=\"");
-            xml = xml.replace("initialization=\"" + media, "initialization=\"");
-        }
+        // Templates may carry the folder as an absolute URL or a root-relative
+        // path. Strip either, leaving names the player and recorder join to
+        // the one BaseURL below.
+        xml = xml.replaceAll("(media|initialization)=\"[^\"]*/", "$1=\"");
+        // Drop every baked BaseURL, including root-relative ones. Leaving one
+        // behind gives Shaka a second, scheme-less location to try.
+        xml = xml.replaceAll("<BaseURL>[^<]*</BaseURL>", "");
         // A baked copy cannot publish updates. Leaving this in makes the player
         // re-poll the same static window every 30s for nothing.
         xml = xml.replaceAll("\\s+minimumUpdatePeriod=\"[^\"]*\"", "");

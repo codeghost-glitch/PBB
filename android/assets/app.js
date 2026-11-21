@@ -125,10 +125,11 @@ function updateStatusMeta() {
   }
   const live = window.Pbb && typeof Pbb.getStreamSource === "function"
     && Pbb.getStreamSource() === "live";
+  const pbb3 = !live && serverSheet.server === "pbb3";
   const server = live
     ? (LIVE_SERVER_NAMES[liveSheet.server] || "Server 1")
     : (SERVER_NAMES[serverSheet.server] || "Server Jeo");
-  meta.textContent = `${live ? "live" : "site"} · ${server} · ${state.quality.toUpperCase()}`;
+  meta.textContent = `${live ? "live" : (pbb3 ? "pbb3" : "site")} · ${server} · ${state.quality.toUpperCase()}`;
 }
 
 function setStatusText(message) {
@@ -1625,12 +1626,12 @@ applyTheme(loadTheme());
 
 // ------------------------------------------------------------------- servers
 
-// The routes and their names are the six pbbcollab.com/live offers. The app
-// stores the pick, so the next launch starts on the same one.
+// Six names from pbbcollab.com/live, plus the direct route from
+// pbb-3.pages.dev. The app stores the pick, so it survives a restart.
 const serverSheet = { server: "s1" };
 const liveSheet = { server: "s1" };
 
-const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch"];
+const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3"];
 
 const SERVER_NAMES = {
   s1: "Server Jeo",
@@ -1639,6 +1640,7 @@ const SERVER_NAMES = {
   s3: "Server Primo",
   s4: "Server Bela",
   twitch: "Twitch Mirror",
+  pbb3: "PBB3.0",
 };
 
 const LIVE_SERVERS = ["s1", "s2", "s3", "s4", "s5", "s6"];
@@ -1694,7 +1696,9 @@ function openSourceSheet() {
     && Pbb.getStreamSource() === "live";
   setSourceNote(live
     ? ("pbbcollab.live · " + LIVE_SERVER_NAMES[liveSheet.server])
-    : ("pbbcollab.com · " + SERVER_NAMES[serverSheet.server]));
+    : (serverSheet.server === "pbb3"
+      ? ("pbb-3.pages.dev · " + SERVER_NAMES[serverSheet.server])
+      : ("pbbcollab.com · " + SERVER_NAMES[serverSheet.server])));
   sheet.classList.remove("hidden");
 }
 
