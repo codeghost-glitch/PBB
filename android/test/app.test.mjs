@@ -162,7 +162,6 @@ function loadPage() {
   const backBtn = makeElement("button");
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
-  const liveServerNote = makeElement("p");
   const liveServerSheet = makeElement("div");
   const liveServerChips = makeElement("div");
   for (const id of ["s1", "s2", "s3", "s4", "s5", "s6"]) {
@@ -184,7 +183,6 @@ function loadPage() {
     themeOptions,
     sourceNote,
     sourceSheet,
-    liveServerNote,
     liveServerSheet,
     liveServerChips,
     serverChips,
@@ -477,12 +475,12 @@ function serverSheetFollowsTheApp() {
     page.fields.serverChips.children[2].classList.contains("active")
     && !page.fields.serverChips.children[0].classList.contains("active"));
   check("the note names the server", true,
-    /Server Nathan is on/.test(page.fields.sourceNote.textContent));
+    /pbbcollab\.com · Server Nathan/.test(page.fields.sourceNote.textContent));
   page.selectServer("s3");
   page.openSourceSheet();
   check("the sheet opens on the third server", "s3", page.serverSheet.server);
   check("the note names the server", true,
-    /Server Primo is on/.test(page.fields.sourceNote.textContent));
+    /pbbcollab\.com · Server Primo/.test(page.fields.sourceNote.textContent));
   check("the third chip is the marked one", true,
     page.fields.serverChips.children[3].classList.contains("active"));
 }
@@ -1020,6 +1018,9 @@ function liveRoutesShareTheServerSheet() {
     html.includes("pbbcollab.com/live") && html.includes("pbbcollab.live"));
   check("the native route list accepts all six live servers", true,
     java.includes('"s1", "s2", "s3", "s4", "s5", "s6"'));
+  check("a blocked handshake falls back to fresh site MPDs", true,
+    java.includes("siteStreamsWithBundledKeys()")
+    && java.includes("new JSONObject(streamConfig()).getJSONArray(\"streams\")"));
 
   const page = loadPage();
   page.openSourceSheet();
@@ -1034,8 +1035,8 @@ function liveRoutesShareTheServerSheet() {
   check("the live pick reaches the app", "s5", call && call[1]);
   check("the shared sheet closes after a pick", true,
     page.fields.sourceSheet.classList.contains("hidden"));
-  check("the note names the live server", true,
-    /Server 5 is on/.test(page.fields.liveServerNote.textContent));
+  check("one note names the live source and server", true,
+    /pbbcollab\.live · Server 5/.test(page.fields.sourceNote.textContent));
   check("the status names the active source and server", true,
     /live · Server 5 · HD/.test(page.fields.statusMeta.textContent));
 }

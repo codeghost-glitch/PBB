@@ -651,16 +651,54 @@ public class MainActivity extends Activity {
      */
     private String publishedConfig() {
         Http.Reply handshake = handshake();
-        if (handshake == null) {
-            return null;
+        JSONArray streams = handshake == null ? null : siteStreams(handshake);
+        if (streams == null) {
+            streams = siteStreamsWithBundledKeys();
         }
-        JSONArray streams = siteStreams(handshake);
         if (streams == null) {
             return null;
         }
         try {
             String json = new JSONObject().put("streams", streams).toString();
             return validKeys(json) != null ? json : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * If the session API is blocked, use the site's MPD with the bundled key
+     * pair instead of replaying a cached manifest with an expired token.
+     */
+    private JSONArray siteStreamsWithBundledKeys() {
+        try {
+            JSONArray bundled = new JSONObject(streamConfig()).getJSONArray("streams");
+            if (bundled.length() != CHANNEL_COUNT) {
+                return null;
+            }
+            JSONArray streams = new JSONArray();
+            for (int i = 0; i < CAM_IDS.length; i++) {
+                int srv = useLiveSite ? 1 : site2Number(streamServer);
+                String xml = Http.getText(SITE2 + "/api/live/mpd/" + CAM_IDS[i]
+                    + ".mpd?srv=s" + srv, 5000, 8000);
+                if (xml == null) {
+                    return null;
+                }
+                String base = mediaBase(xml);
+                if (base == null) {
+                    base = SITE2;
+                }
+                JSONObject keys = bundled.getJSONObject(i);
+                JSONObject stream = new JSONObject();
+                stream.put("name", CHANNEL_NAMES[i]);
+                stream.put("base", base);
+                stream.put("url", DATA_MPD + Base64.encodeToString(
+                    siteMpd(xml, base).getBytes("UTF-8"), Base64.NO_WRAP));
+                stream.put("kid", keys.getString("kid"));
+                stream.put("key", keys.getString("key"));
+                streams.put(stream);
+            }
+            return streams;
         } catch (Exception e) {
             return null;
         }

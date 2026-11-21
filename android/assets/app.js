@@ -1690,8 +1690,11 @@ function openSourceSheet() {
   }
   markServerChoice();
   markLiveServerChoice();
-  setSourceNote(SERVER_NAMES[serverSheet.server] + " is on");
-  setLiveNote(LIVE_SERVER_NAMES[liveSheet.server] + " is on");
+  const live = window.Pbb && typeof Pbb.getStreamSource === "function"
+    && Pbb.getStreamSource() === "live";
+  setSourceNote(live
+    ? ("pbbcollab.live · " + LIVE_SERVER_NAMES[liveSheet.server])
+    : ("pbbcollab.com · " + SERVER_NAMES[serverSheet.server]));
   sheet.classList.remove("hidden");
 }
 
@@ -1734,26 +1737,19 @@ function markLiveServerChoice() {
 function selectLiveServer(server) {
   const pick = LIVE_SERVERS.includes(server) ? server : "s1";
   if (!window.Pbb || typeof Pbb.setLiveServer !== "function") {
-    setLiveNote("android bridge missing");
+    setSourceNote("android bridge missing");
     return;
   }
   const error = Pbb.setLiveServer(pick);
   if (error) {
-    setLiveNote(error);
+    setSourceNote(error);
     return;
   }
   liveSheet.server = pick;
   markLiveServerChoice();
-  setLiveNote(LIVE_SERVER_NAMES[pick] + " is on");
+  setSourceNote("pbbcollab.live · " + LIVE_SERVER_NAMES[pick]);
   closeSourceSheet();
   setTransientStatus(LIVE_SERVER_NAMES[pick] + " - reconnecting");
-}
-
-function setLiveNote(message) {
-  const note = sourceField("liveServerNote");
-  if (note) {
-    note.textContent = message;
-  }
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
