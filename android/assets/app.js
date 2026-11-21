@@ -1899,7 +1899,7 @@ function boot() {
   const stitchBtn = document.getElementById("stitchBtn");
   setStatusKey(refreshBtn, "refresh", "Refresh streams");
   setStatusKey(sourceBtn, "server", "Choose a stream server");
-  setIcon(themeBtn, "palette", "Choose a color theme");
+  setStatusKey(themeBtn, "palette", "Choose a color theme");
   setStatusKey(backBtn, "grid", "Back to grid");
   updateStitchButton();
 

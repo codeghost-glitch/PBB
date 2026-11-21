@@ -870,9 +870,10 @@ function designSystemHoldsTheLine() {
     html.includes('class="status-main"') && html.includes('class="status-actions"')
     && /\.status \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/s.test(css));
   check("the stream keys carry labels, not bare icons", true,
-    (html.match(/class="key-glyph"/g) || []).length === 4
-    && ["Servers", "Refresh", "Stack", "Back"]
+    (html.match(/class="key-glyph"/g) || []).length === 5
+    && ["Theme", "Servers", "Refresh", "Stack", "Back"]
       .every((label) => html.includes(`class="key-label">${label}`))
+    && /setStatusKey\(themeBtn, "palette"/.test(app)
     && /\.status-key \{[^}]*flex-direction: column/s.test(css));
   check("the live badge is uppercase", true,
     /createTextNode\("LIVE"\)/.test(app)
@@ -899,6 +900,8 @@ function liveWindowAndBackupRoute() {
   check("every media hop goes through the app", true,
     /shouldInterceptRequest\(/.test(java)
     && java.includes('url.startsWith(SITE + "/stream/")')
+    && java.includes('url.startsWith(SITE2 + "/stream/")')
+    && java.includes('url.startsWith(SITE2 + "/chat/")')
     && java.includes('url.startsWith("https://absp-live.akamaized.net/")')
     && java.includes('url.startsWith(MIRROR)')
     && java.includes('setRequestProperty("Cookie", sessionCookie)')

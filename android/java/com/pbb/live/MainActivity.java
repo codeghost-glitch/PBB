@@ -256,6 +256,7 @@ public class MainActivity extends Activity {
                 String url = request.getUrl().toString();
                 if (url.startsWith(SITE + "/stream/")
                     || url.startsWith(SITE2 + "/stream/")
+                    || url.startsWith(SITE2 + "/chat/")
                     || url.startsWith("https://absp-live.akamaized.net/")
                     || url.startsWith(MIRROR)) {
                     return proxyStream(url, request.getRequestHeaders());

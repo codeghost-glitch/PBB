@@ -231,6 +231,12 @@ h1 {
   margin-left: auto;
 }
 
+/* The theme key uses the same labelled key as the stream controls. */
+.desk-actions .status-key {
+  flex: 0 0 auto;
+  width: 64px;
+}
+
 .seg {
   display: inline-flex;
   align-items: center;
