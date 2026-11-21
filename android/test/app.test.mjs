@@ -144,6 +144,13 @@ function loadPage() {
   const statusText = makeElement("span");
   const statusMeta = makeElement("span");
   const statusBar = makeElement("footer");
+  const themeSheet = makeElement("div");
+  const themeOptions = makeElement("div");
+  for (const id of ["gold", "blue", "green", "violet"]) {
+    const option = makeElement("button");
+    option.dataset.theme = id;
+    themeOptions.appendChild(option);
+  }
   const backBtn = makeElement("button");
   const sourceNote = makeElement("p");
   const sourceSheet = makeElement("div");
@@ -157,14 +164,21 @@ function loadPage() {
     statusText,
     statusMeta,
     statusBar,
+    themeSheet,
+    themeOptions,
     sourceNote,
     sourceSheet,
     serverChips,
   };
+  const stored = {};
+  const localStorageStub = {
+    getItem: (key) => (key in stored ? stored[key] : null),
+    setItem: (key, value) => { stored[key] = String(value); },
+  };
   const windowStub = {
     Pbb,
     matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
-    localStorage: { getItem: () => null, setItem() {} },
+    localStorage: localStorageStub,
   };
 
   const documentStub = {
@@ -216,6 +230,10 @@ function loadPage() {
   players,
   gesture,
   serverSheet,
+  theme,
+  applyTheme,
+  openThemeSheet,
+  closeThemeSheet,
   selectServer,
   openSourceSheet,
   setStatusText,
@@ -255,6 +273,7 @@ function loadPage() {
   page.statusText = statusText;
   page.calls = calls;
   page.fields = fields;
+  page.storage = stored;
   return page;
 }
 
@@ -467,10 +486,9 @@ function fullscreenKeepsThePictureWhole() {
     /\.fs-deck \{[^}]*background: var\(--surface\)/s.test(css)
     && !css.includes("backdrop-filter"));
   check("the app is dark only", true,
-    html.includes('data-theme="dark"')
+    /data-theme="(gold|blue|green|violet)"/.test(html)
     && /color-scheme: dark/.test(css)
-    && !/color-scheme: dark light/.test(html)
-    && !/themeBtn/.test(html));
+    && !/color-scheme: dark light/.test(html));
   check("keys stay compact but keep a 44px target", true,
     /\.fs-keys \{[^}]*grid-template-columns: repeat\(2, var\(--tap\)\)/s.test(css)
     && /\.fs-key \{[^}]*min-height: var\(--tap\)/s.test(css));
@@ -899,6 +917,10 @@ function statusStripCarriesContext() {
     css.includes('.status[data-state="error"] .status-led')
     && css.includes('.status-meta')
     && /\.status-actions::before/.test(css));
+  check("the status copy keeps its height when the hint changes", true,
+    /#statusText \{[^}]*min-height: 2\.7em/s.test(css)
+    && /#statusText \{[^}]*-webkit-line-clamp: 2/s.test(css)
+    && /\.status-meta \{[^}]*min-height: 1\.25em/s.test(css));
 }
 
 function serverSheetAndWallReadClearly() {
@@ -907,9 +929,11 @@ function serverSheetAndWallReadClearly() {
   check("the server sheet explains the switch", true,
     html.includes('class="sheet-intro"')
     && html.includes("Switching reconnects all three feeds."));
+  const routeBlock = /<div class="sheet-chips" id="serverChips"[\s\S]*?<\/div>/.exec(html);
   check("the routes are a radio group", true,
-    html.includes('role="radiogroup"')
-    && (html.match(/role="radio"/g) || []).length === 6);
+    Boolean(routeBlock)
+    && routeBlock[0].includes('role="radiogroup"')
+    && (routeBlock[0].match(/role="radio"/g) || []).length === 6);
   check("the chosen route is named to assistive tech", true,
     /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
       fs.readFileSync(APP, "utf8")));
@@ -928,6 +952,36 @@ function serverSheetAndWallReadClearly() {
     page.fields.serverChips.children[2].getAttribute("aria-checked"));
   check("the other routes are unchecked", "false",
     page.fields.serverChips.children[0].getAttribute("aria-checked"));
+}
+
+function materialYouThemesSwitch() {
+  const page = loadPage();
+  const css = fs.readFileSync(CSS, "utf8");
+  const html = fs.readFileSync(HTML, "utf8");
+  check("four preset schemes exist", true,
+    ["gold", "blue", "green", "violet"]
+      .every((name) => css.includes(`:root[data-theme="${name}"]`)));
+  check("the theme picker is a radio group", true,
+    html.includes('id="themeOptions"') && html.includes('role="radiogroup"')
+    && (html.match(/data-theme="(gold|blue|green|violet)"/g) || []).length >= 4);
+
+  check("the default theme is gold", "gold",
+    page.window.document.documentElement.getAttribute("data-theme"));
+  page.applyTheme("blue", true);
+  check("the chosen theme reaches the document", "blue",
+    page.window.document.documentElement.getAttribute("data-theme"));
+  check("the theme is stored", "blue", page.storage.pbb_theme);
+  check("the chosen theme is checked", "true",
+    page.fields.themeOptions.children[1].getAttribute("aria-checked"));
+  check("the old theme is unchecked", "false",
+    page.fields.themeOptions.children[0].getAttribute("aria-checked"));
+
+  page.openThemeSheet();
+  check("the theme sheet opens", false,
+    page.fields.themeSheet.classList.contains("hidden"));
+  page.closeThemeSheet();
+  check("the theme sheet closes", true,
+    page.fields.themeSheet.classList.contains("hidden"));
 }
 
 const tests = [
@@ -958,6 +1012,7 @@ const tests = [
   launcherIconFollowsTheSystem,
   statusStripCarriesContext,
   serverSheetAndWallReadClearly,
+  materialYouThemesSwitch,
 ];
 
 for (const test of tests) {

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-type="software" data-theme="dark">
+<html lang="en" data-type="software" data-theme="gold">
 <head>
   <meta charset="utf-8">
   <meta name="page-type" content="software">
@@ -27,6 +27,7 @@
         </div>
       </div>
       <div class="desk-actions">
+        <button id="themeBtn" class="btn btn-ghost btn-icon" type="button" aria-label="choose color theme"></button>
         <div class="seg" role="group" aria-label="default quality">
           <button class="seg-btn" type="button" data-quality="hd">HD</button>
           <button class="seg-btn" type="button" data-quality="sd">SD</button>
@@ -61,6 +62,33 @@
         <button id="backBtn" class="btn btn-ghost btn-icon hidden" type="button" aria-label="back to grid"></button>
       </div>
     </footer>
+  </div>
+  <div class="sheet hidden" id="themeSheet" role="dialog" aria-modal="true" aria-label="color theme">
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <h2>theme</h2>
+        <button id="themeClose" class="btn btn-ghost btn-icon" type="button" aria-label="close themes"></button>
+      </div>
+      <p class="sheet-intro">Material You colors. The theme stays on this phone.</p>
+      <div class="sheet-chips" id="themeOptions" role="radiogroup" aria-label="color theme">
+        <button class="chip" type="button" role="radio" aria-checked="true" data-theme="gold">
+          <span class="chip-key theme-swatch gold" aria-hidden="true"></span>
+          <span class="chip-name">Brand gold</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-theme="blue">
+          <span class="chip-key theme-swatch blue" aria-hidden="true"></span>
+          <span class="chip-name">Blue hour</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-theme="green">
+          <span class="chip-key theme-swatch green" aria-hidden="true"></span>
+          <span class="chip-name">Green room</span>
+        </button>
+        <button class="chip" type="button" role="radio" aria-checked="false" data-theme="violet">
+          <span class="chip-key theme-swatch violet" aria-hidden="true"></span>
+          <span class="chip-name">Night violet</span>
+        </button>
+      </div>
+    </div>
   </div>
   <div class="sheet hidden" id="sourceSheet" role="dialog" aria-modal="true" aria-label="stream server">
     <div class="sheet-panel">

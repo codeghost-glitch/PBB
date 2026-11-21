@@ -510,6 +510,12 @@ const ICONS = {
     ["rect", { x: 3, y: 3, width: 18, height: 8, rx: 1 }],
     ["rect", { x: 3, y: 13, width: 18, height: 8, rx: 1 }],
   ],
+  palette: [
+    ["path", { d: "M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6a3 3 0 0 0 3-3A6 6 0 0 0 12 3z" }],
+    ["circle", { cx: 7.5, cy: 10.5, r: 1, fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: 10.5, cy: 7.5, r: 1, fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: 15, cy: 8, r: 1, fill: "currentColor", stroke: "none" }],
+  ],
 };
 
 const SVG_ATTRS = {
@@ -1509,6 +1515,100 @@ window.onStreamConfig = async (raw) => {
   setStatusText("keys refreshed - reconnecting streams");
 };
 
+// ------------------------------------------------------------------- themes
+
+const THEME_KEY = "pbb_theme";
+const THEMES = ["gold", "blue", "green", "violet"];
+const THEME_NAMES = {
+  gold: "Brand gold",
+  blue: "Blue hour",
+  green: "Green room",
+  violet: "Night violet",
+};
+const theme = { current: "gold" };
+
+function loadTheme() {
+  try {
+    const saved = window.localStorage && window.localStorage.getItem(THEME_KEY);
+    return THEMES.includes(saved) ? saved : "gold";
+  } catch {
+    return "gold";
+  }
+}
+
+function markThemeChoice() {
+  const row = document.getElementById("themeOptions");
+  if (!row) {
+    return;
+  }
+  for (const option of row.children) {
+    const active = option.dataset.theme === theme.current;
+    option.classList.toggle("active", active);
+    option.setAttribute("aria-checked", active ? "true" : "false");
+  }
+}
+
+function applyTheme(name, persist = false) {
+  const pick = THEMES.includes(name) ? name : "gold";
+  theme.current = pick;
+  document.documentElement.setAttribute("data-theme", pick);
+  markThemeChoice();
+  if (persist) {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(THEME_KEY, pick);
+      }
+    } catch {
+      // The theme still applies for this session.
+    }
+  }
+}
+
+function openThemeSheet() {
+  const sheet = document.getElementById("themeSheet");
+  if (!sheet) {
+    return;
+  }
+  markThemeChoice();
+  sheet.classList.remove("hidden");
+}
+
+function closeThemeSheet() {
+  const sheet = document.getElementById("themeSheet");
+  if (sheet) {
+    sheet.classList.add("hidden");
+  }
+}
+
+function wireThemeSheet() {
+  const sheet = document.getElementById("themeSheet");
+  if (!sheet) {
+    return;
+  }
+  const close = document.getElementById("themeClose");
+  if (close) {
+    setIcon(close, "close", "close themes");
+    close.addEventListener("click", closeThemeSheet);
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeThemeSheet();
+    }
+  });
+  const options = document.getElementById("themeOptions");
+  if (options) {
+    for (const option of options.children) {
+      option.addEventListener("click", () => {
+        applyTheme(option.dataset.theme, true);
+        setTransientStatus(`theme: ${THEME_NAMES[theme.current]}`);
+        closeThemeSheet();
+      });
+    }
+  }
+}
+
+applyTheme(loadTheme());
+
 // ------------------------------------------------------------------- servers
 
 // The routes and their names are the six pbbcollab.com/live offers. The app
@@ -1723,12 +1823,18 @@ function boot() {
     setIcon(sourceBtn, "server", "choose stream server");
     sourceBtn.addEventListener("click", openSourceSheet);
   }
+  const themeBtn = document.getElementById("themeBtn");
+  if (themeBtn) {
+    setIcon(themeBtn, "palette", "choose color theme");
+    themeBtn.addEventListener("click", openThemeSheet);
+  }
   const stitchBtn = document.getElementById("stitchBtn");
   if (stitchBtn) {
     stitchBtn.addEventListener("click", toggleStitch);
   }
   updateStitchButton();
   wireSourceSheet();
+  wireThemeSheet();
   indicator = document.getElementById("indicator");
   setIcon(backBtn, "grid", "back to grid");
   const fsLock = document.getElementById("fsLock");

@@ -12,17 +12,6 @@
 :root {
   color-scheme: dark;
 
-  /* Material 3 roles, seeded from the brand gold. */
-  --md-sys-color-primary: #E8C56A;
-  --md-sys-color-on-primary: #201A08;
-  --md-sys-color-primary-container: #4A3B10;
-  --md-sys-color-on-primary-container: #FFE0A3;
-  --md-sys-color-surface: #111316;
-  --md-sys-color-surface-container: #1B1E22;
-  --md-sys-color-surface-container-high: #262A2F;
-  --md-sys-color-on-surface: #F2F0EC;
-  --md-sys-color-on-surface-variant: #C7C7C4;
-  --md-sys-color-outline: #7E7F83;
   --md-sys-color-error: #FFB4AB;
   --md-sys-color-on-error: #2B0A09;
   --md-sys-color-inverse-surface: #E6E2E0;
@@ -84,6 +73,60 @@
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
 
+/* Preset Material 3 dark schemes. Each block changes only the seed roles;
+   every component reads the aliases above. */
+:root,
+:root[data-theme="gold"] {
+  --md-sys-color-primary: #E8C56A;
+  --md-sys-color-on-primary: #201A08;
+  --md-sys-color-primary-container: #4A3B10;
+  --md-sys-color-on-primary-container: #FFE0A3;
+  --md-sys-color-surface: #111316;
+  --md-sys-color-surface-container: #1B1E22;
+  --md-sys-color-surface-container-high: #262A2F;
+  --md-sys-color-on-surface: #F2F0EC;
+  --md-sys-color-on-surface-variant: #C7C7C4;
+  --md-sys-color-outline: #7E7F83;
+}
+
+:root[data-theme="blue"] {
+  --md-sys-color-primary: #AECBFA;
+  --md-sys-color-on-primary: #0A1D3F;
+  --md-sys-color-primary-container: #28446E;
+  --md-sys-color-on-primary-container: #D7E3FF;
+  --md-sys-color-surface: #101318;
+  --md-sys-color-surface-container: #1A1E26;
+  --md-sys-color-surface-container-high: #242935;
+  --md-sys-color-on-surface: #E5E9F2;
+  --md-sys-color-on-surface-variant: #C2C8D6;
+  --md-sys-color-outline: #7D879B;
+}
+
+:root[data-theme="green"] {
+  --md-sys-color-primary: #B7E1C1;
+  --md-sys-color-on-primary: #0B2512;
+  --md-sys-color-primary-container: #234633;
+  --md-sys-color-on-primary-container: #D6F5DD;
+  --md-sys-color-surface: #101613;
+  --md-sys-color-surface-container: #19221D;
+  --md-sys-color-surface-container-high: #232E27;
+  --md-sys-color-on-surface: #E7F1E9;
+  --md-sys-color-on-surface-variant: #C0D0C4;
+  --md-sys-color-outline: #74867A;
+}
+
+:root[data-theme="violet"] {
+  --md-sys-color-primary: #D0BCFF;
+  --md-sys-color-on-primary: #381E72;
+  --md-sys-color-primary-container: #4F378B;
+  --md-sys-color-on-primary-container: #EADDFF;
+  --md-sys-color-surface: #141218;
+  --md-sys-color-surface-container: #1E1B25;
+  --md-sys-color-surface-container-high: #292532;
+  --md-sys-color-on-surface: #E6E0E9;
+  --md-sys-color-on-surface-variant: #CAC4D0;
+  --md-sys-color-outline: #7D7A85;
+}
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -592,6 +635,12 @@ h1 {
 #statusText {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   font-size: var(--t-body);
   line-height: 1.35;
   color: var(--ink);
@@ -602,6 +651,7 @@ h1 {
 .status-meta {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 1.25em;
   color: var(--faint);
   font-size: var(--t-label);
   font-variant-numeric: tabular-nums;
@@ -1030,6 +1080,20 @@ body.fullscreen-mode .indicator {
 }
 
 .chip:not(.active):hover { background: var(--g-alt); }
+
+.theme-swatch {
+  border-color: transparent;
+  background: var(--md-sys-color-primary);
+}
+
+.theme-swatch.blue { background: #AECBFA; }
+.theme-swatch.green { background: #B7E1C1; }
+.theme-swatch.violet { background: #D0BCFF; }
+
+.chip.active .theme-swatch {
+  border-color: var(--on-primary);
+  box-shadow: inset 0 0 0 3px var(--primary-container);
+}
 
 .chip.active {
   color: var(--on-primary-container);
