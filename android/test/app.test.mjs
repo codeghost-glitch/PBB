@@ -604,8 +604,9 @@ function channelSourceContract() {
     java.includes('"_b=" + bucket')
     && java.includes('System.currentTimeMillis() / 15000L'));
   check("the handshake carries the site's same-origin headers", true,
-    http.includes('setRequestProperty("Sec-Fetch-Site", "same-origin")')
-    && http.includes('setRequestProperty("Origin", "https://www.pbbcollab.live")')
+    http.includes('setHeader(conn, "Sec-Fetch-Site", "same-origin")')
+    && http.includes('setHeader(conn, "Origin", "https://www.pbbcollab.live")')
+    && http.includes('getDeclaredField("requests")')
     && http.includes('sun.net.http.allowRestrictedHeaders'));
   check("the site's MPD is inlined as a data URL", true,
     java.includes('DATA_MPD = "data:application/dash+xml;base64,"')
@@ -958,6 +959,7 @@ function serverSheetAndWallReadClearly() {
   check("the chosen route is named to assistive tech", true,
     /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
       fs.readFileSync(APP, "utf8")));
+  check("only one route can claim in use", false, css.includes("content: \"in use\""));
   check("the active route reads as a selected row", true,
     /\.chip\.active \{[\s\S]*?background: var\(--primary-container\)/.test(css)
     && /\.chip\.active \{[\s\S]*?border-color: var\(--primary\)/.test(css));

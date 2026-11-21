@@ -1157,15 +1157,6 @@ body.fullscreen-mode .indicator {
 
 
 
-.chip.active::after {
-  content: "in use";
-  margin-left: auto;
-  color: var(--on-primary-container);
-  font-size: var(--t-label);
-  font-weight: var(--w-bold);
-  white-space: nowrap;
-}
-
 .sheet-note {
   padding: var(--s-3) var(--s-4);
   color: var(--on-primary-container);

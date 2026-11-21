@@ -3,10 +3,14 @@ package com.pbb.live;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * The two HTTP GETs the app makes and the one stream reader, in a single place
@@ -22,6 +26,43 @@ final class Http {
     }
 
     private Http() {
+    }
+
+    /**
+     * Android's HttpURLConnection drops restricted headers even when the
+     * JDK property is set. Put the value into the connection's own header map
+     * as well, so the site sees the same request its page sends.
+     */
+    private static void setHeader(HttpURLConnection conn, String name, String value) {
+        conn.setRequestProperty(name, value);
+        try {
+            Class<?> type = conn.getClass();
+            while (type != null) {
+                try {
+                    Field field = type.getDeclaredField("requests");
+                    field.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    Map<String, List<String>> requests =
+                        (Map<String, List<String>>) field.get(conn);
+                    if (requests != null) {
+                        String key = name.toLowerCase(Locale.US);
+                        List<String> values = requests.get(key);
+                        if (values == null) {
+                            values = new ArrayList<String>();
+                            requests.put(key, values);
+                        }
+                        values.clear();
+                        values.add(value);
+                    }
+                    return;
+                } catch (NoSuchFieldException e) {
+                    type = type.getSuperclass();
+                }
+            }
+        } catch (Throwable ignored) {
+            // setRequestProperty above still works on implementations without
+            // the field.
+        }
     }
 
     static HttpURLConnection open(String url, int connectMs, int readMs) throws IOException {
@@ -126,13 +167,13 @@ final class Http {
         conn.setRequestProperty("Content-Type", "application/json");
         // The session API rejects a plain API client. It wants the same
         // same-origin fetch headers the site's own page sends.
-        conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-        conn.setRequestProperty("Origin", "https://www.pbbcollab.live");
-        conn.setRequestProperty("Referer", "https://www.pbbcollab.live/");
-        conn.setRequestProperty("Sec-Fetch-Site", "same-origin");
-        conn.setRequestProperty("Sec-Fetch-Mode", "cors");
-        conn.setRequestProperty("Sec-Fetch-Dest", "empty");
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36");
+        setHeader(conn, "Accept", "application/json, text/plain, */*");
+        setHeader(conn, "Origin", "https://www.pbbcollab.live");
+        setHeader(conn, "Referer", "https://www.pbbcollab.live/");
+        setHeader(conn, "Sec-Fetch-Site", "same-origin");
+        setHeader(conn, "Sec-Fetch-Mode", "cors");
+        setHeader(conn, "Sec-Fetch-Dest", "empty");
+        setHeader(conn, "User-Agent", "Mozilla/5.0 (Android) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36");
         if (client != null) {
             conn.setRequestProperty("X-PBB-Client", client);
         }
