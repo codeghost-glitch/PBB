@@ -23,14 +23,14 @@ public final class RecorderLogicTest {
         liveApiIsUsed();
         serviceStopsOnlyWhenIdle();
         stitchKeepsBothPendingStarts();
-        theStitchPairStacksOnceAndAbortsOnFailure();
+        theStitchGroupStacksOnceAndAbortsOnFailure();
         theSnapshotScriptMatchesTheApp();
         siteServersAreAccepted();
         theMpdUsesOneAbsoluteSegmentBase();
         cdnPathKeepsItsEscapedLetter();
         theClearKeyHeaderWins();
         aSite503RetriesOnTheCdn();
-        theServiceMarksTheStitchPairAtStart();
+        theServiceMarksTheStitchGroupAtStart();
         stopBreaksSocketReads();
         cookieStaysOnTheSite();
         if (failures > 0) {
@@ -151,7 +151,12 @@ public final class RecorderLogicTest {
             javaSource.contains("publishedClearKey(i, srv)")
             && !javaSource.contains("manifestKid(url)"));
         check("a published pair overrides the bundled one", true,
-            javaSource.contains("liveKeys == null ? keys.getString(\"kid\") : liveKeys[0]"));
+            javaSource.contains("liveKeys == null ? bundled.getJSONObject(i).getString(\"kid\") : liveKeys[0]"));
+        check("the MPD KID is rewritten to the published key", true,
+            javaSource.contains("cenc:default_KID=\\\"")
+            && javaSource.contains("Http.psshForKid(cleanKid)"));
+        check("site segments get a cache-safe query", true,
+            javaSource.contains("$2?_pbb=1"));
     }
 
     private static void aSite503RetriesOnTheCdn() throws Exception {
@@ -164,37 +169,38 @@ public final class RecorderLogicTest {
             && source.contains("return cdn + name;"));
     }
 
-    private static void theServiceMarksTheStitchPairAtStart() throws Exception {
+    private static void theServiceMarksTheStitchGroupAtStart() throws Exception {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
         String service = sourceOf("android/java/com/pbb/live/RecordService.java");
         int start = source.indexOf("private void startRecordService()");
         int end = source.indexOf("private String makeDisplayName", start);
         String body = source.substring(start, end);
-        check("the pair is marked when both starts are sent", true,
-            body.contains("RecordService.markStackPair(0, 1);")
-            && body.contains("indices.contains(Integer.valueOf(0))"));
+        check("the group is marked when all three starts are sent", true,
+            body.contains("RecordService.markStackGroup(0, 1, 2);")
+            && body.contains("indices.contains(Integer.valueOf(2))"));
         check("the stack start reports its status", true,
             service.contains("Saving stacked video"));
     }
 
     /**
-     * The join runs only when both feeds saved. A half pair waits, a failed feed
-     * abandons the pair, and a running join is never started twice: those three
-     * answers are the difference between one stacked file and two separate ones.
+     * The join runs only when all three feeds saved. A partial group waits, a
+     * failed feed abandons it, and a running join is never started twice.
      */
-    private static void theStitchPairStacksOnceAndAbortsOnFailure() {
-        check("the first feed waits for its partner", RecordService.PAIR_WAIT,
-            RecordService.pairStep(0, false, false, true, true, false));
-        check("the second feed starts the join", RecordService.PAIR_STACK,
-            RecordService.pairStep(0, false, false, true, true, true));
-        check("a failed feed abandons the pair", RecordService.PAIR_ABORT,
-            RecordService.pairStep(0, false, false, false, true, true));
-        check("a running join is not started twice", RecordService.PAIR_WAIT,
-            RecordService.pairStep(0, true, false, true, true, true));
-        check("no pair means nothing to join", RecordService.PAIR_WAIT,
-            RecordService.pairStep(-1, false, false, true, true, true));
-        check("an abandoned pair never rejoins", RecordService.PAIR_WAIT,
-            RecordService.pairStep(0, false, true, true, true, true));
+    private static void theStitchGroupStacksOnceAndAbortsOnFailure() {
+        boolean[] all = {true, true, true};
+        boolean[] partial = {true, true, false};
+        check("the last feed joins the group", RecordService.STACK_JOIN,
+            RecordService.stackStep(0, false, false, true, all));
+        check("a partial group waits", RecordService.STACK_WAIT,
+            RecordService.stackStep(0, false, false, true, partial));
+        check("a failed feed abandons the group", RecordService.STACK_ABORT,
+            RecordService.stackStep(0, false, false, false, all));
+        check("a running join is not started twice", RecordService.STACK_WAIT,
+            RecordService.stackStep(0, true, false, true, all));
+        check("no group means nothing to join", RecordService.STACK_WAIT,
+            RecordService.stackStep(-1, false, false, true, all));
+        check("an abandoned group never rejoins", RecordService.STACK_WAIT,
+            RecordService.stackStep(0, false, true, true, all));
     }
 
     /**

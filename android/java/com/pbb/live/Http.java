@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -67,6 +68,33 @@ final class Http {
             // setRequestProperty above still works on implementations without
             // the field.
         }
+    }
+
+    /** A 52-byte Widevine PSSH carrying the current ClearKey KID. */
+    static String psshForKid(String rawKid) {
+        String kid = rawKid == null ? "" : rawKid.replace("-", "").toLowerCase(Locale.US);
+        if (!kid.matches("[0-9a-f]{32}")) {
+            return "";
+        }
+        byte[] out = new byte[52];
+        out[0] = 0;
+        out[1] = 0;
+        out[2] = 0;
+        out[3] = 52;
+        byte[] pssh = "pssh".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        System.arraycopy(pssh, 0, out, 4, pssh.length);
+        out[8] = 1;
+        byte[] system = {
+            (byte) 0x10, (byte) 0x77, (byte) 0xef, (byte) 0xec, (byte) 0xc0, (byte) 0xb2,
+            (byte) 0x4d, (byte) 0x02, (byte) 0xac, (byte) 0xe3, (byte) 0x3c, (byte) 0x1e,
+            (byte) 0x52, (byte) 0xe2, (byte) 0xfb, (byte) 0x4b
+        };
+        System.arraycopy(system, 0, out, 12, system.length);
+        out[31] = 1;
+        for (int i = 0; i < 16; i++) {
+            out[32 + i] = (byte) Integer.parseInt(kid.substring(i * 2, i * 2 + 2), 16);
+        }
+        return Base64.getEncoder().encodeToString(out);
     }
 
     /** Akamai rejects the literal camera folder; escape its first letter. */

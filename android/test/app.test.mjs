@@ -126,7 +126,7 @@ function loadPage() {
   const Pbb = {
     setVolume: (value, persist) => calls.push(["setVolume", value, persist]),
     setBrightness: (value, persist) => calls.push(["setBrightness", value, persist]),
-    markStackPair: (top, bottom) => calls.push(["markStackPair", top, bottom]),
+    markStackGroup: (first, second, third) => calls.push(["markStackGroup", first, second, third]),
     startRecording: (index, label) => calls.push(["startRecording", index, label]),
     stopRecording: (index) => calls.push(["stopRecording", index]),
     setFocusedStream: (index) => calls.push(["setFocusedStream", index]),
@@ -683,15 +683,15 @@ function channelSourceContract() {
 function stitchAndServerContract() {
   const app = fs.readFileSync(APP, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
-  check("the double record uses the native recorder, not a WebView canvas", true,
+  check("the triple record uses the native recorder, not a WebView canvas", true,
     !/captureStream|MediaRecorder/s.test(app) &&
-    /STITCH_FEEDS = \[0, 1\]/s.test(app) &&
+    /STITCH_FEEDS = \[0, 1, 2\]/s.test(app) &&
     /Pbb\.startRecording\(index, players\[index\]\.stream\.name\)/s.test(app));
-  check("the two feeds are marked as a stack pair before recording", true,
-    /Pbb\.markStackPair\(STITCH_FEEDS\[0\], STITCH_FEEDS\[1\]\)/s.test(app));
-  check("a single recording clears any pending stack pair", true,
-    /Pbb\.markStackPair\(-1, -1\)/s.test(app));
-  check("the double record has a visible tally state", true,
+  check("all three feeds are marked as a stack group before recording", true,
+    /Pbb\.markStackGroup\(STITCH_FEEDS\[0\], STITCH_FEEDS\[1\], STITCH_FEEDS\[2\]\)/s.test(app));
+  check("a single recording clears any pending stack group", true,
+    /Pbb\.markStackGroup\(-1, -1, -1\)/s.test(app));
+  check("the triple record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
   check("the sheet lists the site servers and the two mirrors", true,
@@ -744,7 +744,13 @@ function stitchAndServerContract() {
     && java.includes("doc = siteMpdText(i, srv == 0 ? 1 : 0)"));
   check("the published key header overrides the bundled key", true,
     java.includes("clearKeyPair(doc == null ? null : doc.clearKey)")
-    && /stream\.put\("kid", liveKeys == null \? pair\[0\] : liveKeys\[0\]\)/.test(java));
+    && /String kid = liveKeys == null \? pair\[0\] : liveKeys\[0\];/.test(java));
+  check("the site PSSH follows the published KID", true,
+    java.includes("Http.psshForKid(cleanKid)")
+    && /siteMpd\(xml, base, kid\)/.test(java));
+  check("site segment names get a cache-safe query", true,
+    java.includes("$2?_pbb=1")
+    && /base\.startsWith\(SITE2 \+ "\/"\)/.test(java));
   check("a failed MPD load cannot fall through with no manifest", true,
     /if \(xml == null\) \{\s*return null;\s*\}\s*if \(base == null\)/.test(java));
   check("a failed site route falls back to the live session only last", true,
@@ -829,12 +835,14 @@ function playbackAndRecorderFixes() {
     /if \(!session\.running\) \{[\s\S]{0,500}Thread\.interrupted\(\)[\s\S]{0,150}stopFetches/s.test(java));
   const plugin = fs.readFileSync(path.join(HERE, "..", "java", "com", "pbb", "live", "RecordService.java"), "utf8");
   const c = fs.readFileSync(path.join(HERE, "..", "..", "ffmpeg", "pbb_ffmpeg.c"), "utf8");
-  check("a stitch pair is joined by native code into one file", true,
-    /nativeStack\(top\.getAbsolutePath\(\), bottom\.getAbsolutePath\(\)/s.test(plugin) &&
+  check("three feeds are joined by native code into one file", true,
+    /nativeStack\(sources\[0\]\.getAbsolutePath\(\), sources\[1\]\.getAbsolutePath\(\)/s.test(plugin) &&
+    /sources\[2\]\.getAbsolutePath\(\)/s.test(plugin) &&
     /int pbb_stack\(/s.test(c) &&
-    /stack_planes\(frame, pt, pb, w, h\)/s.test(c));
+    /stack_planes\(frame, p1, p2, p3, w, h\)/s.test(c));
   check("the stack keeps each source's full height", true,
-    /int rows_y = h;/s.test(c) && /int rows_c = h \/ 2;/s.test(c));
+    /int rows_y = h;/s.test(c) && /int rows_c = h \/ 2;/s.test(c) &&
+    /frame->height = h \* 3;/s.test(c));
 }
 
 function controlRoomStructure() {

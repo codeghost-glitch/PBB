@@ -225,10 +225,10 @@ Java_com_pbb_live_RecordService_nativeRemux(
 
 
 /* ------------------------------------------------------------------ *
- * Stack two finished recordings into one tall MP4. The published files
- * are already decrypted by pbb_remux, so no key is needed here. Both
- * feeds are captured at the same quality, so their frames match 1:1;
- * one frame from each is joined top/bottom into a single H.264 frame.
+ * Stack three finished recordings into one tall MP4. The published files
+ * are already decrypted by pbb_remux, so no key is needed here. All feeds
+ * are captured at the same quality, so their frames match 1:1; one frame
+ * from each is joined into a single H.264 frame.
  * ------------------------------------------------------------------ */
 
 typedef struct {
@@ -349,25 +349,26 @@ static void stack_rows(uint8_t *dst, int dls, const uint8_t *src, int sls,
     }
 }
 
-static void stack_planes(AVFrame *dst, const AVFrame *top, const AVFrame *bottom,
-                         int w, int h) {
-    /* Each source contributes its full height (h) to the 2h output; the
+static void stack_planes(AVFrame *dst, const AVFrame *first, const AVFrame *second,
+                         const AVFrame *third, int w, int h) {
+    /* Each source contributes its full height (h) to the 3h output; the
      * chroma planes contribute h/2 rows each. */
+    const AVFrame *frames[3] = { first, second, third };
     int rows_y = h;
     int rows_c = h / 2;
     int cw = w / 2;
-    stack_rows(dst->data[0], dst->linesize[0],
-        top ? top->data[0] : NULL, top ? top->linesize[0] : 0, w, rows_y);
-    stack_rows(dst->data[0] + (size_t)rows_y * dst->linesize[0], dst->linesize[0],
-        bottom ? bottom->data[0] : NULL, bottom ? bottom->linesize[0] : 0, w, rows_y);
-    stack_rows(dst->data[1], dst->linesize[1],
-        top ? top->data[1] : NULL, top ? top->linesize[1] : 0, cw, rows_c);
-    stack_rows(dst->data[1] + (size_t)rows_c * dst->linesize[1], dst->linesize[1],
-        bottom ? bottom->data[1] : NULL, bottom ? bottom->linesize[1] : 0, cw, rows_c);
-    stack_rows(dst->data[2], dst->linesize[2],
-        top ? top->data[2] : NULL, top ? top->linesize[2] : 0, cw, rows_c);
-    stack_rows(dst->data[2] + (size_t)rows_c * dst->linesize[2], dst->linesize[2],
-        bottom ? bottom->data[2] : NULL, bottom ? bottom->linesize[2] : 0, cw, rows_c);
+    for (int i = 0; i < 3; i++) {
+        const AVFrame *src = frames[i];
+        stack_rows(dst->data[0] + (size_t)(i * rows_y) * dst->linesize[0],
+            dst->linesize[0], src ? src->data[0] : NULL,
+            src ? src->linesize[0] : 0, w, rows_y);
+        stack_rows(dst->data[1] + (size_t)(i * rows_c) * dst->linesize[1],
+            dst->linesize[1], src ? src->data[1] : NULL,
+            src ? src->linesize[1] : 0, cw, rows_c);
+        stack_rows(dst->data[2] + (size_t)(i * rows_c) * dst->linesize[2],
+            dst->linesize[2], src ? src->data[2] : NULL,
+            src ? src->linesize[2] : 0, cw, rows_c);
+    }
 }
 
 static void stack_flush(AVCodecContext *enc, AVFormatContext *out, AVStream *vst,
@@ -382,14 +383,14 @@ static void stack_flush(AVCodecContext *enc, AVFormatContext *out, AVStream *vst
     }
 }
 
-int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
-              char *err, size_t errlen) {
-    StackInput top, bottom;
+int pbb_stack(const char *first_path, const char *second_path,
+              const char *third_path, const char *opath, char *err, size_t errlen) {
+    StackInput first, second, third;
     AVFormatContext *out = NULL;
     AVCodecContext *enc = NULL;
-    AVFrame *ft = NULL, *fb = NULL, *frame = NULL;
+    AVFrame *f1 = NULL, *f2 = NULL, *f3 = NULL, *frame = NULL;
     AVPacket *pkt = NULL;
-    struct SwsContext *sws_t = NULL, *sws_b = NULL;
+    struct SwsContext *sws1 = NULL, *sws2 = NULL, *sws3 = NULL;
     AVStream *vst = NULL, *ast = NULL;
     AVStream *asrc = NULL;
     AVDictionary *mux_opts = NULL, *enc_opts = NULL;
@@ -398,22 +399,26 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
 
     if (err != NULL && errlen > 0) err[0] = '\0';
     av_log_set_level(AV_LOG_ERROR);
-    if (top_path == NULL || bottom_path == NULL || opath == NULL) {
+    if (first_path == NULL || second_path == NULL || third_path == NULL || opath == NULL) {
         describe_error(err, errlen, "null argument", AVERROR(EINVAL));
         return AVERROR(EINVAL);
     }
 
-    ret = stack_open(&top, top_path);
-    if (ret < 0) { describe_error(err, errlen, "open main recording", ret); goto done; }
-    ret = stack_open(&bottom, bottom_path);
+    ret = stack_open(&first, first_path);
+    if (ret < 0) { describe_error(err, errlen, "open all-access recording", ret); goto done; }
+    ret = stack_open(&second, second_path);
     if (ret < 0) { describe_error(err, errlen, "open dining recording", ret); goto done; }
+    ret = stack_open(&third, third_path);
+    if (ret < 0) { describe_error(err, errlen, "open den recording", ret); goto done; }
 
-    AVStream *vsrc = top.fmt->streams[top.video_index];
-    AVStream *vsrc2 = bottom.fmt->streams[bottom.video_index];
+    AVStream *vsrc = first.fmt->streams[first.video_index];
+    AVStream *vs2 = second.fmt->streams[second.video_index];
+    AVStream *vs3 = third.fmt->streams[third.video_index];
     w = vsrc->codecpar->width;
     h = vsrc->codecpar->height;
     if (w <= 0 || h <= 0 || w % 2 != 0 || h % 2 != 0
-        || vsrc2->codecpar->width != w || vsrc2->codecpar->height != h) {
+        || vs2->codecpar->width != w || vs2->codecpar->height != h
+        || vs3->codecpar->width != w || vs3->codecpar->height != h) {
         describe_error(err, errlen, "feed resolutions differ", AVERROR(EINVAL));
         goto done;
     }
@@ -426,13 +431,13 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
     enc = avcodec_alloc_context3(codec);
     if (enc == NULL) { ret = AVERROR(ENOMEM); goto done; }
     enc->width = w;
-    enc->height = h * 2;
+    enc->height = h * 3;
     enc->pix_fmt = AV_PIX_FMT_YUV420P;
     AVRational fps = vsrc->avg_frame_rate;
     if (fps.num <= 0 || fps.den <= 0) fps = (AVRational){ 30, 1 };
     enc->framerate = fps;
     enc->time_base = av_inv_q(fps);
-    enc->bit_rate = 2000000;
+    enc->bit_rate = 3000000;
     enc->gop_size = (int)(2 * av_q2d(fps));
     if (enc->gop_size < 1) enc->gop_size = 60;
     av_dict_set(&enc_opts, "preset", "veryfast", 0);
@@ -447,8 +452,8 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
     ret = avcodec_parameters_from_context(vst->codecpar, enc);
     if (ret < 0) { describe_error(err, errlen, "video stream", ret); goto done; }
     vst->time_base = enc->time_base;
-    if (top.audio_index >= 0) {
-        asrc = top.fmt->streams[top.audio_index];
+    if (first.audio_index >= 0) {
+        asrc = first.fmt->streams[first.audio_index];
         ast = avformat_new_stream(out, NULL);
         if (ast == NULL) { ret = AVERROR(ENOMEM); goto done; }
         ret = avcodec_parameters_copy(ast->codecpar, asrc->codecpar);
@@ -462,44 +467,47 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
     ret = avformat_write_header(out, &mux_opts);
     if (ret < 0) { describe_error(err, errlen, "write header", ret); goto done; }
     wrote_header = 1;
-    top.out = out;
-    top.out_audio = ast;
-    top.src_audio = asrc;
+    first.out = out;
+    first.out_audio = ast;
+    first.src_audio = asrc;
 
-    ft = av_frame_alloc();
-    fb = av_frame_alloc();
+    f1 = av_frame_alloc();
+    f2 = av_frame_alloc();
+    f3 = av_frame_alloc();
     frame = av_frame_alloc();
     pkt = av_packet_alloc();
-    if (ft == NULL || fb == NULL || frame == NULL || pkt == NULL) {
+    if (f1 == NULL || f2 == NULL || f3 == NULL || frame == NULL || pkt == NULL) {
         describe_error(err, errlen, "frame alloc", AVERROR(ENOMEM));
         ret = AVERROR(ENOMEM);
         goto done;
     }
     frame->format = AV_PIX_FMT_YUV420P;
     frame->width = w;
-    frame->height = h * 2;
+    frame->height = h * 3;
     ret = av_frame_get_buffer(frame, 32);
     if (ret < 0) { describe_error(err, errlen, "frame buffer", ret); goto done; }
 
     for (;;) {
-        int got_top = stack_read_frame(&top, ft, 1);
-        int got_bottom = stack_read_frame(&bottom, fb, 0);
-        if (!got_top && !got_bottom) break;
-        AVFrame *pt = got_top ? stack_yuv420(ft, &sws_t) : NULL;
-        AVFrame *pb = got_bottom ? stack_yuv420(fb, &sws_b) : NULL;
-        if ((got_top && pt == NULL) || (got_bottom && pb == NULL)) {
+        int got1 = stack_read_frame(&first, f1, 1);
+        int got2 = stack_read_frame(&second, f2, 0);
+        int got3 = stack_read_frame(&third, f3, 0);
+        if (!got1 && !got2 && !got3) break;
+        AVFrame *p1 = got1 ? stack_yuv420(f1, &sws1) : NULL;
+        AVFrame *p2 = got2 ? stack_yuv420(f2, &sws2) : NULL;
+        AVFrame *p3 = got3 ? stack_yuv420(f3, &sws3) : NULL;
+        if ((got1 && p1 == NULL) || (got2 && p2 == NULL) || (got3 && p3 == NULL)) {
             describe_error(err, errlen, "pixel format conversion failed", AVERROR(EINVAL));
             ret = AVERROR(EINVAL);
             goto done;
         }
         av_frame_make_writable(frame);
-        stack_planes(frame, pt, pb, w, h);
-        /* Follow the top feed's own timeline. A plain counter drifts from the
-         * audio as soon as either feed drops a segment. */
-        if (got_top && (ft->pts != AV_NOPTS_VALUE
-                        || ft->best_effort_timestamp != AV_NOPTS_VALUE)) {
-            int64_t src = ft->pts != AV_NOPTS_VALUE
-                ? ft->pts : ft->best_effort_timestamp;
+        stack_planes(frame, p1, p2, p3, w, h);
+        /* Follow the first feed's own timeline. A plain counter drifts from the
+         * audio as soon as a feed drops a segment. */
+        if (got1 && (f1->pts != AV_NOPTS_VALUE
+                     || f1->best_effort_timestamp != AV_NOPTS_VALUE)) {
+            int64_t src = f1->pts != AV_NOPTS_VALUE
+                ? f1->pts : f1->best_effort_timestamp;
             frame->pts = av_rescale_q(src, vsrc->time_base, enc->time_base);
         } else {
             frame->pts = pts;
@@ -514,11 +522,12 @@ int pbb_stack(const char *top_path, const char *bottom_path, const char *opath,
             if (ret < 0) { describe_error(err, errlen, "write video", ret); goto done; }
             av_packet_unref(pkt);
         }
-        if (pt != NULL && pt != ft) av_frame_free(&pt);
-        if (pb != NULL && pb != fb) av_frame_free(&pb);
+        if (p1 != NULL && p1 != f1) av_frame_free(&p1);
+        if (p2 != NULL && p2 != f2) av_frame_free(&p2);
+        if (p3 != NULL && p3 != f3) av_frame_free(&p3);
     }
     stack_flush(enc, out, vst, pkt);
-    if (top.audio_failed) {
+    if (first.audio_failed) {
         describe_error(err, errlen, "write audio", AVERROR(EIO));
         ret = AVERROR(EIO);
         goto done;
@@ -531,17 +540,21 @@ done:
     if (wrote_header && out != NULL) {
         /* av_write_trailer was called on success; nothing extra to close. */
     }
-    av_frame_free(&ft);
-    av_frame_free(&fb);
+    av_frame_free(&f1);
+    av_frame_free(&f2);
+    av_frame_free(&f3);
     av_frame_free(&frame);
     av_packet_free(&pkt);
-    if (sws_t != NULL) sws_freeContext(sws_t);
-    if (sws_b != NULL) sws_freeContext(sws_b);
+    if (sws1 != NULL) sws_freeContext(sws1);
+    if (sws2 != NULL) sws_freeContext(sws2);
+    if (sws3 != NULL) sws_freeContext(sws3);
     if (enc != NULL) avcodec_free_context(&enc);
-    if (top.dec != NULL) avcodec_free_context(&top.dec);
-    if (bottom.dec != NULL) avcodec_free_context(&bottom.dec);
-    if (top.fmt != NULL) avformat_close_input(&top.fmt);
-    if (bottom.fmt != NULL) avformat_close_input(&bottom.fmt);
+    if (first.dec != NULL) avcodec_free_context(&first.dec);
+    if (second.dec != NULL) avcodec_free_context(&second.dec);
+    if (third.dec != NULL) avcodec_free_context(&third.dec);
+    if (first.fmt != NULL) avformat_close_input(&first.fmt);
+    if (second.fmt != NULL) avformat_close_input(&second.fmt);
+    if (third.fmt != NULL) avformat_close_input(&third.fmt);
     if (out != NULL) {
         if (out->pb != NULL && !(out->oformat->flags & AVFMT_NOFILE)) avio_closep(&out->pb);
         avformat_free_context(out);
@@ -553,18 +566,21 @@ done:
 
 JNIEXPORT void JNICALL
 Java_com_pbb_live_RecordService_nativeStack(
-    JNIEnv *env, jclass cls, jstring jtop, jstring jbottom, jstring joutput) {
+    JNIEnv *env, jclass cls, jstring jfirst, jstring jsecond, jstring jthird,
+    jstring joutput) {
     (void)cls;
-    const char *top = (*env)->GetStringUTFChars(env, jtop, NULL);
-    const char *bottom = (*env)->GetStringUTFChars(env, jbottom, NULL);
+    const char *first = (*env)->GetStringUTFChars(env, jfirst, NULL);
+    const char *second = (*env)->GetStringUTFChars(env, jsecond, NULL);
+    const char *third = (*env)->GetStringUTFChars(env, jthird, NULL);
     const char *out = (*env)->GetStringUTFChars(env, joutput, NULL);
     char err[512];
-    int result = pbb_stack(top, bottom, out, err, sizeof(err));
+    int result = pbb_stack(first, second, third, out, err, sizeof(err));
     if (result < 0) {
         jclass exc = (*env)->FindClass(env, "java/lang/RuntimeException");
         if (exc != NULL) (*env)->ThrowNew(env, exc, err);
     }
-    if (top) (*env)->ReleaseStringUTFChars(env, jtop, top);
-    if (bottom) (*env)->ReleaseStringUTFChars(env, jbottom, bottom);
+    if (first) (*env)->ReleaseStringUTFChars(env, jfirst, first);
+    if (second) (*env)->ReleaseStringUTFChars(env, jsecond, second);
+    if (third) (*env)->ReleaseStringUTFChars(env, jthird, third);
     if (out) (*env)->ReleaseStringUTFChars(env, joutput, out);
 }

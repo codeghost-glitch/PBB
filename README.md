@@ -11,7 +11,7 @@ The app reads fresh stream URLs and ClearKeys from `pbbcollab.live` at startup a
 - A server sheet with the site's six routes, PBB3.0 and the CCTV mirror, named the way the sites name them. The choice is stored on the phone. The footer status has its own row on a phone, so a long message wraps without fighting the keys.
 - HD and SD quality buttons. HD uses the tallest rendition; SD uses the smallest rendition at least 480 lines tall.
 - Record one, two or three cameras at once. Each recording gets its own notification and stop action.
-- Stitch button: records Main Access and Dining Area, then joins them into one stacked MP4.
+- Stitch button: records Main Access, Dining Area and External Den, then joins them into one stacked MP4.
 - Dark-only in a lifted graphite grade with quiet depth. One type system, one hairline, 44 px touch targets.
 
 ## Build
@@ -120,7 +120,7 @@ The app routes media requests through `shouldInterceptRequest`. The site proxy n
 - The recorder uses the live edge from the MPD plus a bounded range scan. It does not walk the archive from zero.
 - The plugin is arm64-only, shipped as base64 in the APK and pinned by SHA-256. Non-arm64 devices get a clear error.
 
-The stitch button records cameras 0 and 1, then stacks them into `PBB_stitch_...mp4`. The service marks the pair again when the two starts are actually sent, so a missed UI mark cannot leave two ordinary files. The two originals are deleted only after the joined file is published.
+The stitch button records all three cameras, then stacks them into one `PBB_stitch_...mp4`. The service marks the group again when the three starts are actually sent, so a missed UI mark cannot leave three ordinary files. The three originals are deleted only after the joined file is published.
 
 Known limit: a recording that was already running keeps its key. If the broadcaster rotates during that recording, the file may not play. Refresh and start a new recording after a rotation.
 

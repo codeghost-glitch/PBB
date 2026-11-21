@@ -2,10 +2,14 @@
 /* eslint-disable no-undef -- Pbb and shaka are injected before this page loads. */
 const Pbb = window.Pbb;
 const shaka = window.shaka;
-// The site player carries a few older KIDs in its MPDs. Keeping their keys
-// alongside the current pair stops a stale KID from looking like a rotation.
+// The site player carries every known camera key. Its MPDs can name an old
+// KID for another camera, so Shaka needs all of them alongside the current
+// pair from X-PBB-ClearKey.
 const FALLBACK_CLEAR_KEYS = {
+  "b75e0a8315d0499b834c00a3d5b91935": "39876c3c4f32a11dee56078febbb67dd",
   "8150b74d16324bb4b2ff62e3e202fc7a": "0c5ed4f9db9d4ee61bbc91b3a51ef8b5",
+  "b750a40736a24e60b5a4f256208b92c5": "af07292597f692726dcac2bd297ddf8e",
+  "ea6588d030c94ca89925ac0c49974430": "3e6de4afee1eff8e14f9506b76ac9ee6",
   "1044e7ece2d741bcafe80d8613da104f": "f5e17f169ff05ea40c5d3f065f523942",
 };
 
@@ -528,10 +532,11 @@ const ICONS = {
   moon: [
     ["path", { d: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" }],
   ],
-  // Two stacked monitors: the stitched Main-over-Dining recording.
+  // Three stacked monitors: the stitched all-camera recording.
   stitch: [
-    ["rect", { x: 3, y: 3, width: 18, height: 8, rx: 1 }],
-    ["rect", { x: 3, y: 13, width: 18, height: 8, rx: 1 }],
+    ["rect", { x: 3, y: 2, width: 18, height: 6, rx: 1 }],
+    ["rect", { x: 3, y: 9, width: 18, height: 6, rx: 1 }],
+    ["rect", { x: 3, y: 16, width: 18, height: 6, rx: 1 }],
   ],
   broadcast: [
     ["circle", { cx: 12, cy: 12, r: 2 }],
@@ -1401,7 +1406,7 @@ function toggleRecord(index) {
     // wrong key and land in Movies/PBB as a file that will not play.
     setStatusText("Keys changed. Choose a server before recording");
   } else {
-    Pbb.markStackPair(-1, -1);
+    Pbb.markStackGroup(-1, -1, -1);
     setStatusText(`Starting ${entry.stream.name}`);
     Pbb.startRecording(index, entry.stream.name);
   }
@@ -1830,9 +1835,9 @@ function selectLiveServer(server) {
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
-// captured frame comes back black. Record both feeds with the native service
-// instead; the two tallies and stop buttons are the recording indicators.
-const STITCH_FEEDS = [0, 1];
+// captured frame comes back black. Record all three feeds with the native
+// service instead; the tallies and stop buttons are the indicators.
+const STITCH_FEEDS = [0, 1, 2];
 const stitch = { active: false };
 
 function updateStitchButton() {
@@ -1842,7 +1847,7 @@ function updateStitchButton() {
   }
   btn.classList.toggle("stitch-active", stitch.active);
   setStatusKey(btn, stitch.active ? "stop" : "stitch",
-    stitch.active ? "stop both recordings" : "record main and dining together");
+    stitch.active ? "stop all three recordings" : "record all three cameras together");
 }
 
 function toggleStitch() {
@@ -1859,7 +1864,7 @@ function toggleStitch() {
     setTransientStatus("Keys changed. Choose a server before recording");
   } else {
     stitch.active = true;
-    Pbb.markStackPair(STITCH_FEEDS[0], STITCH_FEEDS[1]);
+    Pbb.markStackGroup(STITCH_FEEDS[0], STITCH_FEEDS[1], STITCH_FEEDS[2]);
     for (const index of STITCH_FEEDS) {
       Pbb.startRecording(index, players[index].stream.name);
     }

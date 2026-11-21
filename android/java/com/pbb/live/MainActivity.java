@@ -147,8 +147,8 @@ public class MainActivity extends Activity {
     // handshake is still running is what made every tile load twice.
     private final Object configLock = new Object();
     private volatile boolean configFresh = false;
-    // The operator asked for a stitch. Both starts can also arrive as one
-    // batch from two plain record taps, and only this flag tells them apart.
+    // The operator asked for a stitch. All three starts can also arrive as one
+    // batch from three plain record taps, and only this flag tells them apart.
     private volatile boolean stitchPending = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
@@ -788,14 +788,15 @@ public class MainActivity extends Activity {
                 }
                 // The MPD body can name a stale KID. The site header is current.
                 String[] liveKeys = clearKeyPair(doc.clearKey);
-                JSONObject keys = bundled.getJSONObject(i);
+                String kid = liveKeys == null ? bundled.getJSONObject(i).getString("kid") : liveKeys[0];
+                String key = liveKeys == null ? bundled.getJSONObject(i).getString("key") : liveKeys[1];
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
                 stream.put("base", base);
                 stream.put("url", DATA_MPD + Base64.encodeToString(
-                    siteMpd(xml, base).getBytes("UTF-8"), Base64.NO_WRAP));
-                stream.put("kid", liveKeys == null ? keys.getString("kid") : liveKeys[0]);
-                stream.put("key", liveKeys == null ? keys.getString("key") : liveKeys[1]);
+                    siteMpd(xml, base, kid).getBytes("UTF-8"), Base64.NO_WRAP));
+                stream.put("kid", kid);
+                stream.put("key", key);
                 streams.put(stream);
             }
             return streams;
@@ -903,15 +904,17 @@ public class MainActivity extends Activity {
                     base = SITE2;
                 }
                 String[] liveKeys = clearKeyPair(doc == null ? null : doc.clearKey);
+                String kid = liveKeys == null ? pair[0] : liveKeys[0];
+                String key = liveKeys == null ? pair[1] : liveKeys[1];
                 JSONObject stream = new JSONObject();
                 stream.put("name", CHANNEL_NAMES[i]);
                 // The manifest body moves its publishTime on every handshake, so
                 // the page treats this base plus the key pair as the identity.
                 stream.put("base", base);
                 stream.put("url", DATA_MPD + Base64.encodeToString(
-                    siteMpd(xml, base).getBytes("UTF-8"), Base64.NO_WRAP));
-                stream.put("kid", liveKeys == null ? pair[0] : liveKeys[0]);
-                stream.put("key", liveKeys == null ? pair[1] : liveKeys[1]);
+                    siteMpd(xml, base, kid).getBytes("UTF-8"), Base64.NO_WRAP));
+                stream.put("kid", kid);
+                stream.put("key", key);
                 streams.put(stream);
             }
         } catch (Exception e) {
@@ -1002,7 +1005,7 @@ public class MainActivity extends Activity {
         return base.startsWith("/") ? SITE2 + base : base;
     }
 
-    private String siteMpd(String xml, String base) {
+    private String siteMpd(String xml, String base, String kid) {
         // Strip only a leading folder. Mirror segment names carry signed query
         // tokens with slashes; cutting at the last slash would break them.
         xml = xml.replaceAll("(media|initialization)=\"(?:https?://[^\"?]*/|/)[^\"?]*",
@@ -1010,9 +1013,29 @@ public class MainActivity extends Activity {
         // Drop every baked BaseURL, including root-relative ones. Leaving one
         // behind gives Shaka a second, scheme-less location to try.
         xml = xml.replaceAll("<BaseURL>[^<]*</BaseURL>", "");
+        // The site MPD can carry another camera's KID in its PSSH. Replace it
+        // with the KID paired with the key we are about to give Shaka.
+        String cleanKid = kid == null ? "" : kid.replace("-", "").toLowerCase(Locale.US);
+        if (cleanKid.matches("[0-9a-f]{32}")) {
+            String uuid = cleanKid.substring(0, 8) + "-" + cleanKid.substring(8, 12)
+                + "-" + cleanKid.substring(12, 16) + "-" + cleanKid.substring(16, 20)
+                + "-" + cleanKid.substring(20);
+            xml = xml.replaceAll("cenc:default_KID=\"[^\"]*\"",
+                "cenc:default_KID=\"" + uuid + "\"");
+            String pssh = Http.psshForKid(cleanKid);
+            if (!pssh.isEmpty()) {
+                xml = xml.replaceAll("(<cenc:pssh[^>]*>)[^<]*(</cenc:pssh>)",
+                    "$1" + java.util.regex.Matcher.quoteReplacement(pssh) + "$2");
+            }
+        }
         // A baked copy cannot publish updates. Leaving this in makes the player
         // re-poll the same static window every 30s for nothing.
         xml = xml.replaceAll("\\s+minimumUpdatePeriod=\"[^\"]*\"", "");
+        // The site edge sometimes returns a cached 503 for a bare segment URL.
+        // A constant query is enough to use the healthy cache key.
+        if (base.startsWith(SITE2 + "/") || base.startsWith(SITE + "/")) {
+            xml = xml.replaceAll("(media|initialization)=\"([^\"?]+)\"", "$1=\"$2?_pbb=1\"");
+        }
         int head = xml.indexOf("<MPD");
         int end = head < 0 ? -1 : xml.indexOf('>', head);
         if (end < 0) {
@@ -1336,8 +1359,8 @@ public class MainActivity extends Activity {
 
     /** Starts every camera in the batch that is not already recording. */
     private void requestRecording(int[] indices, String[] labels) {
-        // A stitch tap arrives as two bridge calls. Keep both while a permission
-        // dialog is open; clearing here made the second call replace the first.
+        // A stitch tap arrives as three bridge calls. Keep all three while a
+        // permission dialog is open; clearing here dropped the later feeds.
         for (int i = 0; i < indices.length; i++) {
             int index = indices[i];
             if (index < 0 || RecordService.isActive(index)
@@ -1376,15 +1399,17 @@ public class MainActivity extends Activity {
         if (indices.isEmpty()) {
             return;
         }
-        // The stitch tap arrives as two separate bridge calls. Mark the pair
-        // again here, at the point both starts are actually sent, so a stale
-        // or missed UI mark cannot leave two ordinary recordings. The flag keeps
-        // two plain record taps that happen to land in one batch out of it.
+        // The stitch tap arrives as three separate bridge calls. Mark the group
+        // again here, at the point the starts are actually sent, so a stale or
+        // missed UI mark cannot leave three ordinary recordings. Three plain
+        // record taps can land in one batch but do not set stitchPending.
         boolean stitch = stitchPending;
         stitchPending = false;
-        if (stitch && indices.size() == 2 && indices.contains(Integer.valueOf(0))
-                && indices.contains(Integer.valueOf(1))) {
-            RecordService.markStackPair(0, 1);
+        if (stitch && indices.size() == 3
+                && indices.contains(Integer.valueOf(0))
+                && indices.contains(Integer.valueOf(1))
+                && indices.contains(Integer.valueOf(2))) {
+            RecordService.markStackGroup(0, 1, 2);
         }
         JSONArray streams;
         try {
@@ -1604,9 +1629,9 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void markStackPair(int top, int bottom) {
-            stitchPending = top >= 0 && bottom >= 0;
-            RecordService.markStackPair(top, bottom);
+        public void markStackGroup(int first, int second, int third) {
+            stitchPending = first >= 0 && second >= 0 && third >= 0;
+            RecordService.markStackGroup(first, second, third);
         }
 
         @JavascriptInterface

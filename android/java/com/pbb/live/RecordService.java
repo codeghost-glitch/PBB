@@ -107,7 +107,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     private static final String PLUGIN_ASSET = "libpbbffmpeg.so.b64";
 
     private static final String PLUGIN_SHA256 =
-        "fed17d893611e95b98225feabf44ed9d6ff9616d728948b44224b33dad659d06";
+        "3b461941e4dd2c14f7dff5f766ac41741c87ae5afdf2012665be21dee3c45f89";
 
     private static final Pattern NUMBER = Pattern.compile("\\$Number(%0(\\d+)d)?\\$");
     private static final Pattern DEFAULT_KID =
@@ -120,51 +120,55 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     static final int MAX_EMPTY_RETRIES = 3;
     private static final int MAX_PROBE_RETRIES = 20;
 
-    private static final Object PAIR_LOCK = new Object();
-    private static int pairTop = -1;
-    private static int pairBottom = -1;
-    private static boolean pairStacking = false;
-    private static boolean pairFailed = false;
-    private static final Map<Integer, File> pairSources = new HashMap<Integer, File>();
-    private static final Map<Integer, Uri> pairUris = new HashMap<Integer, Uri>();
-    private static final Map<Integer, File> pairPublished = new HashMap<Integer, File>();
+    private static final Object STACK_LOCK = new Object();
+    private static final int STACK_COUNT = 3;
+    private static int stackFirst = -1;
+    private static int stackSecond = -1;
+    private static int stackThird = -1;
+    private static boolean stackStacking = false;
+    private static boolean stackFailed = false;
+    private static final Map<Integer, File> stackSources = new HashMap<Integer, File>();
+    private static final Map<Integer, Uri> stackUris = new HashMap<Integer, Uri>();
+    private static final Map<Integer, File> stackPublished = new HashMap<Integer, File>();
 
-    /** What the pair step should do once one feed of a stitch has finished. */
-    static final int PAIR_WAIT = 0;
-    static final int PAIR_STACK = 1;
-    static final int PAIR_ABORT = 2;
+    /** What the group step should do once one feed of a stitch has finished. */
+    static final int STACK_WAIT = 0;
+    static final int STACK_JOIN = 1;
+    static final int STACK_ABORT = 2;
 
     /**
-     * The join only runs once both feeds are saved. Kept pure so the host test
-     * can check that a half pair waits and a failed feed abandons it, which is
-     * the difference between one stacked file and two separate ones.
+     * The join only runs once all three feeds are saved. Kept pure so the host
+     * test can check that a partial group waits, a failed feed abandons it and
+     * a running join is never started twice.
      */
-    static int pairStep(int top, boolean stacking, boolean failed, boolean savedOk,
-            boolean hasTop, boolean hasBottom) {
-        if (top < 0 || stacking || failed) {
-            return PAIR_WAIT;
+    static int stackStep(int first, boolean stacking, boolean failed, boolean savedOk,
+            boolean[] saved) {
+        if (first < 0 || stacking || failed) {
+            return STACK_WAIT;
         }
         if (!savedOk) {
-            return PAIR_ABORT;
+            return STACK_ABORT;
         }
-        return hasTop && hasBottom ? PAIR_STACK : PAIR_WAIT;
+        return saved != null && saved.length == STACK_COUNT
+            && saved[0] && saved[1] && saved[2] ? STACK_JOIN : STACK_WAIT;
     }
 
-    /** Called by the page before starting the two feeds of a stitch recording. */
-    static void markStackPair(int top, int bottom) {
-        synchronized (PAIR_LOCK) {
-            // A generic record start clears the pair. Ignore it while a stack
-            // is pending or running, or the two feeds finish as separate files.
-            if (top < 0 && (pairTop >= 0 || pairStacking)) {
+    /** Called by the page before starting the three feeds of a stitch recording. */
+    static void markStackGroup(int first, int second, int third) {
+        synchronized (STACK_LOCK) {
+            // A generic record start clears the group. Ignore it while a stack
+            // is pending or running, or the feeds finish as separate files.
+            if (first < 0 && (stackFirst >= 0 || stackStacking)) {
                 return;
             }
-            pairTop = top;
-            pairBottom = bottom;
-            pairStacking = false;
-            pairFailed = false;
-            pairSources.clear();
-            pairUris.clear();
-            pairPublished.clear();
+            stackFirst = first;
+            stackSecond = second;
+            stackThird = third;
+            stackStacking = false;
+            stackFailed = false;
+            stackSources.clear();
+            stackUris.clear();
+            stackPublished.clear();
         }
     }
 
@@ -235,7 +239,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
     private final Map<Integer, Session> sessions = new HashMap<Integer, Session>();
 
     private static native void nativeRemux(String video, String audio, String output, String keyHex);
-    private static native void nativeStack(String top, String bottom, String output);
+    private static native void nativeStack(String first, String second, String third, String output);
 
     static class Track {
         String media;
@@ -611,15 +615,17 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             // recording: keep the pulled segments and say where they are. A part
             // with no media in it is just init data, so drop it instead.
             boolean stacked;
-            synchronized (PAIR_LOCK) {
-                stacked = session.index == pairTop || session.index == pairBottom;
+            synchronized (STACK_LOCK) {
+                stacked = session.index == stackFirst
+                    || session.index == stackSecond
+                    || session.index == stackThird;
             }
             if (keepSegments && videoTmp.exists()) {
                 result = result + " - segments kept in " + getFilesDir().getAbsolutePath();
             } else {
                 delete(videoTmp);
                 delete(audioTmp);
-                // A stitch pair needs the finished MP4 for the stack step.
+                // A stitch group needs the finished MP4 for the stack step.
                 if (!stacked) {
                     delete(outTmp);
                 }
@@ -642,8 +648,8 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
                 maybeStack(session, !failed && outTmp.exists() && outTmp.length() > 4096);
             }
             boolean joinRunning;
-            synchronized (PAIR_LOCK) {
-                joinRunning = pairStacking;
+            synchronized (STACK_LOCK) {
+                joinRunning = stackStacking;
             }
             if (shouldStopService(activeCount(), joinRunning)) {
                 stopForeground(true);
@@ -652,86 +658,88 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
         }
     }
 
-    /** Both feeds of a stitch pair have finished: join them into one tall MP4. */
+    /** All three feeds of a stitch group have finished: join them into one tall MP4. */
     private void maybeStack(Session session, boolean savedOk) {
-        File top;
-        File bottom;
-        Uri topUri;
-        Uri bottomUri;
-        File topPublished;
-        File bottomPublished;
-        synchronized (PAIR_LOCK) {
+        int[] ids = new int[STACK_COUNT];
+        File[] sources = new File[STACK_COUNT];
+        Uri[] uris = new Uri[STACK_COUNT];
+        File[] publishedFiles = new File[STACK_COUNT];
+        synchronized (STACK_LOCK) {
             File source = session.outTmp;
             if (savedOk) {
-                pairSources.put(session.index, source);
+                stackSources.put(session.index, source);
                 if (session.publishedUri != null) {
-                    pairUris.put(session.index, session.publishedUri);
+                    stackUris.put(session.index, session.publishedUri);
                 }
                 File published = session.publishedFile != null
                     ? session.publishedFile : session.publishedFallbackFile;
                 if (published != null) {
-                    pairPublished.put(session.index, published);
+                    stackPublished.put(session.index, published);
                 }
             }
-            int step = pairStep(pairTop, pairStacking, pairFailed, savedOk,
-                pairSources.containsKey(pairTop), pairSources.containsKey(pairBottom));
-            if (step == PAIR_ABORT) {
-                // One side of the pair is unusable, so the join can never run.
-                // Forget the pair and remove both part files; otherwise the
-                // partner's file stays and the next recording is stacked onto it.
-                pairFailed = true;
+            ids[0] = stackFirst;
+            ids[1] = stackSecond;
+            ids[2] = stackThird;
+            boolean[] saved = new boolean[STACK_COUNT];
+            for (int i = 0; i < STACK_COUNT; i++) {
+                saved[i] = stackSources.containsKey(ids[i]);
+            }
+            int step = stackStep(stackFirst, stackStacking, stackFailed, savedOk, saved);
+            if (step == STACK_ABORT) {
+                // One feed is unusable, so the join can never run. Forget the
+                // group and remove its part files; otherwise the other files
+                // stay and the next recording is stacked onto them.
+                stackFailed = true;
                 delete(source);
-                abandonPair();
+                abandonGroup();
                 return;
             }
-            if (step != PAIR_STACK) {
+            if (step != STACK_JOIN) {
                 return;
             }
-            pairStacking = true;
+            stackStacking = true;
             status(false, -1, "Saving stacked video", KIND_NOTICE);
-            top = pairSources.get(pairTop);
-            bottom = pairSources.get(pairBottom);
-            topUri = pairUris.get(pairTop);
-            bottomUri = pairUris.get(pairBottom);
-            topPublished = pairPublished.get(pairTop);
-            bottomPublished = pairPublished.get(pairBottom);
+            for (int i = 0; i < STACK_COUNT; i++) {
+                sources[i] = stackSources.get(ids[i]);
+                uris[i] = stackUris.get(ids[i]);
+                publishedFiles[i] = stackPublished.get(ids[i]);
+            }
         }
-        final File fTop = top;
-        final File fBottom = bottom;
-        final Uri uTop = topUri;
-        final Uri uBottom = bottomUri;
+        final File[] fSources = sources;
+        final Uri[] fUris = uris;
+        final File[] fPublished = publishedFiles;
         backgroundThreads("pbb-stack").newThread(new Runnable() {
             @Override
             public void run() {
-                joinPair(fTop, fBottom, uTop, uBottom, topPublished, bottomPublished);
+                joinGroup(fSources, fUris, fPublished);
             }
         }).start();
     }
 
-    /** Drops a pair that cannot be joined, with its part files. */
-    private void abandonPair() {
-        synchronized (PAIR_LOCK) {
-            for (File source : pairSources.values()) {
+    /** Drops a group that cannot be joined, with its part files. */
+    private void abandonGroup() {
+        synchronized (STACK_LOCK) {
+            for (File source : stackSources.values()) {
                 delete(source);
             }
-            pairSources.clear();
-            pairUris.clear();
-            pairPublished.clear();
-            pairTop = -1;
-            pairBottom = -1;
-            pairStacking = false;
+            stackSources.clear();
+            stackUris.clear();
+            stackPublished.clear();
+            stackFirst = -1;
+            stackSecond = -1;
+            stackThird = -1;
+            stackStacking = false;
         }
     }
 
-    private void joinPair(File top, File bottom, Uri topUri, Uri bottomUri,
-                          File topPublished, File bottomPublished) {
+    private void joinGroup(File[] sources, Uri[] uris, File[] publishedFiles) {
         File joined = new File(getFilesDir(), "pbb_stack_" + System.currentTimeMillis() + ".mp4");
         String result;
         boolean ok = false;
         try {
             synchronized (REMUX_LOCK) {
-                nativeStack(top.getAbsolutePath(), bottom.getAbsolutePath(),
-                    joined.getAbsolutePath());
+                nativeStack(sources[0].getAbsolutePath(), sources[1].getAbsolutePath(),
+                    sources[2].getAbsolutePath(), joined.getAbsolutePath());
             }
             if (joined.length() < 8192) {
                 throw new IOException("stack produced no media");
@@ -743,25 +751,29 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
             // Only remove the originals when the joined file is in a real
             // gallery location; a fallback copy must leave them alone.
             if (!joinedOut.fallback) {
-                if (topUri != null) getContentResolver().delete(topUri, null, null);
-                if (bottomUri != null) getContentResolver().delete(bottomUri, null, null);
-                delete(topPublished);
-                delete(bottomPublished);
+                for (int i = 0; i < STACK_COUNT; i++) {
+                    if (uris[i] != null) {
+                        getContentResolver().delete(uris[i], null, null);
+                    }
+                    delete(publishedFiles[i]);
+                }
             }
         } catch (Throwable t) {
             Log.e(TAG, "stitch failed", t);
             result = "Stacking failed: " + t.getMessage();
         } finally {
-            delete(top);
-            delete(bottom);
+            for (int i = 0; i < STACK_COUNT; i++) {
+                delete(sources[i]);
+            }
             delete(joined);
-            synchronized (PAIR_LOCK) {
-                pairSources.clear();
-                pairUris.clear();
-                pairPublished.clear();
-                pairTop = -1;
-                pairBottom = -1;
-                pairStacking = false;
+            synchronized (STACK_LOCK) {
+                stackSources.clear();
+                stackUris.clear();
+                stackPublished.clear();
+                stackFirst = -1;
+                stackSecond = -1;
+                stackThird = -1;
+                stackStacking = false;
             }
         }
         status(false, -1, result, ok ? KIND_DONE : KIND_ERROR);
@@ -1635,7 +1647,7 @@ public static final String ACTION_START = "com.pbb.live.RECORD_START";
 
     @Override
     public void onDestroy() {
-        abandonPair();
+        abandonGroup();
         List<Session> copy;
         synchronized (sessions) {
             copy = new ArrayList<Session>(sessions.values());
