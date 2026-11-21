@@ -6,27 +6,46 @@
   font-display: swap;
 }
 
-/* A monitor wall, not a dashboard. Neutral ground, one type system, one
-   hairline, one button shape. The pictures carry the colour; the only
-   saturated marks are green for live and red for recording. No labels sit on
-   the video: each frame has its own quiet strip underneath. */
+/* A monitor wall built on Material 3 dark roles. The brand gold is the seed;
+   surfaces are tone-based, so the pictures carry colour and the chrome stays
+   quiet. One 4dp spacing grid, one 48dp touch grid, one set of roles. */
 :root {
   color-scheme: dark;
 
-  --g-main: #16181B;
-  --g-alt: #1C1F23;
-  --surface: #20242A;
-  --surface-2: #282D34;
-  --ink: #F5F5F2;
-  --muted: rgba(245, 245, 242, 0.72);
-  --faint: rgba(245, 245, 242, 0.48);
-  --line: rgba(245, 245, 242, 0.16);
-  --line-strong: rgba(245, 245, 242, 0.28);
-  --paper: #0D0E10;
-  --live: #63CFA0;
-  --rec: #F06A6A;
-  --focus: #A9BAFF;
-  --scrim: rgba(8, 9, 11, 0.56);
+  /* Material 3 roles, seeded from the brand gold. */
+  --md-sys-color-primary: #E8C56A;
+  --md-sys-color-on-primary: #201A08;
+  --md-sys-color-primary-container: #4A3B10;
+  --md-sys-color-on-primary-container: #FFE0A3;
+  --md-sys-color-surface: #111316;
+  --md-sys-color-surface-container: #1B1E22;
+  --md-sys-color-surface-container-high: #262A2F;
+  --md-sys-color-on-surface: #F2F0EC;
+  --md-sys-color-on-surface-variant: #C7C7C4;
+  --md-sys-color-outline: #7E7F83;
+  --md-sys-color-error: #FFB4AB;
+  --md-sys-color-on-error: #2B0A09;
+  --md-sys-color-inverse-surface: #E6E2E0;
+  --md-sys-color-inverse-on-surface: #2E3032;
+
+  --g-main: var(--md-sys-color-surface);
+  --g-alt: var(--md-sys-color-surface-container-high);
+  --surface: var(--md-sys-color-surface-container);
+  --surface-2: var(--md-sys-color-surface-container-high);
+  --ink: var(--md-sys-color-on-surface);
+  --muted: var(--md-sys-color-on-surface-variant);
+  --faint: #9A9A98;
+  --line: #45464B99;
+  --line-strong: var(--md-sys-color-outline);
+  --paper: #0B0C0E;
+  --live: #A6D8B8;
+  --rec: var(--md-sys-color-error);
+  --primary: var(--md-sys-color-primary);
+  --on-primary: var(--md-sys-color-on-primary);
+  --primary-container: var(--md-sys-color-primary-container);
+  --on-primary-container: var(--md-sys-color-on-primary-container);
+  --focus: var(--md-sys-color-primary);
+  --scrim: #0000008F;
 
   --s-1: 4px;
   --s-2: 8px;
@@ -35,14 +54,14 @@
   --s-6: 24px;
   --s-8: 32px;
   --s-12: 48px;
-  --nav: 56px;
-  --gut: 24px;
+  --nav: 64px;
+  --gut: 16px;
 
-  --t-label: 13px;
+  --t-label: 14px;
   --t-body: 16px;
   --t-card: 16px;
   --t-lead: 18px;
-  --t-h1: 22px;
+  --t-h1: 24px;
   --t-h2: 24px;
   --t-stat: 28px;
   --w-reg: 500;
@@ -51,7 +70,8 @@
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
-  --tap: 44px;
+  --radius-xl: 28px;
+  --tap: 48px;
 
   --m-in: 150ms;
   --m-out: 120ms;
@@ -141,14 +161,15 @@ body.keyboard-focus :focus-visible {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
+  background: var(--primary-container);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }
 
-.brand-mark svg { display: block; width: 22px; height: 22px; }
+.brand-mark svg { display: block; width: 24px; height: 24px; }
 
 .brand-copy { min-width: 0; }
 
@@ -177,13 +198,13 @@ h1 {
 }
 
 .seg-btn {
-  min-width: 44px;
-  min-height: 36px;
-  padding: 0 var(--s-2);
+  min-width: 48px;
+  min-height: 40px;
+  padding: 0 var(--s-3);
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-family: var(--font);
   font-size: var(--t-label);
   font-weight: var(--w-reg);
@@ -193,8 +214,8 @@ h1 {
 }
 
 .seg-btn.active {
-  color: var(--paper);
-  background: var(--ink);
+  color: var(--on-primary-container);
+  background: var(--primary-container);
 }
 
 .desk-key,
@@ -223,7 +244,7 @@ h1 {
   z-index: 1;
   flex: 1 1 auto;
   min-height: 0;
-  padding: var(--s-3) var(--gut);
+  padding: var(--s-2) var(--gut);
 }
 
 .grid {
@@ -346,7 +367,7 @@ h1 {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--s-3);
-  min-height: 56px;
+  min-height: 64px;
   padding: var(--s-2) var(--s-3);
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -455,7 +476,7 @@ h1 {
 .cam-actions .btn-icon::after {
   content: "";
   position: absolute;
-  inset: -2px;
+  inset: -4px;
 }
 
 .cam-actions .btn-icon svg { display: block; width: 19px; height: 19px; }
@@ -486,8 +507,8 @@ h1 {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--s-3);
-  min-height: 76px;
-  max-height: 136px;
+  min-height: 80px;
+  max-height: 144px;
   padding: var(--s-3) var(--gut);
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -530,8 +551,8 @@ h1 {
 .status-state {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   flex: none;
   border: 1px solid var(--line);
   border-radius: 50%;
@@ -944,16 +965,16 @@ body.fullscreen-mode .indicator {
 .sheet-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--s-6);
-  width: min(520px, 100%);
+  gap: var(--s-4);
+  width: min(560px, 100%);
   max-height: min(88vh, calc(100vh - var(--s-4)));
   overflow-y: auto;
-  padding: var(--s-6);
-  padding-bottom: max(var(--s-6), env(safe-area-inset-bottom));
+  padding: var(--s-4);
+  padding-bottom: max(var(--s-4), env(safe-area-inset-bottom));
   background: var(--surface);
   border: 1px solid var(--line);
   border-bottom: 0;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   animation: sheet-in var(--m-panel) var(--ease-enter);
 }
 
@@ -995,11 +1016,11 @@ body.fullscreen-mode .indicator {
   gap: var(--s-3);
   width: 100%;
   min-height: 64px;
-  padding: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
   color: var(--ink);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   font-family: var(--font);
   text-align: left;
   cursor: pointer;
@@ -1011,8 +1032,9 @@ body.fullscreen-mode .indicator {
 .chip:not(.active):hover { background: var(--g-alt); }
 
 .chip.active {
-  background: var(--g-alt);
-  border-color: var(--line);
+  color: var(--on-primary-container);
+  background: var(--primary-container);
+  border-color: var(--primary);
 }
 
 .chip:active { transform: translateY(1px); }
@@ -1027,8 +1049,8 @@ body.fullscreen-mode .indicator {
 }
 
 .chip.active .chip-key {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .chip.active .chip-key::after {
@@ -1036,7 +1058,7 @@ body.fullscreen-mode .indicator {
   position: absolute;
   inset: 5px;
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--on-primary);
 }
 
 
@@ -1052,14 +1074,17 @@ body.fullscreen-mode .indicator {
 .chip.active::after {
   content: "in use";
   margin-left: auto;
-  color: var(--muted);
+  color: var(--on-primary-container);
   font-size: var(--t-label);
-  font-weight: var(--w-reg);
+  font-weight: var(--w-bold);
   white-space: nowrap;
 }
 
 .sheet-note {
-  color: var(--muted);
+  padding: var(--s-3) var(--s-4);
+  color: var(--on-primary-container);
+  background: var(--primary-container);
+  border-radius: var(--radius-sm);
   font-size: var(--t-label);
   line-height: 1.5;
 }
@@ -1068,7 +1093,7 @@ body.fullscreen-mode .indicator {
   .sheet { place-items: center; padding: var(--s-4); }
   .sheet-panel {
     border-bottom: 1px solid var(--line);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
   }
 }
 

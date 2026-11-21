@@ -756,12 +756,12 @@ function designSystemHoldsTheLine() {
     && (html.match(/data-server="/g) || []).length === 6
     && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
-    /\.chip\.active \.chip-key \{[^}]*background: var\(--ink\)/s.test(css));
+    /\.chip\.active \.chip-key \{[^}]*background: var\(--primary\)/s.test(css));
   check("the program feed is marked by a hairline, not a number", true,
     /\.cam-card:first-child \{ border-color: var\(--line-strong\)/s.test(css)
     && !/\.cam-num/.test(css));
   check("the one filled control is the chosen quality", true,
-    /\.seg-btn\.active \{[^}]*background: var\(--ink\)/s.test(css));
+    /\.seg-btn\.active \{[^}]*background: var\(--primary-container\)/s.test(css));
   check("the interface stays neutral", true,
     !css.includes("backdrop-filter")
     && !/\.cam-card \{[^}]*box-shadow/s.test(css)
@@ -790,10 +790,10 @@ function designSystemHoldsTheLine() {
     Boolean(cardStateRule) && /bottom: var\(--s-3\)/.test(cardStateRule[0])
     && /white-space: normal/.test(cardStateRule[0])
     && !/text-overflow/.test(cardStateRule[0]));
-  check("the dark grade has depth", true,
-    css.includes("--g-main: #16181B")
-    && css.includes("--surface: #20242A")
-    && /body \{[^}]*background-image:[\s\S]{0,200}radial-gradient/.test(css));
+  check("the dark grade uses Material 3 roles", true,
+    css.includes("--md-sys-color-surface: #111316")
+    && css.includes("--md-sys-color-surface-container: #1B1E22")
+    && css.includes("--md-sys-color-primary: #E8C56A"));
 }
 
 function liveWindowAndBackupRoute() {
@@ -914,8 +914,8 @@ function serverSheetAndWallReadClearly() {
     /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
       fs.readFileSync(APP, "utf8")));
   check("the active route reads as a selected row", true,
-    /\.chip\.active \{[\s\S]*?background: var\(--g-alt\)/.test(css)
-    && /\.chip\.active \{[\s\S]*?border-color: var\(--line\)/.test(css));
+    /\.chip\.active \{[\s\S]*?background: var\(--primary-container\)/.test(css)
+    && /\.chip\.active \{[\s\S]*?border-color: var\(--primary\)/.test(css));
   check("the wall separates the monitors", true,
     /\.grid \{[\s\S]*?gap: var\(--s-2\)/.test(css)
     && /\.cam-bar \{[\s\S]*?background: var\(--surface\)/.test(css)
