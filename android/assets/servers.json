@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "site": [
+    { "id": "s1", "name": "Server Jeo", "host": "pbbcollab.com", "kind": "site", "source": "SITE", "mode": 0, "srv": 0, "segments": "site" },
+    { "id": "pbbtop", "name": "Server Gehlee", "host": "pbbcollab.com", "kind": "site", "source": "SITE", "mode": 0, "srv": 1, "segments": "site" },
+    { "id": "s2", "name": "Server Nathan", "host": "pbbcollab.com", "kind": "site", "source": "SITE", "mode": 1, "srv": 0, "segments": "site" },
+    { "id": "s3", "name": "Server Primo", "host": "pbbcollab.com", "kind": "site", "source": "SITE", "mode": 2, "srv": 0, "segments": "mirror" },
+    { "id": "s4", "name": "Server Bela", "host": "pbbcollab.com", "kind": "site", "source": "SITE", "mode": 3, "srv": 1, "segments": "site" },
+    { "id": "twitch", "name": "Twitch Mirror", "host": "pbbcollab.com", "kind": "site", "source": "SITE", "mode": 0, "srv": 1, "segments": "site" },
+    { "id": "pbb3", "name": "PBB3.0", "host": "pbb-3.pages.dev", "kind": "pbb3", "source": "PBB3", "mode": 0, "srv": 1, "segments": "site" },
+    { "id": "mirror", "name": "PBB3 CCTV", "host": "pbb3collablive.xyz", "kind": "mirror", "source": "MIRROR", "mode": 0, "srv": 0, "segments": "site" }
+  ],
+  "live": [
+    { "id": "s1", "name": "Server 1", "host": "pbbcollab.live", "note": "Main server · recommended", "kind": "live", "source": "LIVE", "mode": 0, "srv": 1 },
+    { "id": "s2", "name": "Server 2", "host": "pbbcollab.live", "note": "Backup server · fast", "kind": "live", "source": "LIVE", "mode": 1, "srv": 1 },
+    { "id": "s3", "name": "Server 3", "host": "pbbcollab.live", "note": "Edge server · alternate", "kind": "live", "source": "LIVE", "mode": 2, "srv": 1 },
+    { "id": "s4", "name": "Server 4", "host": "pbbcollab.live", "note": "Relay server · low latency", "kind": "live", "source": "LIVE", "mode": 3, "srv": 1 },
+    { "id": "s5", "name": "Server 5", "host": "pbbcollab.live", "note": "Cloud mirror · ultra fast", "kind": "live", "source": "LIVE", "mode": 4, "srv": 1 },
+    { "id": "s6", "name": "Server 6", "host": "pbbcollab.live", "note": "Global relay · ultra fast", "kind": "live", "source": "LIVE", "mode": 5, "srv": 1 }
+  ]
+}

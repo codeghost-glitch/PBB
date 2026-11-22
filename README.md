@@ -91,10 +91,14 @@ The config is cached in `filesDir/streams.json`. `keys/keys.json` is the checked
 
 ### Servers
 
-The picker uses the six ids and names from `pbbcollab.com/live`, in the same order, plus the PBB3.0 and CCTV mirror routes:
+The picker is driven by `android/assets/servers.json`. The checked-in copy is bundled in the APK; the app fetches the same file from the public GitHub raw URL on start, every five minutes, when the servers sheet opens, and when Refresh is tapped. A valid download replaces the cached copy. Added, removed and renamed routes therefore reach installed apps without a new build. A stored pick that is no longer in the catalog falls back to the first route in its group.
+
+Each `site` entry carries its id, label, host, source badge, route `kind` (`site`, `pbb3` or `mirror`), three-bit session `mode`, MPD `srv`, and segment route. Each `live` entry carries the same fields except `kind`, which is always `live`. The native side validates ids, labels and route numbers before using them, so a malformed catalog cannot steer playback to an arbitrary URL.
+
+The default catalog has these site routes:
 
 | Id | Name |
-|---|---|
+| --- | --- |
 | `s1` | Server Jeo |
 | `pbbtop` | Server Gehlee |
 | `s2` | Server Nathan |
@@ -104,7 +108,9 @@ The picker uses the six ids and names from `pbbcollab.com/live`, in the same ord
 | `pbb3` | PBB3.0 |
 | `mirror` | PBB3 CCTV |
 
-`Server Jeo`, `Server Nathan` and `Server Primo` keep the app's original main, proxy and mirror playback routes. The three site-named routes read their MPD from `pbbcollab.com` and use the segment folder the MPD names; they keep separate labels to match the website. `PBB3.0` reads the three CDN manifests named by `pbb-3.pages.dev` with the same camera keys. `PBB3 CCTV` reads the three signed MPD endpoints published by `pbb3collablive.xyz`; their signed query strings are preserved through proxying and recording.
+Plus six `pbbcollab.live` routes, `s1` through `s6`. `Server Jeo`, `Server Nathan` and `Server Primo` keep the app's original main, proxy and mirror playback routes. The three site-named routes read their MPD from `pbbcollab.com` and use the segment folder the MPD names; they keep separate labels to match the website. `PBB3.0` reads the three CDN manifests named by `pbb-3.pages.dev` with the same camera keys. `PBB3 CCTV` reads the three signed MPD endpoints published by `pbb3collablive.xyz`; their signed query strings are preserved through proxying and recording.
+
+To add or rename a route, edit `android/assets/servers.json` and push it to `main`. Keep the repository public; installed apps read the raw URL directly.
 
 The app routes media requests through `shouldInterceptRequest`. The site proxy needs the site's own Origin; the CDN and mirrors do not get the session cookie. The CCTV camera ids are in `CAM_MIRROR`.
 

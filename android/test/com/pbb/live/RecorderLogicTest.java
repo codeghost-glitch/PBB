@@ -104,10 +104,21 @@ public final class RecorderLogicTest {
 
     private static void siteServersAreAccepted() throws Exception {
         String source = sourceOf("android/java/com/pbb/live/MainActivity.java");
-        check("the site routes and both mirrors are accepted", true,
-            source.contains("\"s1\", \"pbbtop\", \"s2\", \"s3\", \"s4\", \"twitch\", \"pbb3\", \"mirror\""));
-        check("site routes use the site MPD endpoint", true,
-            source.contains("\"pbbtop\".equals(server) || \"s4\".equals(server)"));
+        String catalog = sourceOf("android/assets/servers.json");
+        check("the catalog is fetched, cached and validated", true,
+            source.contains("CATALOG_URL")
+            && source.contains("CATALOG_CACHE")
+            && source.contains("validServerCatalog"));
+        check("the catalog holds the site routes and both mirrors", true,
+            catalog.contains("\"id\": \"s1\"")
+            && catalog.contains("\"id\": \"pbbtop\"")
+            && catalog.contains("\"id\": \"s3\"")
+            && catalog.contains("\"id\": \"pbb3\"")
+            && catalog.contains("\"id\": \"mirror\""));
+        check("site routes are read from the catalog", true,
+            source.contains("catalogNumber(server, false, \"srv\", 0)")
+            && source.contains("serverKind(streamServer)")
+            && source.contains("serverSegments(streamServer)"));
     }
 
     private static void theMpdUsesOneAbsoluteSegmentBase() throws Exception {

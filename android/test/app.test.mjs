@@ -15,6 +15,7 @@ const APP = path.join(HERE, "..", "assets", "app.js");
 const CSS = path.join(HERE, "..", "assets", "styles.css");
 const HTML = path.join(HERE, "..", "assets", "index.html");
 const ACTIVITY = path.join(HERE, "..", "java", "com", "pbb", "live", "MainActivity.java");
+const CATALOG = path.join(HERE, "..", "assets", "servers.json");
 const SNAPSHOT = path.join(HERE, "..", "..", "keys", "keys.json");
 const ICON_BG = path.join(HERE, "..", "res", "values", "colors.xml");
 const ICON_FG = path.join(HERE, "..", "res", "drawable", "ic_launcher_foreground.xml");
@@ -124,6 +125,8 @@ function loadPage() {
   const livePick = { server: "s1" };
   const sourcePick = { source: "site" };
   const Pbb = {
+    getServerCatalog: () => fs.readFileSync(CATALOG, "utf8"),
+    refreshServerCatalog: () => calls.push(["refreshServerCatalog"]),
     setVolume: (value, persist) => calls.push(["setVolume", value, persist]),
     setBrightness: (value, persist) => calls.push(["setBrightness", value, persist]),
     markStackGroup: (first, second, third) => calls.push(["markStackGroup", first, second, third]),
@@ -267,6 +270,11 @@ function loadPage() {
   applyGestureValue,
   applyQuality,
   onTouchEnd,
+  loadServerCatalog,
+  renderServerChips,
+  onServerCatalog,
+  catalogIds,
+  getServerCatalogData: () => serverCatalog,
   setRefs(refs) {
     grid = refs.grid;
     backBtn = refs.backBtn;
@@ -299,6 +307,8 @@ function loadPage() {
   page.statusText = statusText;
   page.calls = calls;
   page.fields = fields;
+  page.loadServerCatalog();
+  page.renderServerChips();
   page.storage = stored;
   return page;
 }
@@ -491,6 +501,42 @@ function serverPickIsStored() {
   check("the sheet remembers the pick", "s2", page.serverSheet.server);
 }
 
+function serverCatalogFollowsRemoteUpdates() {
+  const page = loadPage();
+  const custom = {
+    version: 1,
+    site: [
+      { id: "s1", name: "Server One", host: "pbbcollab.com", source: "SITE", note: "" },
+      { id: "new", name: "Server New", host: "new.example", source: "NEW", note: "Quick" },
+    ],
+    live: [
+      { id: "live-a", name: "Live A", host: "pbbcollab.live", source: "LIVE", note: "Fresh" },
+    ],
+  };
+  page.onServerCatalog(JSON.stringify(custom));
+  check("renamed and added routes replace the old chips", 2,
+    page.fields.serverChips.children.length);
+  check("the renamed route keeps its pick", true,
+    page.fields.serverChips.children[0].dataset.server === "s1"
+    && page.fields.serverChips.children[0].children.some(
+      (child) => child.textContent === "Server One"));
+  check("the new route is selectable", true,
+    page.fields.serverChips.children[1].dataset.server === "new");
+  page.selectServer("new");
+  check("the new id reaches the app", "new",
+    (page.calls.find((entry) => entry[0] === "setStreamServer") || [])[1]);
+  check("one live route replaces the old group", 1,
+    page.fields.liveServerChips.children.length);
+  check("a deleted live pick falls back to the first route", "live-a", page.liveSheet.server);
+  page.selectLiveServer("live-a");
+  check("the new live label reaches the status", true,
+    /LIVE · Live A/.test(page.fields.statusMeta.textContent));
+
+  page.onServerCatalog(JSON.stringify({ version: 99, site: [], live: [] }));
+  check("a broken catalog cannot empty the picker", 2,
+    page.fields.serverChips.children.length);
+}
+
 function serverSheetFollowsTheApp() {
   const page = loadPage();
   page.selectServer("s2");
@@ -601,7 +647,9 @@ function pipDoesNotRestartTheFeed() {
 function refreshResyncsAllStreams() {
   const app = fs.readFileSync(APP, "utf8");
   check("refresh still asks for fresh keys", true,
-    /function refreshKeysFromUi\(\) \{[\s\S]{0,220}Pbb\.refreshKeys\(\)/s.test(app));
+    /function refreshKeysFromUi\(\) \{[\s\S]{0,360}Pbb\.refreshKeys\(\)/s.test(app));
+  check("refresh also checks the server catalog", true,
+    /function refreshKeysFromUi\(\) \{[\s\S]{0,220}Pbb\.refreshServerCatalog\(\)/s.test(app));
   check("a manual refresh rebuilds the players", true,
     /manualKeyRefresh[\s\S]{0,320}await resyncStreams\(\)/s.test(app));
   check("all players reload in the same tick", true,
@@ -694,16 +742,18 @@ function stitchAndServerContract() {
   check("the triple record has a visible tally state", true,
     /stitch-active/s.test(app) && /updateStitchButton\(\)/s.test(app));
   const html = fs.readFileSync(path.join(HERE, "..", "assets", "index.html"), "utf8");
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  const page = loadPage();
   check("the sheet lists the site servers and the two mirrors", true,
     /id="serverChips"/.test(html)
     && ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"]
-      .every((id) => html.includes(`data-server="${id}"`))
+      .every((id) => catalog.site.some((entry) => entry.id === id))
     && /selectServer/.test(app)
-    && !/data-server="s[5-7]"/.test(html));
+    && page.fields.serverChips.children.length === 8);
   check("the site routes use the websites' names", true,
     ["Server Jeo", "Server Gehlee", "Server Nathan", "Server Primo",
       "Server Bela", "Twitch Mirror", "PBB3.0", "PBB3 CCTV"]
-      .every((name) => html.includes(name)));
+      .every((name) => catalog.site.some((entry) => entry.name === name)));
   check("PBB3.0 uses the direct CDN manifests, then the site route", true,
     java.includes("pbb3Streams()")
     && /streams = pbb3Streams\(\);\s*if \(streams == null\) \{\s*streams = siteStreamsWithBundledKeys\(\);/.test(java)
@@ -719,7 +769,7 @@ function stitchAndServerContract() {
     /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java)
     && java.includes("MIRROR_MPD = {")
     && java.includes("MIRROR + CAM_MIRROR[0] + \"/manifest.mpd\"")
-    && /if \("mirror"\.equals\(streamServer\)/.test(java)
+    && /if \("mirror"\.equals\(kind\)/.test(java)
     && java.includes("manifestBase(xml)"));
   const httpSource = fs.readFileSync(
     path.join(HERE, "..", "java", "com", "pbb", "live", "Http.java"), "utf8");
@@ -880,10 +930,11 @@ function designSystemHoldsTheLine() {
   check("every spacing token is on the 4px grid", true,
     Array.from(css.matchAll(/--s-[0-9]+: (\d+)px/g))
       .every((match) => Number(match[1]) % 4 === 0));
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
   check("the picker lists routes as rows", true,
     /\.chip \{[^}]*min-height: 64px/s.test(css)
     && /\.chip-name \{[^}]*--w-bold/s.test(css)
-    && (html.match(/data-server="/g) || []).length === 8
+    && catalog.site.length === 8
     && !html.includes("chip-desc"));
   check("the chosen route is marked with a filled dot", true,
     /\.chip\.active \.chip-key \{[^}]*background: var\(--primary\)/s.test(css));
@@ -1052,11 +1103,18 @@ function serverSheetAndWallReadClearly() {
   check("the server sheet explains the switch", true,
     html.includes('class="sheet-intro"')
     && html.includes("Switching routes reconnects all three feeds."));
-  const routeBlock = /<div class="sheet-chips" id="serverChips"[\s\S]*?<\/div>/.exec(html);
-  check("the routes are a radio group", true,
+  const routeBlock = /<div class="sheet-chips" id="serverChips"[^>]*><\/div>/.exec(html);
+  const page = loadPage();
+  check("the routes are a radio group built from the catalog", true,
     Boolean(routeBlock)
     && routeBlock[0].includes('role="radiogroup"')
-    && (routeBlock[0].match(/role="radio"/g) || []).length === 8);
+    && page.fields.serverChips.children.length === 8
+    && page.fields.serverChips.children.every(
+      (chip) => chip.getAttribute("role") === "radio"));
+  check("the live routes are built from the catalog too", true,
+    page.fields.liveServerChips.children.length === 6
+    && page.fields.liveServerChips.children.every(
+      (chip) => chip.getAttribute("role") === "radio"));
   check("the chosen route is named to assistive tech", true,
     /chip\.setAttribute\("aria-checked", active \? "true" : "false"\)/.test(
       fs.readFileSync(APP, "utf8")));
@@ -1069,7 +1127,6 @@ function serverSheetAndWallReadClearly() {
     && /\.cam-bar \{[\s\S]*?background: var\(--surface\)/.test(css)
     && /\.cam-role \{[\s\S]*?border: 1px solid var\(--line\)/.test(css));
 
-  const page = loadPage();
   page.selectServer("s2");
   page.openSourceSheet();
   check("the selected route is checked", "true",
@@ -1111,26 +1168,31 @@ function materialYouThemesSwitch() {
 function liveRoutesShareTheServerSheet() {
   const html = fs.readFileSync(HTML, "utf8");
   const java = fs.readFileSync(ACTIVITY, "utf8");
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  const page = loadPage();
   check("both server sets share one sheet", true,
     html.includes('id="sourceSheet"')
     && html.includes('id="serverChips"')
     && html.includes('id="liveServerChips"')
-    && (html.match(/data-live-server="/g) || []).length === 6
+    && catalog.live.length === 6
+    && page.fields.liveServerChips.children.length === 6
     && !html.includes('id="liveServerBtn"'));
   check("the sheet names the source groups", true,
     html.includes("pbbcollab.com/live") && html.includes("pbbcollab.live")
     && html.includes("PBB3 sources"));
   check("the mirror source is labelled on the sheet", true,
-    html.includes('data-server="mirror"') && html.includes("PBB3 CCTV")
+    catalog.site.some((entry) => entry.id === "mirror" && entry.name === "PBB3 CCTV")
     && /MIRROR = "https:\/\/pbb3collablive\.xyz\/api\/proxy\/stream\//.test(java));
-  check("the native route list accepts all six live servers", true,
-    java.includes('"s1", "s2", "s3", "s4", "s5", "s6"'));
+  check("the native route list comes from the catalog", true,
+    java.includes("CATALOG_URL")
+    && java.includes("validServerCatalog")
+    && java.includes("catalogEntry")
+    && catalog.live.every((entry) => /^[a-z0-9][a-z0-9_-]{0,31}$/.test(entry.id)));
   check("a blocked handshake falls back to fresh site MPDs", true,
     java.includes("siteStreamsWithBundledKeys()")
     && java.includes("bundledKeyStreams(mpds, SITE2)")
     && java.includes("new JSONObject(streamConfig()).getJSONArray(\"streams\")"));
 
-  const page = loadPage();
   page.openSourceSheet();
   check("the shared sheet opens on both groups", false,
     page.fields.sourceSheet.classList.contains("hidden"));
@@ -1164,6 +1226,7 @@ const tests = [
   channelListContract,
   startupReadsTheStoredServer,
   serverPickIsStored,
+  serverCatalogFollowsRemoteUpdates,
   serverSwitchFailuresReachTheStrip,
   serverSheetFollowsTheApp,
   fullscreenKeepsThePictureWhole,

@@ -44,6 +44,9 @@ function refreshKeysFromUi() {
   manualKeyRefresh = true;
   state.keyChecked = false;
   setStatusText("Syncing feeds");
+  if (typeof Pbb.refreshServerCatalog === "function") {
+    Pbb.refreshServerCatalog();
+  }
   Pbb.refreshKeys();
 }
 
@@ -142,12 +145,9 @@ function updateStatusMeta() {
     return;
   }
   const live = usingLiveSource();
-  const pbb3 = !live && serverSheet.server === "pbb3";
-  const mirror = !live && serverSheet.server === "mirror";
-  const server = live
-    ? (LIVE_SERVER_NAMES[liveSheet.server] || "Server 1")
-    : (SERVER_NAMES[serverSheet.server] || "Server Jeo");
-  const source = live ? "LIVE" : (pbb3 ? "PBB3" : (mirror ? "MIRROR" : "SITE"));
+  const entry = catalogEntry(live ? liveSheet.server : serverSheet.server, live);
+  const server = (entry && entry.name) || "Server";
+  const source = (entry && entry.source) || (live ? "LIVE" : "SITE");
   meta.textContent = `${source} · ${server} · ${state.quality.toUpperCase()}`;
 }
 
@@ -1689,48 +1689,182 @@ applyTheme(loadTheme());
 
 // ------------------------------------------------------------------- servers
 
-// Six names from pbbcollab.com/live, plus the direct PBB3.0 and mirror
-// routes. The app stores the pick, so it survives a restart.
+// Java fetches this catalog and hands it to the page. A stored pick stays
+// selected only while it is still in the current list.
 const serverSheet = { server: "s1" };
 const liveSheet = { server: "s1" };
 
-const SERVERS = ["s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"];
-
-const SERVER_NAMES = {
-  s1: "Server Jeo",
-  pbbtop: "Server Gehlee",
-  s2: "Server Nathan",
-  s3: "Server Primo",
-  s4: "Server Bela",
-  twitch: "Twitch Mirror",
-  pbb3: "PBB3.0",
-  mirror: "PBB3 CCTV",
+const DEFAULT_SERVER_CATALOG = {
+  site: [
+    { id: "s1", name: "Server Jeo", host: "pbbcollab.com", source: "SITE", note: "" },
+    { id: "pbbtop", name: "Server Gehlee", host: "pbbcollab.com", source: "SITE", note: "" },
+    { id: "s2", name: "Server Nathan", host: "pbbcollab.com", source: "SITE", note: "" },
+    { id: "s3", name: "Server Primo", host: "pbbcollab.com", source: "SITE", note: "" },
+    { id: "s4", name: "Server Bela", host: "pbbcollab.com", source: "SITE", note: "" },
+    { id: "twitch", name: "Twitch Mirror", host: "pbbcollab.com", source: "SITE", note: "" },
+    { id: "pbb3", name: "PBB3.0", host: "pbb-3.pages.dev", source: "PBB3", note: "" },
+    { id: "mirror", name: "PBB3 CCTV", host: "pbb3collablive.xyz", source: "MIRROR", note: "" },
+  ],
+  live: [
+    { id: "s1", name: "Server 1", host: "pbbcollab.live", source: "LIVE", note: "Main server · recommended" },
+    { id: "s2", name: "Server 2", host: "pbbcollab.live", source: "LIVE", note: "Backup server · fast" },
+    { id: "s3", name: "Server 3", host: "pbbcollab.live", source: "LIVE", note: "Edge server · alternate" },
+    { id: "s4", name: "Server 4", host: "pbbcollab.live", source: "LIVE", note: "Relay server · low latency" },
+    { id: "s5", name: "Server 5", host: "pbbcollab.live", source: "LIVE", note: "Cloud mirror · ultra fast" },
+    { id: "s6", name: "Server 6", host: "pbbcollab.live", source: "LIVE", note: "Global relay · ultra fast" },
+  ],
 };
 
-const LIVE_SERVERS = ["s1", "s2", "s3", "s4", "s5", "s6"];
+let serverCatalog = DEFAULT_SERVER_CATALOG;
 
-const LIVE_SERVER_NAMES = {
-  s1: "Server 1",
-  s2: "Server 2",
-  s3: "Server 3",
-  s4: "Server 4",
-  s5: "Server 5",
-  s6: "Server 6",
-};
+const SERVER_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+function normalizeCatalog(raw, fallback) {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.site)
+        || !Array.isArray(parsed.live) || !parsed.site.length || !parsed.live.length) {
+      return fallback;
+    }
+    const group = (rows, fallbackSource) => {
+      const seen = new Set();
+      const out = [];
+      for (const row of rows) {
+        if (!row || typeof row.id !== "string" || !SERVER_ID.test(row.id)
+            || seen.has(row.id) || typeof row.name !== "string" || !row.name
+            || row.name.length > 64 || typeof row.host !== "string" || !row.host
+            || row.host.length > 120) {
+          return null;
+        }
+        seen.add(row.id);
+        out.push({
+          id: row.id,
+          name: row.name.slice(0, 64),
+          host: row.host.slice(0, 120),
+          source: String(row.source || fallbackSource).slice(0, 16).toUpperCase(),
+          note: String(row.note || "").slice(0, 120),
+        });
+      }
+      return out.length ? out : null;
+    };
+    const site = group(parsed.site, "SITE");
+    const live = group(parsed.live, "LIVE");
+    return site && live ? { site, live } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadServerCatalog() {
+  if (!window.Pbb || typeof Pbb.getServerCatalog !== "function") {
+    return;
+  }
+  serverCatalog = normalizeCatalog(Pbb.getServerCatalog(), serverCatalog);
+}
+
+function catalogList(live) {
+  return live ? serverCatalog.live : serverCatalog.site;
+}
+
+function catalogEntry(id, live) {
+  return catalogList(live).find((entry) => entry.id === id) || null;
+}
+
+function catalogIds(live) {
+  return catalogList(live).map((entry) => entry.id);
+}
+
+function defaultServerId(live) {
+  const ids = catalogIds(live);
+  return ids.length ? ids[0] : "s1";
+}
+
+function makeServerChip(entry, live) {
+  const chip = document.createElement("button");
+  chip.className = "chip";
+  chip.type = "button";
+  chip.setAttribute("role", "radio");
+  chip.setAttribute("aria-checked", "false");
+  if (live) {
+    chip.dataset.liveServer = entry.id;
+  } else {
+    chip.dataset.server = entry.id;
+  }
+  const key = document.createElement("span");
+  key.className = "chip-key";
+  key.setAttribute("aria-hidden", "true");
+  chip.appendChild(key);
+  if (entry.note) {
+    const copy = document.createElement("span");
+    copy.className = "chip-copy";
+    const name = document.createElement("span");
+    name.className = "chip-name";
+    name.textContent = entry.name;
+    const note = document.createElement("span");
+    note.className = "chip-note";
+    note.textContent = entry.note;
+    copy.appendChild(name);
+    copy.appendChild(note);
+    chip.appendChild(copy);
+  } else {
+    const name = document.createElement("span");
+    name.className = "chip-name";
+    name.textContent = entry.name;
+    chip.appendChild(name);
+  }
+  chip.addEventListener("click", () => {
+    if (live) {
+      selectLiveServer(entry.id);
+    } else {
+      selectServer(entry.id);
+    }
+  });
+  return chip;
+}
+
+function renderServerChips() {
+  const siteRow = sourceField("serverChips");
+  if (siteRow) {
+    siteRow.replaceChildren(...serverCatalog.site.map((entry) => makeServerChip(entry, false)));
+  }
+  const liveRow = sourceField("liveServerChips");
+  if (liveRow) {
+    liveRow.replaceChildren(...serverCatalog.live.map((entry) => makeServerChip(entry, true)));
+  }
+}
+
+function onServerCatalog(raw) {
+  const next = normalizeCatalog(raw, serverCatalog);
+  const changed = JSON.stringify(next) !== JSON.stringify(serverCatalog);
+  serverCatalog = next;
+  renderServerChips();
+  loadServerChoice();
+  markServerChoice();
+  markLiveServerChoice();
+  updateStatusMeta();
+  const sheet = sourceField("sourceSheet");
+  if (sheet && !sheet.classList.contains("hidden")) {
+    setSourceNote(currentSourceNote());
+  }
+  if (changed && statusText) {
+    setTransientStatus("Server list updated");
+  }
+}
+window.onServerCatalog = onServerCatalog;
 
 // Java owns the persisted pick. Read it before the first status line is drawn;
-// otherwise a stored PBB3.0 route reads as Server Jeo until the sheet opens.
+// otherwise a stored route reads as the old default until the sheet opens.
 function loadServerChoice() {
   if (!window.Pbb) {
     return;
   }
   if (typeof Pbb.getStreamServer === "function") {
     const stored = Pbb.getStreamServer();
-    serverSheet.server = SERVERS.includes(stored) ? stored : "s1";
+    serverSheet.server = catalogIds(false).includes(stored) ? stored : defaultServerId(false);
   }
   if (typeof Pbb.getLiveServer === "function") {
     const stored = Pbb.getLiveServer();
-    liveSheet.server = LIVE_SERVERS.includes(stored) ? stored : "s1";
+    liveSheet.server = catalogIds(true).includes(stored) ? stored : defaultServerId(true);
   }
 }
 
@@ -1743,6 +1877,12 @@ function setSourceNote(message) {
   if (note) {
     note.textContent = message;
   }
+}
+
+function currentSourceNote() {
+  const live = usingLiveSource();
+  const entry = catalogEntry(live ? liveSheet.server : serverSheet.server, live);
+  return entry ? (entry.host + " · " + entry.name) : "Server list unavailable";
 }
 
 function markServerChoice() {
@@ -1763,17 +1903,14 @@ function openSourceSheet() {
   if (!sheet) {
     return;
   }
+  if (window.Pbb && typeof Pbb.refreshServerCatalog === "function") {
+    Pbb.refreshServerCatalog();
+  }
+  loadServerCatalog();
   loadServerChoice();
-  const live = usingLiveSource();
   markServerChoice();
   markLiveServerChoice();
-  setSourceNote(live
-    ? ("pbbcollab.live · " + LIVE_SERVER_NAMES[liveSheet.server])
-    : (serverSheet.server === "pbb3"
-      ? ("pbb-3.pages.dev · " + SERVER_NAMES[serverSheet.server])
-      : (serverSheet.server === "mirror"
-        ? ("pbb3collablive.xyz · " + SERVER_NAMES[serverSheet.server])
-        : ("pbbcollab.com · " + SERVER_NAMES[serverSheet.server]))));
+  setSourceNote(currentSourceNote());
   sheet.classList.remove("hidden");
 }
 
@@ -1785,7 +1922,7 @@ function closeSourceSheet() {
 }
 
 function selectServer(server) {
-  const pick = SERVERS.includes(server) ? server : "s1";
+  const pick = catalogIds(false).includes(server) ? server : defaultServerId(false);
   if (!window.Pbb || typeof Pbb.setStreamServer !== "function") {
     setSourceNote("Android bridge unavailable");
     return;
@@ -1799,7 +1936,7 @@ function selectServer(server) {
   markServerChoice();
   markLiveServerChoice();
   closeSourceSheet();
-  setTransientStatus("Switching to " + SERVER_NAMES[pick]);
+  setTransientStatus("Switching to " + (catalogEntry(pick, false) || {}).name);
 }
 
 function markLiveServerChoice() {
@@ -1816,7 +1953,7 @@ function markLiveServerChoice() {
 }
 
 function selectLiveServer(server) {
-  const pick = LIVE_SERVERS.includes(server) ? server : "s1";
+  const pick = catalogIds(true).includes(server) ? server : defaultServerId(true);
   if (!window.Pbb || typeof Pbb.setLiveServer !== "function") {
     setSourceNote("Android bridge unavailable");
     return;
@@ -1829,9 +1966,9 @@ function selectLiveServer(server) {
   liveSheet.server = pick;
   markServerChoice();
   markLiveServerChoice();
-  setSourceNote("pbbcollab.live · " + LIVE_SERVER_NAMES[pick]);
+  setSourceNote(currentSourceNote());
   closeSourceSheet();
-  setTransientStatus("Switching to " + LIVE_SERVER_NAMES[pick]);
+  setTransientStatus("Switching to " + (catalogEntry(pick, true) || {}).name);
 }
 
 // A WebView cannot copy DRM-protected video frames into a canvas: every
@@ -1893,18 +2030,8 @@ function wireSourceSheet() {
       closeSourceSheet();
     }
   });
-  const row = sourceField("serverChips");
-  if (row) {
-    for (const chip of Array.from(row.children)) {
-      chip.addEventListener("click", () => selectServer(chip.dataset.server));
-    }
-  }
-  const liveRow = sourceField("liveServerChips");
-  if (liveRow) {
-    for (const chip of Array.from(liveRow.children)) {
-      chip.addEventListener("click", () => selectLiveServer(chip.dataset.liveServer));
-    }
-  }
+  // Chips are built from the catalog in renderServerChips(); each chip wires
+  // its own tap there, so a refreshed list never keeps a dead listener.
 }
 
 function boot() {
@@ -1931,6 +2058,8 @@ function boot() {
   setStatusKey(themeBtn, "palette", "Choose a color theme");
   setStatusKey(backBtn, "grid", "Back to grid");
   updateStitchButton();
+  loadServerCatalog();
+  renderServerChips();
 
   if (!window.Pbb) {
     setStatusText("Android bridge unavailable");
@@ -1953,6 +2082,8 @@ function boot() {
 
   state.quality = normalizeQuality(Pbb.getDefaultQuality());
   loadServerChoice();
+  markServerChoice();
+  markLiveServerChoice();
   updateStatusMeta();
   const systemVolume = Number(Pbb.getVolume());
   if (!Number.isNaN(systemVolume)) {
@@ -1973,6 +2104,11 @@ function boot() {
     initPlayer(entry, index);
   }
   gridStartTimer = setTimeout(startGridTogether, 5000);
+  setInterval(() => {
+    if (window.Pbb && typeof Pbb.refreshServerCatalog === "function") {
+      Pbb.refreshServerCatalog();
+    }
+  }, 5 * 60 * 1000);
 
   for (const btn of qualityButtons) {
     btn.addEventListener("click", () => setQuality(btn.dataset.quality, true));

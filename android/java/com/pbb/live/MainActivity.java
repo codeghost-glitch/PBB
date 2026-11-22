@@ -39,14 +39,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -97,12 +100,13 @@ public class MainActivity extends Activity {
     private static final String SERVER_FILE = "stream_server.txt";
     private static final String LIVE_SERVER_FILE = "live_server.txt";
     private static final String SOURCE_FILE = "stream_source.txt";
-    private static final String[] SITE_SERVERS = {
-        "s1", "pbbtop", "s2", "s3", "s4", "twitch", "pbb3", "mirror"
-    };
-    private static final String[] LIVE_SERVERS = {
-        "s1", "s2", "s3", "s4", "s5", "s6"
-    };
+    // The remote catalog is the source of truth. The checked-in asset is the
+    // first-run copy; a downloaded copy is kept for offline starts.
+    private static final String CATALOG_URL =
+        "https://raw.githubusercontent.com/codeghost-glitch/PBB/main/android/assets/servers.json";
+    private static final String CATALOG_ASSET = "servers.json";
+    private static final String CATALOG_CACHE = "server_catalog.json";
+    private static volatile String serverCatalogJson = "";
 
     static {
         System.loadLibrary("pbb");
@@ -171,12 +175,14 @@ public class MainActivity extends Activity {
         appVolumeLevel = appVolume(filesDir);
         appBrightnessLevel = appBrightness(filesDir);
         streamConfigJson = streamConfig();
+        loadServerCatalog();
         streamServer = loadServer();
         liveServer = loadLiveServer();
         useLiveSite = loadSource();
         loadCachedKeys();
         // Start the handshake before the page exists, so the config the page
         // asks for on boot is the fresh one.
+        refreshServerCatalog();
         refreshKeys();
         setupWebView();
         applyOrientation();
@@ -339,7 +345,12 @@ public class MainActivity extends Activity {
      * the middle of the write cannot leave a half written file behind.
      */
     private void writeKeysCache(String json) {
-        File tmp = new File(getFilesDir(), KEYS_CACHE + ".tmp");
+        writeAtomic(KEYS_CACHE, json);
+    }
+
+    /** Writes a small JSON file through a temp file and rename. */
+    private void writeAtomic(String name, String json) {
+        File tmp = new File(getFilesDir(), name + ".tmp");
         try {
             FileOutputStream out = new FileOutputStream(tmp);
             try {
@@ -347,11 +358,219 @@ public class MainActivity extends Activity {
             } finally {
                 out.close();
             }
-            if (!tmp.renameTo(new File(getFilesDir(), KEYS_CACHE))) {
-                throw new IOException("cannot replace the keys cache");
+            if (!tmp.renameTo(new File(getFilesDir(), name))) {
+                throw new IOException("cannot replace " + name);
             }
         } catch (Exception ignored) {
         }
+    }
+
+    /**
+     * Reads the server catalog. A downloaded copy wins; the checked-in asset
+     * is there for the first run and for when GitHub is unreachable.
+     */
+    private void loadServerCatalog() {
+        String cached = readText(new File(getFilesDir(), CATALOG_CACHE));
+        String catalog = validServerCatalog(cached);
+        if (catalog == null) {
+            catalog = validServerCatalog(readAsset(CATALOG_ASSET));
+        }
+        if (catalog != null) {
+            serverCatalogJson = catalog;
+        }
+    }
+
+    private String readText(File file) {
+        try {
+            FileInputStream in = new FileInputStream(file);
+            try {
+                return new String(Http.readAll(in), "UTF-8");
+            } finally {
+                in.close();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String readAsset(String name) {
+        try {
+            InputStream in = getAssets().open(name);
+            try {
+                return new String(Http.readAll(in), "UTF-8");
+            } finally {
+                in.close();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Fetches the catalog on the refresh path and pushes it to the page. */
+    private void refreshServerCatalog() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String raw = null;
+                try {
+                    raw = Http.getText(CATALOG_URL + "?_pbb=" + System.currentTimeMillis(),
+                        5000, 8000);
+                } catch (Exception ignored) {
+                }
+                String next = validServerCatalog(raw);
+                if (next == null) {
+                    return;
+                }
+                if (!next.equals(serverCatalogJson)) {
+                    serverCatalogJson = next;
+                    writeAtomic(CATALOG_CACHE, next);
+                    if (reconcileServerPicks()) {
+                        refreshKeys();
+                    }
+                }
+                final String quoted = JSONObject.quote(next);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            webView.evaluateJavascript(
+                                "window.onServerCatalog && window.onServerCatalog(" + quoted + ")",
+                                null);
+                        }
+                    }
+                });
+            }
+        }, "pbb-catalog").start();
+    }
+
+    /** Validates and normalises a downloaded catalog before it can steer a route. */
+    static String validServerCatalog(String raw) {
+        if (raw == null || raw.length() > 65536) {
+            return null;
+        }
+        try {
+            JSONObject root = new JSONObject(raw);
+            if (root.optInt("version", -1) != 1) {
+                return null;
+            }
+            JSONArray site = root.optJSONArray("site");
+            JSONArray live = root.optJSONArray("live");
+            if (site == null || live == null || site.length() < 1 || live.length() < 1
+                || site.length() > 64 || live.length() > 64) {
+                return null;
+            }
+            return new JSONObject()
+                .put("version", 1)
+                .put("site", validCatalogGroup(site, false))
+                .put("live", validCatalogGroup(live, true))
+                .toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static JSONArray validCatalogGroup(JSONArray group, boolean live) throws Exception {
+        JSONArray out = new JSONArray();
+        Set<String> ids = new HashSet<String>();
+        for (int i = 0; i < group.length(); i++) {
+            JSONObject in = group.getJSONObject(i);
+            String id = in.optString("id", "");
+            if (!id.matches("[a-z0-9][a-z0-9_-]{0,31}") || !ids.add(id)) {
+                throw new IllegalArgumentException("bad server id");
+            }
+            String name = catalogText(in, "name", 1, 64);
+            String host = catalogText(in, "host", 1, 120);
+            String note = catalogText(in, "note", 0, 120);
+            String source = catalogText(in, "source", 2, 16).toUpperCase(Locale.US);
+            if (!source.matches("[A-Z][A-Z0-9 ]{1,15}")) {
+                throw new IllegalArgumentException("bad source label");
+            }
+            int mode = in.optInt("mode", -1);
+            int srv = in.optInt("srv", -1);
+            if (mode < 0 || mode > 7 || srv < 0 || srv > 7) {
+                throw new IllegalArgumentException("bad route number");
+            }
+            String kind = live ? "live" : in.optString("kind", "site");
+            String segments = in.optString("segments", "site");
+            if (live) {
+                if (!"mirror".equals(segments) && !"site".equals(segments)) {
+                    throw new IllegalArgumentException("bad segment route");
+                }
+            } else {
+                if (!"site".equals(kind) && !"pbb3".equals(kind) && !"mirror".equals(kind)) {
+                    throw new IllegalArgumentException("bad server kind");
+                }
+                if (!"site".equals(segments) && !"mirror".equals(segments)) {
+                    throw new IllegalArgumentException("bad segment route");
+                }
+            }
+            JSONObject entry = new JSONObject()
+                .put("id", id)
+                .put("name", name)
+                .put("host", host)
+                .put("note", note)
+                .put("source", source)
+                .put("kind", kind)
+                .put("mode", mode)
+                .put("srv", srv)
+                .put("segments", segments);
+            out.put(entry);
+        }
+        return out;
+    }
+
+    private static String catalogText(JSONObject entry, String key, int min, int max)
+        throws Exception {
+        String value = entry.optString(key, "").trim();
+        if (value.length() < min || value.length() > max) {
+            throw new IllegalArgumentException("bad " + key);
+        }
+        return value;
+    }
+
+    private static JSONObject catalogEntry(String id, boolean live) {
+        try {
+            JSONArray group = new JSONObject(serverCatalogJson)
+                .getJSONArray(live ? "live" : "site");
+            for (int i = 0; i < group.length(); i++) {
+                JSONObject entry = group.getJSONObject(i);
+                if (entry.optString("id", "").equals(id)) {
+                    return entry;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static String firstCatalogId(boolean live) {
+        try {
+            JSONArray group = new JSONObject(serverCatalogJson)
+                .getJSONArray(live ? "live" : "site");
+            return group.getJSONObject(0).optString("id", "");
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private boolean reconcileServerPicks() {
+        boolean changed = false;
+        if (!validServer(streamServer)) {
+            streamServer = defaultServerId(false);
+            storeServer(streamServer);
+            changed = true;
+        }
+        if (!validLiveServer(liveServer)) {
+            liveServer = defaultServerId(true);
+            storeLiveServer(liveServer);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static String defaultServerId(boolean live) {
+        String id = firstCatalogId(live);
+        return id.isEmpty() ? "s1" : id;
     }
 
     /** The pbbcollab.com route picked last. */
@@ -364,7 +583,7 @@ public class MainActivity extends Activity {
             } finally {
                 in.close();
             }
-            return validServer(raw) ? raw : "s1";
+            return validServer(raw) ? raw : defaultServerId(false);
         } catch (Exception e) {
             return "s1";
         }
@@ -379,7 +598,7 @@ public class MainActivity extends Activity {
             } finally {
                 in.close();
             }
-            return validLiveServer(raw) ? raw : "s1";
+            return validLiveServer(raw) ? raw : defaultServerId(true);
         } catch (Exception e) {
             return "s1";
         }
@@ -401,33 +620,38 @@ public class MainActivity extends Activity {
     }
 
     private static boolean validServer(String server) {
-        if (server == null) {
-            return false;
-        }
-        for (String route : SITE_SERVERS) {
-            if (route.equals(server)) {
-                return true;
-            }
-        }
-        return false;
+        return server != null && catalogEntry(server, false) != null;
     }
 
     private static boolean validLiveServer(String server) {
-        if (server == null) {
-            return false;
-        }
-        for (String route : LIVE_SERVERS) {
-            if (route.equals(server)) {
-                return true;
-            }
-        }
-        return false;
+        return server != null && catalogEntry(server, true) != null;
     }
 
-    /** The three pbbcollab.com routes use the site's MPD endpoint. */
+    private static int catalogNumber(String server, boolean live, String key, int fallback) {
+        JSONObject entry = catalogEntry(server, live);
+        return entry == null ? fallback : entry.optInt(key, fallback);
+    }
+
+    /** The site MPD route published by the catalog entry. */
     private static int site2Number(String server) {
-        return ("pbbtop".equals(server) || "s4".equals(server)
-            || "twitch".equals(server)) ? 1 : 0;
+        return catalogNumber(server, false, "srv", 0);
+    }
+
+    private static String serverKind(String server) {
+        JSONObject entry = catalogEntry(server, false);
+        return entry == null ? "site" : entry.optString("kind", "site");
+    }
+
+    private static String serverSegments(String server) {
+        JSONObject entry = catalogEntry(server, false);
+        return entry == null ? "site" : entry.optString("segments", "site");
+    }
+
+    private int currentSrv() {
+        if (useLiveSite) {
+            return catalogNumber(liveServer, true, "srv", 1);
+        }
+        return site2Number(streamServer);
     }
 
     private void storeServer(String server) {
@@ -651,7 +875,7 @@ public class MainActivity extends Activity {
             return "Could not read the stream list";
         }
         StringBuilder rotated = new StringBuilder();
-        int srv = useLiveSite ? 1 : ("pbb3".equals(streamServer) ? 1 : site2Number(streamServer));
+        int srv = currentSrv();
         int answered = 0;
         for (int i = 0; i < streams.length() && i < CAM_IDS.length; i++) {
             JSONObject stream;
@@ -695,12 +919,13 @@ public class MainActivity extends Activity {
      */
     private String publishedConfig() {
         JSONArray streams = null;
-        if ("mirror".equals(streamServer) && !useLiveSite) {
+        String kind = serverKind(streamServer);
+        if ("mirror".equals(kind) && !useLiveSite) {
             streams = mirrorStreams();
             if (streams == null) {
                 streams = siteStreamsWithBundledKeys();
             }
-        } else if ("pbb3".equals(streamServer) && !useLiveSite) {
+        } else if ("pbb3".equals(kind) && !useLiveSite) {
             streams = pbb3Streams();
             if (streams == null) {
                 streams = siteStreamsWithBundledKeys();
@@ -732,7 +957,7 @@ public class MainActivity extends Activity {
      */
     private JSONArray siteStreamsWithBundledKeys() {
         String[] mpds = new String[CHANNEL_COUNT];
-        int srv = useLiveSite ? 1 : ("pbb3".equals(streamServer) ? 1 : site2Number(streamServer));
+        int srv = currentSrv();
         if (siteMpdText(0, srv) == null) {
             srv = srv == 0 ? 1 : 0;
             if (siteMpdText(0, srv) == null) {
@@ -831,7 +1056,7 @@ public class MainActivity extends Activity {
             }
             String route = useLiveSite ? liveServer : streamServer;
             String plain = Http.sessionPlain(seed, key.toString(),
-                serverMode(route), System.currentTimeMillis());
+                serverMode(route, useLiveSite), System.currentTimeMillis());
             byte[] sealed = new byte[plain.length()];
             for (int i = 0; i < plain.length(); i++) {
                 sealed[i] = (byte) (plain.charAt(i) ^ key.charAt(i % key.length()) ^ 0x3c);
@@ -863,7 +1088,7 @@ public class MainActivity extends Activity {
                 // same cameras through a proxy that stays reachable. Keep the
                 // session keys and only take the session manifest when both
                 // site routes are down.
-                int srv = useLiveSite ? 1 : site2Number(streamServer);
+                int srv = currentSrv();
                 Http.Mpd doc = null;
                 if (!useLiveSite) {
                     doc = siteMpdText(i, srv);
@@ -872,7 +1097,7 @@ public class MainActivity extends Activity {
                     }
                     if (doc != null) {
                         xml = doc.body;
-                        base = "s3".equals(streamServer)
+                        base = "mirror".equals(serverSegments(streamServer))
                             ? MIRROR + CAM_MIRROR[i] : mediaBase(xml);
                     }
                 }
@@ -923,24 +1148,9 @@ public class MainActivity extends Activity {
         return streams;
     }
 
-    /** The three-bit mode the site's session handshake uses for each route. */
-    private static int serverMode(String server) {
-        if ("s2".equals(server)) {
-            return 1;
-        }
-        if ("s3".equals(server)) {
-            return 2;
-        }
-        if ("s4".equals(server)) {
-            return 3;
-        }
-        if ("s5".equals(server)) {
-            return 4;
-        }
-        if ("s6".equals(server)) {
-            return 5;
-        }
-        return 0;
+    /** The three-bit mode the site's session handshake uses for a route. */
+    private static int serverMode(String server, boolean live) {
+        return catalogNumber(server, live, "mode", 0);
     }
 
     /** Unseals one camera token into its kid and key. */
@@ -1514,6 +1724,16 @@ public class MainActivity extends Activity {
         public String getConfig() {
             waitForFreshConfig(8000);
             return streamConfigJson;
+        }
+
+        @JavascriptInterface
+        public String getServerCatalog() {
+            return serverCatalogJson;
+        }
+
+        @JavascriptInterface
+        public void refreshServerCatalog() {
+            MainActivity.this.refreshServerCatalog();
         }
 
         @JavascriptInterface
